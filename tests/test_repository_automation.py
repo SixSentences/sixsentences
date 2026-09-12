@@ -294,6 +294,7 @@ def test_trusted_cla_workflow_cannot_be_manually_dispatched() -> None:
 
 def test_trusted_dco_workflow_treats_contribution_commits_only_as_git_data() -> None:
     workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "dco.yml").read_text(encoding="utf-8")
+    ci_workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
     assert "pull_request_target:" in workflow
     assert "workflow_dispatch:" not in workflow
@@ -303,6 +304,7 @@ def test_trusted_dco_workflow_treats_contribution_commits_only_as_git_data() -> 
     assert workflow.count("uses: actions/checkout@") == 1
     assert 'context "DCO / sign-off"' in workflow
     assert "--filter=blob:none" in workflow
+    assert "DCO sign-off" not in ci_workflow
 
 
 def test_status_publisher_posts_only_the_validated_payload(
