@@ -140,4 +140,9 @@ acceptance sentence as a standalone PR comment. A repository-local workflow
 binds that public acceptance to the exact head commit; no external CLA
 application or separately stored token is used.
 
+The CLA is the PR author's individual statement and does not bind other commit
+authors or co-authors. Those contributors' own DCO sign-offs provide the
+Apache-2.0 inbound license; the project does not treat their work as separately
+relicensable merely because somebody else opened the pull request.
+
 Review and merge authority is described in [GOVERNANCE.md](GOVERNANCE.md).

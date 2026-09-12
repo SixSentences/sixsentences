@@ -104,6 +104,22 @@ Signed-off-by: dependabot[bot] <support@github.com>
     )
 
 
+def test_dependabot_owned_pull_request_rejects_human_commits() -> None:
+    author = _identity("Alice Example <alice@example.com>")
+    trailers = DCO.interpret_identity_trailers(
+        """fix: synthetic change
+
+Signed-off-by: Alice Example <alice@example.com>
+"""
+    )
+
+    assert DCO.validate_identities(
+        author,
+        trailers,
+        pull_request_author="dependabot[bot]",
+    ) == ["Dependabot-owned pull requests may contain only Dependabot-authored commits"]
+
+
 def test_dependabot_metadata_block_accepts_only_exact_trusted_final_footer() -> None:
     author = _identity("dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>")
     message = """chore(deps): bump next from 16.3.3 to 16.3.4

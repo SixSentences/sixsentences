@@ -47,10 +47,18 @@ uses no separately stored secret. The resulting status is bound to the exact
 pull-request head commit, so later commits require a fresh evaluation. The
 license granted by a valid acceptance is irrevocable as described above.
 
+Acceptance is an individual statement by the pull-request author. It covers
+only contribution material that person owns or is authorized to submit; it
+does not purport to bind other commit authors or co-authors. Every author and
+co-author separately certifies the DCO. Material from a contributor who has not
+personally accepted this Agreement remains contributed under Apache-2.0 on the
+DCO terms and is not treated as separately relicensable.
+
 Pull requests authored by GitHub's verified `dependabot[bot]` account are
 exempt because the bot cannot enter a legal agreement. Its mechanical lockfile
 and dependency updates still require DCO validation, automated checks, and
-maintainer review.
+maintainer review. Dependabot-owned pull requests may contain only commits made
+by the recognized Dependabot identity.
 
 This Agreement may be revised only through the process in
 [GOVERNANCE.md](GOVERNANCE.md). A revision applies to later contributions after
