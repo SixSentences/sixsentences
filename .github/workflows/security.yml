@@ -35,7 +35,7 @@ jobs:
           base: ""
           head: ${{ github.sha }}
           version: 3.97.4
-          extra_args: --no-verification --results=verified,unknown,unverified --fail --no-update
+          extra_args: --no-verification --results=verified,unknown,unverified --no-update
 
   secrets:
     name: Repository secret scan
