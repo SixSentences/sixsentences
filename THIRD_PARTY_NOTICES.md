@@ -1,20 +1,34 @@
 # Third-party notices
 
-The SixSentences open-source toolkit depends on packages distributed under their
-own licenses. Direct runtime dependencies currently include:
+Except for separately identified marks and third-party material, SixSentences
+source code and documentation are licensed under Apache-2.0. Dependencies,
+adapted components, and data obtained through connectors retain their own
+licenses and terms.
+
+The lockfiles are the canonical inventories for the exact source revision:
+
+- `uv.lock` records the Python runtime and development environment; and
+- `apps/web/package-lock.json` records the web runtime, build, development,
+  and optional platform dependency graph.
+
+A lockfile entry does not by itself prove that a package or optional native
+binary is present in a particular wheel, source distribution, web build,
+container, or operating-system installation. Distributors must inspect the
+actual artifact they ship and comply with the corresponding license terms.
+
+## Python engine
+
+Direct Python runtime dependencies currently include:
 
 | Project | Purpose | License |
 | --- | --- | --- |
 | [DuckDB](https://github.com/duckdb/duckdb) | Local analytical storage and search | MIT |
-| [HTTPX](https://github.com/encode/httpx) | HTTP client for public data connectors | BSD-3-Clause |
+| [HTTPX](https://github.com/encode/httpx) | HTTP client for explicit network connectors | BSD-3-Clause |
 | [Pydantic](https://github.com/pydantic/pydantic) | Models and validation | MIT |
 
-The release includes `uv.lock`, which records hashes and exact versions for the
-runtime and development environments. The isolated build backend is separately
-and exactly pinned in `pyproject.toml`. The locked runtime transitive closure at
-`0.1.0-alpha.1` is:
+The locked runtime transitive closure for `v0.1.0-alpha.1` also records:
 
-| Project | License |
+| Project | License identifier recorded by the project |
 | --- | --- |
 | annotated-types | MIT |
 | AnyIO | MIT |
@@ -26,10 +40,66 @@ and exactly pinned in `pyproject.toml`. The locked runtime transitive closure at
 | typing-extensions | PSF-2.0 |
 | typing-inspection | MIT |
 
-Development dependencies are recorded in both `pyproject.toml` and the lockfile;
-the build dependency is recorded in `pyproject.toml`. Distributors remain
-responsible for reviewing the complete dependency closure and license texts for
-the exact artifacts they ship, especially after updating dependency pins.
+Development dependencies are recorded in `pyproject.toml` and `uv.lock`;
+the isolated build backend is exactly pinned in `pyproject.toml`.
+
+## Web client
+
+The web client uses the npm packages pinned by
+`apps/web/package-lock.json`. Notable direct projects include Next.js and
+React, TanStack Query, CodeMirror, React PDF, Radix UI, Motion, Lucide,
+Tailwind CSS, TypeScript, and shadcn/ui. Their upstream licenses are not replaced
+by the repository's Apache-2.0 license.
+
+### shadcn/ui-generated and adapted components
+
+Portions of `apps/web/src/components/ui` were generated from or adapted from
+[shadcn/ui](https://github.com/shadcn-ui/ui). They retain this MIT notice:
+
+> MIT License
+>
+> Copyright (c) 2023 shadcn
+>
+> Permission is hereby granted, free of charge, to any person obtaining a copy
+> of this software and associated documentation files (the "Software"), to deal
+> in the Software without restriction, including without limitation the rights
+> to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+> copies of the Software, and to permit persons to whom the Software is
+> furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in all
+> copies or substantial portions of the Software.
+>
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+> IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+> FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+> AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+> LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+> OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+> SOFTWARE.
+
+### Optional native and build packages
+
+The npm lockfile for this release records:
+
+- platform-specific optional `@img/sharp-libvips-*` packages at version
+  `1.3.3` with the license identifier `LGPL-3.0-or-later`, reached through
+  the optional `sharp` dependency graph; and
+- `lightningcss` and platform-specific `lightningcss-*` packages at version
+  `1.32.0` with the license identifier `MPL-2.0` (Mozilla Public License
+  2.0) in the development/build graph.
+
+These statements describe the committed lockfile, not the contents of every
+platform installation or compiled deployment. Before distributing a built
+application or container, determine which optional packages and native
+libraries it actually contains and include the notices, license texts, and
+other materials required for that artifact.
+
+The source repository does not commit `node_modules`, a `.next` build, or
+platform-native npm binaries. `npm ci` obtains dependencies described by the
+lockfile for the selected platform.
+
+## Public-data connectors
 
 The repository contains connector code for third-party data services. It does
 not redistribute either dataset:
@@ -57,5 +127,10 @@ Data downloaded through a connector remains subject to the source's current
 terms, attribution requests, schema, and rate limits. Callers should record the
 retrieval date and dataset revision used for research outputs.
 
-No hosted-service source, website assets, commercial fonts, production data,
-or proprietary datasets are included in this repository.
+## Material intentionally not distributed
+
+The repository does not include the marketing site, SaaS backend, production
+data, provider credentials, historical application ZIPs, signed companion
+binaries, browser-extension packages, or proprietary corpora. Lottie animations
+and locally bundled font files whose exact redistribution provenance was not
+established for this release were excluded rather than relicensed.

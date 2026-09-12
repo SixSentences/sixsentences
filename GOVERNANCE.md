@@ -2,8 +2,8 @@
 
 SixSentences is an open-source project stewarded through the
 [SixSentences GitHub organization](https://github.com/SixSentences). This file
-describes how decisions are made for the portable toolkit. It does not govern
-the separately operated hosted service.
+describes how decisions are made for the community Python engine and web
+client. It does not govern the separately operated hosted service.
 
 ## Roles
 
@@ -67,15 +67,18 @@ before access changes.
 
 Reviewers and maintainers disclose material interests that could affect a
 decision and recuse themselves where appropriate. Commercial use of the Apache-
-licensed toolkit is allowed and is not itself a conflict; undisclosed influence
+licensed project is allowed and is not itself a conflict; undisclosed influence
 over technical or research-method claims is.
 
 ## Releases and compatibility
 
 Releases use semantic versioning, with PEP 440 equivalents for Python package
-versions. While the project is below `1.0`, breaking changes may occur in minor
-releases, but they should be announced and accompanied by practical migration
-notes. A release must come from a reviewed commit with passing required checks.
+versions. A release identifies the complete tagged source tree; downloadable
+Python wheels and source distributions cover only the engine package unless a
+release explicitly says otherwise. While the project is below `1.0`, breaking
+changes may occur in minor releases, but they should be announced and
+accompanied by practical migration notes. A release must come from a reviewed
+commit with passing required checks for every included surface.
 
 Project contributions are accepted under Apache-2.0 through the DCO. The
 project will not claim rights it has not received or relicense contributed code

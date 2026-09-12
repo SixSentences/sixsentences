@@ -1,31 +1,53 @@
 # Trademark policy
 
-The Apache License 2.0 grants broad rights to the code in this repository. It
-does not grant rights to project names, logos, service marks, or other brand
-identity.
+The Apache License 2.0 grants broad copyright and patent rights to covered
+source code. It does not grant permission to use project names, logos, service
+marks, or other brand identity except as required for reasonable and customary
+description of the origin of the work.
 
-"SixSentences", "SixSentences Engine", the SixSentences logo, and related
-visual identity identify the SixSentences project and services. You may use
-the names truthfully to:
+"SixSentences", "SixSentences Engine", the SixSentences name with a trailing
+cursor, the six-line-and-cursor logo, the application icon, and the related
+visual identity identify the SixSentences project and services.
+
+You may use the names truthfully to:
 
 - identify unmodified software obtained from this repository;
-- describe compatibility with the project; or
+- describe compatibility with the project;
+- link to or discuss the project; or
 - credit the origin of a fork.
 
-Please do not use the marks in a way that suggests sponsorship, endorsement,
-or official status when none exists. A materially modified distribution should
-use a distinct product name and make the relationship clear, for example:
-"Based on the SixSentences open-source project."
+Do not use the marks in a way that suggests sponsorship, endorsement,
+certification, or official status when none exists. A materially modified
+distribution or hosted service should use a distinct product name and state the
+relationship clearly, for example: "Based on the SixSentences open-source
+project."
 
-Do not reuse the project logo for a fork or service without separate
-permission. This policy does not restrict uses that applicable law permits
-without permission, including nominative fair use.
+Do not reuse the project logo or application icon as the primary identity of a
+fork, product, or service without separate permission. This policy does not
+restrict uses that applicable law permits without permission, including
+nominative fair use.
 
-The file `docs/assets/sixsentences-mark.svg` depicts the project logo. It is
-included solely so official SixSentences documentation can identify the
-project; it is not offered for reuse under the Apache License 2.0. The hosted
-product preview embedded from GitHub user attachments is likewise not part of
-the Apache-licensed source distribution.
+## Files containing project marks
+
+The following source files contain or render official SixSentences marks:
+
+- `docs/assets/sixsentences-mark.svg`;
+- `apps/web/src/app/icon.svg`;
+- `apps/web/src/components/brand/six-mark.tsx`; and
+- the SixSentences mark and wordmark rendered by
+  `apps/web/src/app/opengraph-image.tsx`.
+
+They are included so the official project documentation and client can identify
+themselves. Forks and independently operated deployments should replace those
+marks and any confusingly similar product metadata.
+
+The product-preview animation embedded in `README.md` is hosted as a GitHub
+user attachment. It is not part of the repository's Apache-licensed source
+distribution and must not be reused as branding for another product.
+
+This trademark policy governs use of the marks; it does not change the
+copyright license for surrounding functional code. See [LICENSE](LICENSE),
+[NOTICE](NOTICE), and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Questions about a proposed use can be raised through the
 [SixSentences organization](https://github.com/SixSentences).

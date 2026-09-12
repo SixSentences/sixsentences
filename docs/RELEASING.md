@@ -1,8 +1,10 @@
 # Releasing SixSentences
 
-Releases are built from immutable prerelease tags by GitHub Actions. The
-workflow publishes a GitHub prerelease only. It never publishes to PyPI and
-does not use a package-registry token.
+Releases are built from immutable prerelease tags by GitHub Actions. A release
+publishes the tagged community source tree and attested Python-engine artifacts;
+the web client is validated from source but is not published as a prebuilt
+image. The workflow publishes a GitHub prerelease only. It never publishes to
+PyPI or npm and does not use a package-registry token.
 
 ## Release authority and review
 
@@ -32,6 +34,11 @@ release maintainers. A release tag is immutable even if its workflow fails.
    uv run mypy src/sixsentences
    uv run pytest -q
    uv build
+   cd apps/web
+   npm ci
+   npm run typecheck
+   node --test tests/*.test.mjs
+   npm run build
    ```
 
 The supported mapping is explicit: `0.1.0a1` in Python metadata corresponds to
@@ -55,10 +62,17 @@ commit, is contained in `origin/main`, matches `pyproject.toml` and
 `CITATION.cff`, has the tagged commit's UTC date, and has matching changelog and
 release-note entries.
 
-It then runs the quality suite, builds one source distribution and one wheel
-from that source distribution, installs both in isolated environments, creates
-SHA-256 checksums and a CycloneDX 1.5 runtime SBOM, records GitHub artifact and
-SBOM attestations, and creates the GitHub prerelease.
+It then runs the Python quality suite, builds one source distribution and one
+wheel from that source distribution, installs both in isolated environments,
+creates SHA-256 checksums and a CycloneDX 1.5 runtime SBOM, and records GitHub
+artifact and SBOM attestations. In parallel it installs the locked web
+dependencies, type-checks the client, runs every checked-in web test, and makes
+a production source build against explicit local origins. Only after both
+surfaces pass does it create the GitHub prerelease.
+
+The release page must say that its downloadable build artifacts cover the
+Python engine only. Publishing a web image is a separate roadmap item requiring
+its own SBOM, provenance, compatibility declaration, and smoke test.
 
 If validation fails, fix the problem through another pull request and increment
 the prerelease number. Never move or reuse the failed tag.
