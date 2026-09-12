@@ -31,7 +31,7 @@ const FAILURE_COPY: Record<string, readonly [string, string]> = {
   context_not_available: ["Der angeforderte Gedankenstand ist noch nicht vollständig angekommen.", "The requested thought-stream version has not arrived completely yet."],
   brainstorm_request_conflict: ["Diese Anfrage kollidiert mit einer früheren Strukturierung.", "This request conflicts with an earlier structure."],
   brainstorm_in_progress: ["Dieser Gedankenstand wird bereits strukturiert.", "This thought stream is already being structured."],
-  capacity_unavailable: ["Für die Strukturierung ist gerade keine Kapazität verfügbar.", "No structuring capacity is available right now."],
+  capacity_unavailable: ["Die Strukturierung ist gerade nicht verfügbar.", "Structuring is unavailable right now."],
 };
 
 const NON_RETRYABLE_FAILURE_CODES = new Set([

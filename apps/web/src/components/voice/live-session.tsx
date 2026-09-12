@@ -509,18 +509,18 @@ export default function LiveSession({
       if (!state.startedAt) {
         reportError(reason === "budget"
           ? german
-            ? "Für dieses Interview ist aktuell keine Kapazität verfügbar. Bitte versuche es später erneut."
-            : "There is currently no capacity available for this interview. Please try again later."
+            ? "Die erforderlichen Ressourcen für dieses Interview sind aktuell nicht verfügbar. Bitte versuche es später erneut."
+            : "The resources required for this interview are currently unavailable. Please try again later."
           : unavailableMessage);
         return;
       }
       const notices: Record<RelayEndReason, string> = german ? {
-        budget: "Die Kapazitätsgrenze für dieses Interview ist erreicht. Dein Gespräch wird gespeichert.",
+        budget: "Das Ressourcenlimit für dieses Interview ist erreicht. Dein Gespräch wird gespeichert.",
         time: "Die vereinbarte Interviewdauer ist erreicht. Dein Gespräch wird gespeichert.",
         connection: "Die Verbindung wurde unterbrochen. Dein bisheriges Gespräch wird gespeichert.",
         unavailable: "Das Sprachinterview ist gerade nicht verfügbar. Dein bisheriges Gespräch wird gespeichert.",
       } : {
-        budget: "This interview has reached its capacity limit. Your conversation is being saved.",
+        budget: "This interview has reached its resource limit. Your conversation is being saved.",
         time: "The agreed interview duration has been reached. Your conversation is being saved.",
         connection: "The connection was interrupted. Your conversation so far is being saved.",
         unavailable: "The spoken interview is unavailable right now. Your conversation so far is being saved.",

@@ -800,7 +800,7 @@ export default function RunView({ runId }: { runId: RunRef }) {
                 <p className="max-w-[85%] text-right text-xs leading-relaxed text-muted-foreground">
                   {isGerman
                     ? "Die Paperzahl begrenzt das finale Ergebnis, nicht die Suche oder das Screening. Auch ohne Sucherweiterung können viele Treffer geprüft werden; das ist kein Zeit- oder Kostenlimit."
-                    : "The paper limit caps final results, not retrieval or screening. Even without query expansion, many records may be screened; this is not a time or cost limit."}
+                    : "The paper limit caps final results, not retrieval or screening. Even without query expansion, many records may be screened; it does not limit the work required before selection."}
                 </p>
               )}
             </div>

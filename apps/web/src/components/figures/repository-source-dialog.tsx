@@ -1105,11 +1105,11 @@ export function RepositorySourceDialog({
                       />
                       <span className="text-[0.59375rem] leading-relaxed text-muted-foreground">
                         <span className="block font-medium text-foreground">
-                          {german ? "Verschlüsselte Speicherung bestätigen" : "Confirm encrypted storage"}
+                          {german ? "Token-Verarbeitung prüfen" : "Review token handling"}
                         </span>
                         {german
-                          ? "Der PAT wird bis zum Trennen der Verbindung oder zur Kontolöschung verschlüsselt gespeichert, ausschließlich für serverseitige Read-only-GitHub-Abrufe verwendet und niemals an einen KI-Anbieter gesendet."
-                          : "The PAT is stored encrypted until you disconnect or erase the account, used only for server-side read-only GitHub fetches, and never sent to an AI provider."}
+                          ? "Fahre nur fort, wenn die konfigurierte API den PAT verschlüsselt speichert, ausschließlich für serverseitige Read-only-GitHub-Abrufe nutzt und von KI-Anbieter-Eingaben ausschließt. Prüfe diese Zusagen beim Betreiber."
+                          : "Continue only if the configured API stores the PAT encrypted, uses it solely for server-side read-only GitHub fetches, and excludes it from AI-provider inputs. Verify these guarantees with the deployment operator."}
                       </span>
                     </label>
                     <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-start sm:justify-between">

@@ -108,21 +108,21 @@ test("stable public error codes select local copy and never trust server message
   );
 });
 
-test("stable entitlement codes distinguish access, remaining capacity and action limits", () => {
+test("stable availability codes distinguish access, resources, concurrency and action limits", () => {
   const cases = [
     ["feature_not_in_plan", "feature", /not enabled/],
     ["upgrade_required", "feature", /not enabled/],
-    ["capacity_exhausted", "capacity", /available capacity/],
-    ["capacity_unavailable", "capacity", /available capacity/],
+    ["capacity_exhausted", "resource", /requested resources/],
+    ["capacity_unavailable", "resource", /requested resources/],
     ["concurrency_limit", "concurrency", /actions running/],
-    ["resource_limit", "limit", /workspace limit/],
-    ["resource_limit_reached", "limit", /workspace limit/],
+    ["resource_limit", "limit", /workspace resource limit/],
+    ["resource_limit_reached", "limit", /workspace resource limit/],
     ["action_capacity_limit", "limit", /per-action limit/],
     ["entitlement_limit", "unavailable", /currently unavailable/],
   ];
   for (const [code, kind, copy] of cases) {
     const detail = { code, error: "Synthetic secret diagnostics", routing_hint: "hosted-tier" };
-    assert.equal(helpers.entitlementErrorKind(402, detail), kind);
+    assert.equal(helpers.availabilityErrorKind(402, detail), kind);
     assert.match(helpers.userFacingApiErrorMessage(402, detail), copy);
     assert.doesNotMatch(helpers.userFacingApiErrorMessage(402, detail), /secret|diagnostics/);
     assert.match(helpers.userFacingErrorMessage({ status: 402, detail }), copy);
@@ -131,18 +131,18 @@ test("stable entitlement codes distinguish access, remaining capacity and action
 
 test("unknown 402 errors and authorization failures remain deployment-neutral", () => {
   for (const detail of [null, { error: "capacity exhausted", routing_hint: "hosted-tier" }, { code: "unknown" }, { code: "__proto__" }, { code: "constructor" }]) {
-    assert.equal(helpers.entitlementErrorKind(402, detail), "unavailable");
-    assert.equal(helpers.userFacingApiErrorMessage(402, detail), "This action is currently unavailable. Please try again or contact support.");
+    assert.equal(helpers.availabilityErrorKind(402, detail), "unavailable");
+    assert.equal(helpers.userFacingApiErrorMessage(402, detail), "This action is currently unavailable. Please try again or contact the workspace operator.");
   }
   for (const status of [400, 401, 403, 404, 409, 429, 500, 0]) {
-    assert.equal(helpers.entitlementErrorKind(status, { code: "feature_not_in_plan" }), null);
+    assert.equal(helpers.availabilityErrorKind(status, { code: "feature_not_in_plan" }), null);
   }
   assert.equal(helpers.userFacingApiErrorMessage(401, { code: "feature_not_in_plan" }), "Your session is no longer valid. Please sign in again.");
   assert.equal(helpers.userFacingApiErrorMessage(403, { code: "capacity_exhausted" }), "You don't have permission to do that.");
   assert.equal(helpers.userFacingErrorMessage({ status: 403, detail: { code: "feature_not_in_plan" } }), "You don't have permission to do that.");
 });
 
-test("participant interview capacity errors use localized product copy", () => {
+test("participant interview resource errors use localized deployment-neutral copy", () => {
   const diagnostic = {
     status: 409,
     detail: {
@@ -152,15 +152,15 @@ test("participant interview capacity errors use localized product copy", () => {
   };
   assert.equal(
     helpers.userFacingApiErrorMessage(409, diagnostic.detail),
-    "This interview cannot start right now because the study does not have enough capacity for a full session. Please try again later or contact the research team.",
+    "This interview cannot start because the required resources are unavailable. Please try again later or contact the research team.",
   );
   assert.equal(
     helpers.userFacingPublicTalkErrorMessage(diagnostic, "de"),
-    "Das Interview kann gerade nicht gestartet werden, weil nicht genügend Kapazität für eine vollständige Sitzung verfügbar ist. Bitte versuchen Sie es später erneut oder wenden Sie sich an das Forschungsteam.",
+    "Das Interview kann gerade nicht gestartet werden, weil die erforderlichen Ressourcen nicht verfügbar sind. Bitte versuchen Sie es später erneut oder wenden Sie sich an das Forschungsteam.",
   );
   assert.equal(
     helpers.userFacingPublicTalkErrorMessage(diagnostic, "en"),
-    "This interview cannot start right now because the study does not have enough capacity for a full session. Please try again later or contact the research team.",
+    "This interview cannot start because the required resources are unavailable. Please try again later or contact the research team.",
   );
   assert.equal(
     helpers.userFacingPublicTalkErrorMessage(

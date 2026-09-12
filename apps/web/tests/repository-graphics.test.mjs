@@ -196,7 +196,7 @@ test("private GitHub credentials are one-shot, separately consented, and never c
   assert.match(dialog, /onSettled: \(\) => \{[\s\S]*?invalidateQueries\(\{[\s\S]*?\["repository-connections", userId\]/);
   assert.match(dialog, /connect\.isError[\s\S]*?repositoryIdentityKey\(intent\.repository_url\)[\s\S]*?repository_connection_id: recovered\.id/);
   assert.match(dialog, /Repository access: only this repository \u00b7 Contents: Read-only/);
-  assert.match(dialog, /https:\/\/docs\.github\.com\/en\/authentication\/keeping-your-account-and-data-secure\/managing-your-personal-access-tokens/);
+  assert.match(dialog, /href="https:\/\/docs\.github\.com\/en\/authentication\/keeping-your-account-and-data-secure\/managing-your-personal-access-tokens"/);
   assert.match(dialog, /rel="noopener noreferrer"/);
 });
 

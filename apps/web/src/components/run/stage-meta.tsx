@@ -261,7 +261,7 @@ export function describeEvent(event: RunEvent): string | null {
     case "screening_recall_certified":
       return recallPresentation(p).description;
     case "budget_exhausted":
-      return `LLM budget exhausted after ${fmt(p.screened)} works: honest pause, ${fmt(
+      return `Processing limit reached after ${fmt(p.screened)} works: honest pause, ${fmt(
         p.pending,
       )} pending`;
     case "provider_unavailable":

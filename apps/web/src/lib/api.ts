@@ -1,16 +1,16 @@
 /**
- * Typed client for the SixSentences_ core API.
+ * Typed client for a compatible SixSentences workspace API.
  *
  * Auth is an opaque bearer token kept in localStorage. Error contract:
  * 401 for the current token clears the session and announces `six:unauthorized`.
- * 402 uses stable codes to distinguish feature access, capacity and other limits.
+ * 402 uses stable codes to distinguish feature access and resource limits.
  */
 
 import type { WriterSelection } from "@/lib/writer-selection";
 import { PUBLIC_WEB_SEARCH_NOTICE_VERSION } from "@/lib/public-web-search-query";
 import {
-  entitlementErrorKind,
-  type EntitlementErrorKind,
+  availabilityErrorKind,
+  type AvailabilityErrorKind,
   userFacingAgentFailureMessage,
   userFacingApiErrorMessage,
 } from "@/lib/user-facing-error";
@@ -81,7 +81,6 @@ import type {
   LoginResponse,
   GoogleAuthResponse,
   ExportFormat,
-  FeatureRequest,
   Figure,
   Health,
   HumanDecision,
@@ -129,8 +128,6 @@ import type {
   VoiceSessionConfig,
   VoiceStudy,
   ParticipantInformation,
-  AccountSwitching,
-  SwitchingRequest,
   VoiceTurn,
   ResearchDataset,
   ResearchControlRoom,
@@ -233,7 +230,7 @@ export class ApiError extends Error {
  * A deployment or short network interruption can fail after CORS preflight but
  * before the authenticated request reaches the API. Those failures are exposed
  * as status 0. Server-side 5xx responses are transient too; client, auth and
- * entitlement errors must remain immediate and actionable.
+ * access and resource-limit errors must remain immediate and actionable.
  */
 export function retryTransientApiQuery(
   failureCount: number,
@@ -328,8 +325,8 @@ export function createSpecialistTurnId(): string {
   return `agent_${globalThis.crypto.randomUUID().replaceAll("-", "")}`;
 }
 
-export interface EntitlementEventDetail {
-  kind: EntitlementErrorKind;
+export interface AvailabilityEventDetail {
+  kind: AvailabilityErrorKind;
   message: string;
 }
 
@@ -339,13 +336,13 @@ function announce(name: string, detail?: unknown) {
   }
 }
 
-function announceEntitlementError(error: ApiError, sentToken: string | null) {
-  const kind = entitlementErrorKind(error.status, error.detail);
+function announceAvailabilityError(error: ApiError, sentToken: string | null) {
+  const kind = availabilityErrorKind(error.status, error.detail);
   if (!kind || getToken() !== sentToken) return;
-  announce("six:entitlement", {
+  announce("six:availability", {
     kind,
     message: error.message,
-  } satisfies EntitlementEventDetail);
+  } satisfies AvailabilityEventDetail);
 }
 
 async function toApiError(res: Response): Promise<ApiError> {
@@ -459,7 +456,7 @@ async function request<T>(
       clearToken();
       announce("six:unauthorized");
     }
-    if (auth && res.status === 402) announceEntitlementError(error, token);
+    if (auth && res.status === 402) announceAvailabilityError(error, token);
     throw error;
   }
   if (res.status === 204) return undefined as T;
@@ -699,7 +696,7 @@ async function streamChatRequest(
       clearToken();
       announce("six:unauthorized");
     }
-    if (response.status === 402) announceEntitlementError(error, token);
+    if (response.status === 402) announceAvailabilityError(error, token);
     throw error;
   }
 
@@ -870,7 +867,7 @@ async function streamSpecialistRequest<T>(
       clearToken();
       announce("six:unauthorized");
     }
-    if (response.status === 402) announceEntitlementError(error, token);
+    if (response.status === 402) announceAvailabilityError(error, token);
     throw error;
   }
   accepted = true;
@@ -1116,11 +1113,6 @@ export const api = {
         auth: false,
       },
     ),
-  accountSwitching: () => request<AccountSwitching>("/auth/account/switching"),
-  requestAccountSwitching: (body: {
-    password: string; request_key: string; information_fingerprint: string;
-    destination_name: string; confirm_assistance_request: boolean;
-  }) => request<SwitchingRequest>("/auth/account/switching", { method: "POST", body }),
   register: (
     name: string,
     email: string,
@@ -2229,7 +2221,6 @@ export const api = {
     request<{
       status: "completed" | "aborted";
       interview_id: string | null;
-      cost_units: number;
       audio_stored?: boolean;
     }>(`/voice/sessions/${sessionId}/finalize`, { method: "POST", body }),
   reviewHealth: (runId: number) =>
@@ -2327,14 +2318,6 @@ export const api = {
       { method: "POST", body },
     ),
 
-  // -- ideas board ------------------------------------------------------------
-  features: () => request<FeatureRequest[]>("/features"),
-  createFeature: (title: string, body: string) =>
-    request<FeatureRequest>("/features", { method: "POST", body: { title, body } }),
-  voteFeature: (id: number) =>
-    request<{ id: number; votes: number; voted: boolean }>(`/features/${id}/vote`, {
-      method: "POST",
-    }),
   // -- surveys ----------------------------------------------------------------
   surveys: () => request<Survey[]>("/surveys"),
   survey: (id: string) => request<Survey>(`/surveys/${id}`),
@@ -3264,7 +3247,7 @@ export async function downloadLibraryCitations(
       clearToken();
       announce("six:unauthorized");
     }
-    if (res.status === 402) announceEntitlementError(error, token);
+    if (res.status === 402) announceAvailabilityError(error, token);
     throw error;
   }
   const fallbackNames: Record<LibraryCitationFormat, string> = {

@@ -17,10 +17,11 @@ export const publicAppBaseUrl =
   normalizedBaseUrl(process.env.NEXT_PUBLIC_APP_URL) ?? LOCAL_APP_ORIGIN;
 
 export const publicLegalBaseUrl =
-  normalizedBaseUrl(process.env.NEXT_PUBLIC_LEGAL_BASE_URL) ?? publicAppBaseUrl;
+  normalizedBaseUrl(process.env.NEXT_PUBLIC_LEGAL_BASE_URL);
 
-/** Build an operator-configured legal link without assuming the hosted service. */
-export function publicLegalUrl(path: string): string {
+/** Build an operator-configured legal link without inventing local documents. */
+export function publicLegalUrl(path: string): string | null {
+  if (!publicLegalBaseUrl) return null;
   const relativePath = path.replace(/^\/+/, "");
   return relativePath ? `${publicLegalBaseUrl}/${relativePath}` : publicLegalBaseUrl;
 }

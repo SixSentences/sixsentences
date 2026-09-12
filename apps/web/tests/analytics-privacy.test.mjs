@@ -17,7 +17,10 @@ test("analytics has a closed runtime payload schema", async () => {
   assert.match(source, /const EVENT_FIELDS/);
   assert.match(source, /sanitizeAnalyticsData/);
   assert.doesNotMatch(source, /export type EventData\s*=\s*Record/);
-  assert.match(source, /return parsed\.origin/);
+  assert.doesNotMatch(
+    source,
+    /UmamiTracker|TrackerPayload|sixBeforeSend|\bumami\b|\bbeforeSend\b|normalizeReferrer|normalizePath|routeLabel/,
+  );
 });
 
 test("analytics never identifies accounts or reports model routing", async () => {

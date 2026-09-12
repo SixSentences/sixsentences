@@ -13,7 +13,7 @@ import SettingsDialog, { type SettingsTab } from "@/components/settings/settings
 import Sidebar from "@/components/shell/sidebar";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import type { EntitlementEventDetail } from "@/lib/api";
+import type { AvailabilityEventDetail } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -52,19 +52,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // The server remains authoritative for unavailable features and capacity.
+  // The server remains authoritative for unavailable features and resources.
   // The open-source client reports the reason without directing users to a
   // commercial flow that may not exist on a self-hosted deployment.
   useEffect(() => {
-    const onEntitlement = (event: Event) => {
-      const detail = (event as CustomEvent<EntitlementEventDetail>).detail;
+    const onAvailability = (event: Event) => {
+      const detail = (event as CustomEvent<AvailabilityEventDetail>).detail;
       toast.error(
         detail?.message
           ?? "This action is currently unavailable. Check the server configuration or contact your workspace operator.",
       );
     };
-    window.addEventListener("six:entitlement", onEntitlement);
-    return () => window.removeEventListener("six:entitlement", onEntitlement);
+    window.addEventListener("six:availability", onAvailability);
+    return () => window.removeEventListener("six:availability", onAvailability);
   }, []);
 
   // "Show intro" from the user menu re-opens the welcome overlay; the

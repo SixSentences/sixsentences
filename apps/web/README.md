@@ -62,9 +62,17 @@ The client recognizes these build-time variables:
 | --- | --- | --- |
 | `NEXT_PUBLIC_SIX_API_URL` | Trusted compatible API origin | `http://127.0.0.1:8000` |
 | `NEXT_PUBLIC_APP_URL` | Canonical client origin used for metadata and links | `http://localhost:3000` |
-| `NEXT_PUBLIC_LEGAL_BASE_URL` | Origin serving the deployment's legal documents | `http://localhost:3000` |
+| `NEXT_PUBLIC_LEGAL_BASE_URL` | Origin serving the deployment's `/terms`, `/privacy`, `/dpa`, and `/imprint` documents | empty |
+| `NEXT_PUBLIC_TERMS_VERSION` | Operator-published Terms version accepted during registration | empty |
+| `NEXT_PUBLIC_PRIVACY_VERSION` | Operator-published privacy-notice version acknowledged during registration | empty |
+| `NEXT_PUBLIC_DPA_VERSION` | Operator-published processing-agreement version sent to the API contract | empty |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Optional public OAuth client identifier | empty |
-| `NEXT_PUBLIC_BROWSER_CAPTURE_STORE_URL` | Optional link to a separately distributed browser extension | empty |
+
+The development defaults deliberately do not invent legal documents at the
+local app origin. Until an operator configures the legal origin and all three
+versions, registration fails closed and legal navigation is omitted. Existing
+account, export, and security controls remain available when the API requires a
+new acceptance.
 
 Every `NEXT_PUBLIC_*` value is embedded in browser-delivered JavaScript. Never
 put a secret, private API key, OAuth client secret, or privileged credential in

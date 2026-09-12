@@ -247,7 +247,7 @@ export default function TalkPage() {
         aborted: true,
       })
       .catch(() => {
-        // Capacity cleanup is an operator concern; the participant should see
+        // Session cleanup is an operator concern; the participant should see
         // only the actionable connection error and can try again.
       });
   }

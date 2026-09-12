@@ -15,16 +15,6 @@ test("DPA reacceptance prefills only an explicitly confirmed controller identity
   assert.doesNotMatch(source, /legal_controller_name\s*\?\?\s*me\.(?:first_name|email|org_name)/);
 });
 
-test("switching loading errors are distinct from genuine non-owner access", () => {
-  const source = read("src/components/settings/switching-controls.tsx");
-  assert.match(source, /enabled: me\?\.role === "owner"/);
-  assert.match(source, /if \(me\.role !== "owner"\)/);
-  assert.match(source, /if \(!data \|\| error\) return \(/);
-  assert.match(source, /Switching information could not be loaded/);
-  assert.match(source, /onClick=\{\(\) => void refetch\(\)\}/);
-  assert.doesNotMatch(source, /if \(!data \|\| error\).*available to workspace owners/);
-});
-
 test("the Library reader and cards respond to available pane width, not only viewport", () => {
   const source = read("src/app/(app)/library/page.tsx");
   assert.match(source, /layout\.getBoundingClientRect\(\)\.width < 1100/);

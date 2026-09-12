@@ -71,7 +71,8 @@ for (const [name, path, mutationName] of surfaces) {
     if (mutationName === "start") assert.equal(run.calls[0].fields, run.context.fields);
     assert.match(run.source, /<AlertDialog open=\{reextractOpen\}/);
     assert.match(run.source, /onClick=\{confirmReextraction\}/);
-    assert.match(run.source, /uses capacity again and replaces its current table values/);
+    assert.match(run.source, /replaces its current table values/);
+    assert.doesNotMatch(run.source, /uses capacity again/);
     assert.match(run.source, /reviewed edits/);
   });
 
@@ -120,4 +121,24 @@ test("the studio action bar wraps rather than pushing its extra action outside t
   const studio = readFileSync("src/components/run/extraction-studio.tsx", "utf8");
   assert.match(studio, /className="flex min-w-0 flex-wrap items-center gap-2"/);
   assert.match(studio, /className="min-w-0 flex-1 basis-56"/);
+});
+
+test("extraction titles remove every angle bracket without multi-pass tag stripping", () => {
+  const path = "src/components/run/extraction-studio.tsx";
+  const source = readFileSync(path, "utf8");
+  const ast = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let helper = "";
+  ts.forEachChild(ast, (node) => {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === "cleanTitle") {
+      helper = node.getText(ast);
+    }
+  });
+  assert.ok(helper);
+  const context = {};
+  vm.runInNewContext(ts.transpileModule(helper, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText, context);
+  assert.equal(context.cleanTitle("<<script>alert(1)</script>  Study"), "scriptalert(1)/script Study");
+  assert.doesNotMatch(context.cleanTitle("<<<b>Title</b>>"), /[<>]/);
+  assert.doesNotMatch(helper, /<\[\^>\]\*>/);
 });

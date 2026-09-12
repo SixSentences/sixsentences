@@ -90,7 +90,7 @@ function fieldLabel(value: string): string {
 }
 
 function cleanTitle(value: string): string {
-  return value.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+  return value.replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
 }
 
 function withReviewedCell(
@@ -708,8 +708,8 @@ export default function ExtractionStudio({ runId }: { runId: number }) {
             <AlertDialogDescription>
               This starts a new extraction for every included study using the current
               contract, including studies already completed. Each completed new result
-              uses capacity again and replaces its current table values, including
-              reviewed edits. Download the CSV first if you want to keep the current table.
+              replaces its current table values, including reviewed edits. Download the
+              CSV first if you want to keep the current table.
               To keep completed results, cancel and use the primary extraction button instead.
             </AlertDialogDescription>
           </AlertDialogHeader>

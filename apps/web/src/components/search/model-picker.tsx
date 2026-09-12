@@ -29,7 +29,7 @@ type ModelPickerProps = {
   large?: boolean;
 };
 
-/** The model menu: exact economics stay internal; users see relative cost. */
+/** The model menu renders only capabilities declared by the connected API. */
 export default function ModelPicker({
   value,
   onChange,
@@ -47,13 +47,6 @@ export default function ModelPicker({
   const selectedId = resolvePrivateModelId(value, catalog);
   const selected = models.find((m) => m.id === selectedId);
   if (!selected) return null;
-  const costLabel = (tier: (typeof models)[number]["cost_tier"]): string =>
-    `${isGerman ? "Kosten" : "Cost"} · ${{
-      low: "$",
-      medium: "$$",
-      high: "$$$",
-      very_high: "$$$$",
-    }[tier]}`;
 
   return (
     <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -115,17 +108,7 @@ export default function ModelPicker({
               className="group/item items-start rounded-lg px-2.5 py-2 text-foreground data-[highlighted]:bg-accent data-[highlighted]:text-foreground data-disabled:opacity-60"
             >
               <div className="min-w-0 flex-1">
-                <p className="flex items-center gap-2 text-[0.8125rem] font-medium">
-                  <span className="truncate">{model.label}</span>
-                  <span
-                    className={cn(
-                      "shrink-0 rounded-full px-1.5 py-px font-mono text-[0.59375rem]",
-                      "border border-border/70 bg-background/70 !text-foreground shadow-none group-data-[highlighted]/item:border-foreground/15 group-data-[highlighted]/item:bg-background group-data-[highlighted]/item:!text-foreground",
-                    )}
-                  >
-                    {costLabel(model.cost_tier ?? model.impact)}
-                  </span>
-                </p>
+                <p className="truncate text-[0.8125rem] font-medium">{model.label}</p>
                 <p className="mt-0.5 line-clamp-2 text-[0.71875rem] leading-snug !text-muted-foreground group-data-[highlighted]/item:!text-foreground/70">
                   {isGerman ? model.tagline_de : model.tagline}
                 </p>

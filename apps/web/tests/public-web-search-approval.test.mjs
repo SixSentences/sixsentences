@@ -48,12 +48,13 @@ test("expandable details distinguish formulated requests from targeted terms wit
     "personal data, confidential or sensitive information",
     "does not automatically include conversation history, transcripts, manuscripts or uploads",
     "Public search terms from that context require your explicit approval",
-    "OpenRouter to Perplexity",
-    "processing may take place in the USA",
+    "public-search service configured by this deployment",
+    "disclose recipients, processing locations and retention",
   ]) assert.ok(details.includes(text));
   assert.doesNotMatch(details, /conversation history must not be forwarded/);
   assert.doesNotMatch(details, /anonymous|anonymisiert|legally guaranteed|rechtssicher/i);
   assert.match(approval, /const exact = exactQuery \?\? editable/);
   assert.match(details, /full anonymization/);
-  assert.match(details, /href=\{publicLegalUrl\("privacy"\)\}/);
+  assert.match(approval, /const privacyUrl = publicLegalUrl\("privacy"\)/);
+  assert.match(details, /href=\{privacyUrl\}/);
 });

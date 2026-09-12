@@ -156,20 +156,9 @@ const DEFAULT_REDRAW_PROMPT =
   "Redraw this exactly as a clean, professional publication figure. "
   + "Keep every element and label.";
 
-/* Which image model renders; ids mirror the backend's FIGURE_MODELS
-   registry. "Auto" stays the default and currently means Nano Banana Pro. */
+/* Provider selection remains server-owned in the open-source client. */
 const FIGURE_MODELS = [
-  { id: "auto", label: "Auto", hint: "Nano Banana Pro, the default" },
-  {
-    id: "nano-banana-pro",
-    label: "Nano Banana Pro",
-    hint: "Strongest with dense labels and exact text",
-  },
-  {
-    id: "nano-banana-2",
-    label: "Nano Banana 2",
-    hint: "Fast Google model for efficient iteration",
-  },
+  { id: "auto", label: "Auto", hint: "Model selected by the connected API" },
 ] as const;
 
 /* The blank page teaches by example: one click drops a real prompt in. */
@@ -1233,8 +1222,8 @@ export default function FiguresPage() {
                     Rendered by
                   </DropdownMenuLabel>
                   <p className="px-2 pb-1.5 text-[0.625rem] leading-relaxed text-muted-foreground">
-                    Rendered through the configured Google Gemini provider.
-                    {" "}<a href={publicLegalUrl("privacy")} target="_blank" rel="noreferrer" className="underline underline-offset-2">Data processing and retention</a>
+                    Rendered through the model provider configured by this deployment.
+                    {publicLegalUrl("privacy") ? <>{" "}<a href={publicLegalUrl("privacy")!} target="_blank" rel="noreferrer" className="underline underline-offset-2">Data processing and retention</a></> : null}
                   </p>
                   {FIGURE_MODELS.map((entry) => (
                     <DropdownMenuItem
@@ -1441,7 +1430,7 @@ export default function FiguresPage() {
             </div>
             <div className="flex shrink-0 items-center gap-3">
               <span className="font-mono text-[0.625rem] uppercase tracking-[0.18em] text-muted-foreground">
-                Adaptive capacity
+                Configured renderer
               </span>
               <Button
                 disabled={composedPromptLength < 3 || promptTooLong || repositoryGoalMismatch || create.isPending}

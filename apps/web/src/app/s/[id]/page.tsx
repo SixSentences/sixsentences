@@ -251,10 +251,10 @@ export default function PublicSurveyPage() {
           </Button>
         </form>
         <p className="mt-8 text-center text-[0.6875rem] leading-relaxed text-muted-foreground">
-          The research team that shared this link is responsible for this survey and for how responses are processed. SixSentences_ hosts it on their behalf.{" "}
-          <a href={publicLegalUrl("privacy")} className="underline underline-offset-2 hover:text-foreground">Privacy</a>
+          The research team that shared this link is responsible for this survey and for how responses are processed. Responses are submitted to its configured research workspace.
+          {publicLegalUrl("privacy") ? <>{" "}<a href={publicLegalUrl("privacy")!} className="underline underline-offset-2 hover:text-foreground">Privacy</a></> : null}
         </p>
-        <p className="mt-3 text-center font-mono text-[0.59375rem] uppercase tracking-[0.18em] text-muted-foreground">Hosted by SixSentences_</p>
+        <p className="mt-3 text-center font-mono text-[0.59375rem] uppercase tracking-[0.18em] text-muted-foreground">SixSentences_ research workspace</p>
       </div>
       <PublicLegalFooter className="mx-auto mt-8 w-full max-w-2xl shrink-0" />
     </main>

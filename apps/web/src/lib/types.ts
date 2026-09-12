@@ -1,25 +1,6 @@
-/** Wire types mirroring the SixSentences_ core API (FastAPI) responses. */
+/** Wire types for a compatible SixSentences workspace API. */
 
 export type Role = "owner" | "member";
-
-export interface SwitchingRequest {
-  id: string;
-  status: string;
-  receipt: Record<string, unknown>;
-  submitted_at: string;
-  standard_transition_deadline: string;
-  completed_at: string | null;
-  retrieval_available_until: string | null;
-}
-
-export interface AccountSwitching {
-  information: {
-    version: string; title: string; summary: string; scope: string; timing: string;
-    process: string; fees: string; contact: string; terms_url: string; declaration: string;
-  };
-  information_fingerprint: string;
-  requests: SwitchingRequest[];
-}
 
 export interface AssistantPreferences {
   detail: "concise" | "balanced" | "thorough";
@@ -109,7 +90,6 @@ export interface ChatModelOption {
   tagline: string;
   tagline_de: string;
   impact: "low" | "medium" | "high" | "very_high";
-  cost_tier: "low" | "medium" | "high" | "very_high";
   reasoning: boolean;
   default: boolean;
   locked: boolean;
@@ -117,23 +97,10 @@ export interface ChatModelOption {
 
 export interface ChatModelCatalog {
   default_id?: string;
-  routing_mode?: "gemini_private";
+  /** Opaque deployment route declared by the connected API. */
+  routing_mode?: string;
   content_scope?: "private";
   models: ChatModelOption[];
-}
-
-export type FeatureStatus = "proposed" | "approved" | "declined" | "shipped";
-
-/** One idea on the board, shaped for the caller (their vote, their authorship). */
-export interface FeatureRequest {
-  id: number;
-  title: string;
-  body: string;
-  status: FeatureStatus;
-  votes: number;
-  voted: boolean;
-  mine: boolean;
-  created_at: string;
 }
 
 export interface ScreeningMethod {
@@ -2641,11 +2608,6 @@ export interface VoiceSession {
   participant_label: string;
   guide_version: number;
   duration_ms: number;
-  /** Public, server-reported workspace impact; raw internal units stay server-side. */
-  capacity_percent?: number;
-  /** Original allowance for historical sessions; not a current per-minute charge. */
-  capacity_authorization_percent?: number | null;
-  capacity_accounting?: "authorized_session" | "usage";
   interview_id: string | null;
   started_at: string;
   ended_at: string | null;
@@ -2711,7 +2673,6 @@ export interface VoiceStudy {
   participant_information_ready?: boolean;
   participant_information_gaps?: string[];
   budget_minutes: number;
-  used_minutes?: number;
   guide: { sections: VoiceGuideSection[] };
   guide_version: number;
   session_count: number;
@@ -2754,8 +2715,6 @@ export interface VoiceConfig {
   min_live_session_minutes: number;
   /** API-authoritative current upper bound for one live AI-led interview. */
   max_live_session_minutes: number;
-  /** Admission estimate only; closed spoken sessions settle recorded model costs. */
-  live_capacity_percent_per_minute?: number | null;
 }
 
 export interface PublicTalkInfo {
@@ -2774,7 +2733,8 @@ export interface PublicTalkInfo {
   consent_text: string;
   consent_fingerprint: string;
   contact_line: string;
-  live_provider: "Google Gemini";
+  /** Human-readable provider disclosure supplied by the connected API. */
+  live_provider: string;
   provider_disclosure_version: string;
   privacy_notice_url: string;
   terms_url: string;

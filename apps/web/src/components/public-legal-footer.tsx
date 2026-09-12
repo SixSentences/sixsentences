@@ -9,7 +9,7 @@ const LEGAL_LINKS = [
     href: publicLegalUrl("report-illegal-content"),
     label: "Report illegal content",
   },
-] as const;
+].filter((link): link is { href: string; label: string } => link.href !== null);
 
 export default function PublicLegalFooter({
   className,
@@ -18,6 +18,8 @@ export default function PublicLegalFooter({
   className?: string;
   inverse?: boolean;
 }) {
+  if (LEGAL_LINKS.length === 0) return null;
+
   return (
     <footer
       aria-label="Legal information"

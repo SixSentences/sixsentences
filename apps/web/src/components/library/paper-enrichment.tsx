@@ -43,8 +43,8 @@ function requestErrorMessage(
       "A metadata check is already running for this paper.",
     ],
     paper_enrichment_capacity_busy: [
-      "Die Prüfkapazität ist gerade ausgelastet. Versuche es gleich noch einmal.",
-      "Metadata-check capacity is busy. Try again shortly.",
+      "Die Metadatenprüfung ist gerade ausgelastet. Versuche es gleich noch einmal.",
+      "Metadata checking is busy. Try again shortly.",
     ],
     paper_enrichment_daily_limit: [
       "Dieses Paper wurde heute bereits zu oft geprüft.",

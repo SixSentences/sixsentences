@@ -67,13 +67,15 @@ function LegalSettings() {
       title: isGerman ? "Impressum" : "Legal notice",
       description: isGerman ? "Betreiber und Kontakt." : "Operator and contact details.",
     },
-  ];
+  ].filter((document): document is { href: string; title: string; description: string } => document.href !== null);
 
   return (
     <div className="mx-auto max-w-3xl space-y-3">
       <SettingsSection
         title={isGerman ? "Rechtliche Dokumente" : "Legal documents"}
-        description={isGerman ? "Diese Links stammen vom konfigurierten Betreiber der Instanz." : "These links are provided by the configured instance operator."}
+        description={documents.length > 0
+          ? (isGerman ? "Diese Links stammen vom konfigurierten Betreiber der Instanz." : "These links are provided by the configured instance operator.")
+          : (isGerman ? "Für diese Instanz wurden noch keine rechtlichen Dokumente konfiguriert." : "No legal documents have been configured for this deployment.")}
         icon={<Scale className="size-3.5" />}
       >
         <div className="divide-y divide-border">

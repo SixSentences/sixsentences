@@ -79,8 +79,8 @@ function errorCopy(error: unknown, german: boolean): string {
   }
   if (code === "capacity_unavailable") {
     return german
-      ? "Für die Projektsynthese ist gerade keine Kapazität verfügbar. Deine Auswahl bleibt erhalten."
-      : "No capacity is available for project synthesis right now. Your selection is preserved.";
+      ? "Die Projektsynthese ist gerade nicht verfügbar. Deine Auswahl bleibt erhalten."
+      : "Project synthesis is unavailable right now. Your selection is preserved.";
   }
   return german
     ? "Die Projektsynthese konnte nicht bestätigt werden. Deine Auswahl und die bisherigen Dokumente bleiben erhalten."
@@ -103,8 +103,8 @@ function receiptFailureCopy(receipt: ProjectBrainstormSynthesisReceipt, german: 
   }
   if (receipt.error_code === "capacity_unavailable") {
     return german
-      ? "Für diesen Versuch war keine Verarbeitungskapazität verfügbar. Die Quellen können später erneut verwendet werden."
-      : "No processing capacity was available for this attempt. The sources can be retried later.";
+      ? "Dieser Versuch konnte nicht verarbeitet werden. Die Quellen können später erneut verwendet werden."
+      : "This attempt could not be processed. The sources can be retried later.";
   }
   return german
     ? "Die Projektsynthese wurde nicht abgeschlossen. Das bisherige Projektdokument bleibt unverändert."

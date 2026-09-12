@@ -33,6 +33,7 @@ export default function PublicWebSearchApproval({
   const isGerman = language === "de";
   const editable = Boolean(onQueryChange);
   const exact = exactQuery ?? editable;
+  const privacyUrl = publicLegalUrl("privacy");
 
   return (
     <div
@@ -111,16 +112,18 @@ export default function PublicWebSearchApproval({
             </p>
             <p>
               {isGerman
-                ? "Die minimierten Suchbegriffe gehen über OpenRouter an Perplexity; die Verarbeitung kann in den USA erfolgen."
-                : "The minimized search terms are sent through OpenRouter to Perplexity; processing may take place in the USA."}
+                ? "Die minimierten Suchbegriffe gehen an den von dieser Instanz konfigurierten öffentlichen Suchdienst. Angaben zu Empfängern, Verarbeitungsorten und Aufbewahrung muss der Betreiber in seinen Datenschutzhinweisen veröffentlichen."
+                : "The minimized search terms are sent to the public-search service configured by this deployment. Its operator must disclose recipients, processing locations and retention in the privacy notice."}
             </p>
             <p>
               {isGerman
                 ? "Suchfilter garantieren keine vollständige Anonymisierung. "
                 : "Search filters do not guarantee full anonymization. "}
-              <a href={publicLegalUrl("privacy")} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
-                {isGerman ? "Datenschutzhinweise" : "Privacy notice"}
-              </a>
+              {privacyUrl ? (
+                <a href={privacyUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+                  {isGerman ? "Datenschutzhinweise" : "Privacy notice"}
+                </a>
+              ) : (isGerman ? "Bitte den Betreiber nach den Datenschutzhinweisen fragen." : "Ask the deployment operator for its privacy notice.")}
             </p>
           </div>
         </details>

@@ -174,7 +174,3 @@ export function useMembers(enabled = true) {
 export function useWebhooks(enabled = true) {
   return useQuery({ queryKey: ["webhooks"], queryFn: api.listWebhooks, enabled });
 }
-
-export function useFeatures() {
-  return useQuery({ queryKey: ["features"], queryFn: api.features });
-}

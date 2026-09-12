@@ -18,9 +18,7 @@ import { useAuth } from "@/lib/auth";
 import { publicLegalUrl } from "@/lib/public-links";
 import { useSignupStatus } from "@/lib/signup-control";
 import {
-  CURRENT_DPA_VERSION,
-  CURRENT_PRIVACY_VERSION,
-  CURRENT_TERMS_VERSION,
+  SIGNUP_LEGAL_VERSIONS,
   type SignupLegalAcceptance,
 } from "@/lib/legal";
 import { evaluatePasswordStrength } from "@/lib/password-strength";
@@ -39,7 +37,6 @@ export default function RegisterPage() {
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [ageRequirementConfirmed, setAgeRequirementConfirmed] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [marketingConsent, setMarketingConsent] = useState(false);
   const [verification, setVerification] = useState<{
     email: string;
     sent: boolean;
@@ -48,16 +45,25 @@ export default function RegisterPage() {
   const passwordStrength = evaluatePasswordStrength(password, { email, name });
   const passwordsMatch =
     passwordConfirmation.length > 0 && password === passwordConfirmation;
-  const legalAcceptance: SignupLegalAcceptance = {
-    age_requirement_confirmed: ageRequirementConfirmed,
-    terms_accepted: termsAccepted,
-    terms_version: CURRENT_TERMS_VERSION,
-    privacy_acknowledged: false,
-    privacy_version: CURRENT_PRIVACY_VERSION,
-    dpa_accepted: false,
-    dpa_version: CURRENT_DPA_VERSION,
-    marketing_consent: marketingConsent,
-  };
+  const termsUrl = publicLegalUrl("terms");
+  const privacyUrl = publicLegalUrl("privacy");
+  const dpaUrl = publicLegalUrl("dpa");
+  const legalDocumentsConfigured = Boolean(termsUrl && privacyUrl && dpaUrl);
+
+  function legalAcceptance(): SignupLegalAcceptance | null {
+    if (!SIGNUP_LEGAL_VERSIONS || !legalDocumentsConfigured) return null;
+    return {
+      age_requirement_confirmed: ageRequirementConfirmed,
+      terms_accepted: termsAccepted,
+      terms_version: SIGNUP_LEGAL_VERSIONS.terms,
+      privacy_acknowledged: false,
+      privacy_version: SIGNUP_LEGAL_VERSIONS.privacy,
+      dpa_accepted: false,
+      dpa_version: SIGNUP_LEGAL_VERSIONS.dpa,
+      // Compatibility default for APIs that still accept the former hosted field.
+      marketing_consent: false,
+    };
+  }
 
   useEffect(() => {
     captureResearchQuestionFromHash();
@@ -67,6 +73,11 @@ export default function RegisterPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!signup.enabled) return;
+    const acceptance = legalAcceptance();
+    if (!acceptance) {
+      setError("Registration is unavailable until the deployment operator configures its legal documents.");
+      return;
+    }
     const data = new FormData(event.currentTarget);
     const orgName = String(data.get("org") ?? "").trim();
 
@@ -97,7 +108,7 @@ export default function RegisterPage() {
         normalizedEmail,
         password,
         orgName,
-        legalAcceptance,
+        acceptance,
       );
       if (result.verification_required) {
         setVerification({
@@ -119,6 +130,11 @@ export default function RegisterPage() {
 
   async function handleGoogleCredential(credential: string) {
     if (!signup.enabled) return;
+    const acceptance = legalAcceptance();
+    if (!acceptance) {
+      setError("Registration is unavailable until the deployment operator configures its legal documents.");
+      return;
+    }
     setPending(true);
     setError("");
     try {
@@ -131,7 +147,7 @@ export default function RegisterPage() {
         credential,
         "signup",
         "",
-        legalAcceptance,
+        acceptance,
       );
       if ("verification_required" in result && result.verification_required) {
         setVerification({
@@ -155,13 +171,24 @@ export default function RegisterPage() {
     }
   }
 
-  if (!verification && !signup.enabled) return (
+  const legalConfigurationMissing = signup.enabled
+    && (!SIGNUP_LEGAL_VERSIONS || !legalDocumentsConfigured);
+
+  if (!verification && (!signup.enabled || legalConfigurationMissing)) return (
     <AuthShell>
       <h1 data-launch-signup-control="runtime" className="font-display text-4xl text-foreground">
-        {signup.isPending ? "Checking availability…" : "Registration is currently closed"}
+        {signup.isPending
+          ? "Checking availability…"
+          : legalConfigurationMissing
+            ? "Registration is not configured"
+            : "Registration is currently closed"}
       </h1>
       <p className="mt-3 text-[0.9375rem] text-muted-foreground">
-        {signup.isError ? "We could not check registration right now. Please try again shortly." : "Already have an account? You can still sign in as usual."}
+        {signup.isError
+          ? "We could not check registration right now. Please try again shortly."
+          : legalConfigurationMissing
+            ? "The deployment operator must publish its legal documents and versions before accepting registrations."
+            : "Already have an account? You can still sign in as usual."}
       </p>
       <Link href="/login" className="mt-6 inline-block text-moss underline underline-offset-4">Sign in</Link>
     </AuthShell>
@@ -237,7 +264,7 @@ export default function RegisterPage() {
       <div className="rise rise-1" data-launch-signup-surface="open">
         <h1 className="font-display text-4xl text-foreground">Create your account</h1>
         <p className="mt-2 text-[0.9375rem] text-muted-foreground">
-          A one-time starter research allowance, on us.
+          Create a research workspace on this deployment.
         </p>
       </div>
 
@@ -267,7 +294,7 @@ export default function RegisterPage() {
           <span>
             I accept the{" "}
             <a
-              href={publicLegalUrl("terms")}
+              href={termsUrl!}
               target="_blank"
               rel="noreferrer"
               className="text-moss underline underline-offset-4"
@@ -279,26 +306,14 @@ export default function RegisterPage() {
         </label>
         <p className="text-[0.8125rem] leading-relaxed text-muted-foreground">
           Our{" "}
-          <a href={publicLegalUrl("privacy")} target="_blank" rel="noreferrer" className="text-moss underline underline-offset-4">Privacy Notice</a>
+          <a href={privacyUrl!} target="_blank" rel="noreferrer" className="text-moss underline underline-offset-4">Privacy Notice</a>
           {" "}explains how we process your data. It is information, not an additional consent.
         </p>
         <p className="text-[0.75rem] leading-relaxed text-muted-foreground">
           Before using your workspace, its authorised owner completes the{" "}
-          <a href={publicLegalUrl("dpa")} target="_blank" rel="noreferrer" className="text-moss underline underline-offset-4">Data Processing Agreement</a>
+          <a href={dpaUrl!} target="_blank" rel="noreferrer" className="text-moss underline underline-offset-4">Data Processing Agreement</a>
           {" "}for the responsible person or organisation.
         </p>
-        <label className="flex cursor-pointer items-start gap-3 text-[0.75rem] leading-relaxed text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={marketingConsent}
-            onChange={(event) => setMarketingConsent(event.target.checked)}
-            className="mt-0.5 size-4 shrink-0 accent-moss"
-          />
-          <span>
-            Email me occasional product updates and research workflow tips. Optional;
-            unsubscribe at any time.
-          </span>
-        </label>
       </div>
 
       <div className="mt-5 space-y-4">

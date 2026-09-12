@@ -7,7 +7,6 @@ import {
   BrainCircuit,
   CheckCircle2,
   CircleHelp,
-  Download,
   Headphones,
   KeyRound,
   Laptop,
@@ -281,8 +280,8 @@ const brainstormFailureMessages: Record<string, readonly [german: string, englis
     "This thought-stream version is already being structured.",
   ],
   capacity_unavailable: [
-    "Für die Strukturierung ist momentan keine Kapazität verfügbar.",
-    "No structuring capacity is available right now.",
+    "Die Strukturierung ist momentan nicht verfügbar.",
+    "Structuring is unavailable right now.",
   ],
   brainstorm_is_solo: [
     "Brainstorming ist ein Solo-Modus ohne Teilnehmenden-Einwilligung.",
@@ -377,8 +376,8 @@ function BrainstormResultPanel({
         </p>
         <p className="mt-1 text-[0.6875rem] leading-relaxed text-muted-foreground">
           {german
-            ? "SixSentences verarbeitet den vollständig eingefrorenen Gedankenstrom. Du kannst diese Seite schließen und später zurückkommen."
-            : "SixSentences is processing the complete frozen thought stream. You can close this page and return later."}
+            ? "Die konfigurierte API verarbeitet den vollständig eingefrorenen Gedankenstrom. Du kannst diese Seite schließen und später zurückkommen."
+            : "The configured API is processing the complete frozen thought stream. You can close this page and return later."}
         </p>
       </div>
     );
@@ -837,7 +836,6 @@ function SessionCardMenu({
 
 export function LiveSessionsPanel({
   projectFilter,
-  activeProjectId,
   focusedSessionId,
   sessionPurpose,
   onFocusedSessionOutsideScope,
@@ -846,7 +844,6 @@ export function LiveSessionsPanel({
   onPairComplete,
 }: {
   projectFilter: ProjectFilter;
-  activeProjectId: number | null;
   focusedSessionId?: string | null;
   sessionPurpose?: LiveSession["purpose"];
   onFocusedSessionOutsideScope?: (session: LiveSession) => void;
@@ -857,24 +854,17 @@ export function LiveSessionsPanel({
   const queryClient = useQueryClient();
   const { me } = useAuth();
   const german = me?.language === "de";
-  const [setupOpen, setSetupOpen] = useState(false);
   const [devicesOpen, setDevicesOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<LiveSession | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<LiveCompanionDevice | null>(null);
 
   useEffect(() => {
-    const openSetup = () => setSetupOpen(true);
     const openDevices = () => setDevicesOpen(true);
-    window.addEventListener("six:open-companion-setup", openSetup);
     window.addEventListener("six:open-companion-devices", openDevices);
     return () => {
-      window.removeEventListener("six:open-companion-setup", openSetup);
       window.removeEventListener("six:open-companion-devices", openDevices);
     };
   }, []);
-  useEffect(() => {
-    if (pairRequest) setSetupOpen(true);
-  }, [pairRequest]);
 
   const config = useQuery({
     queryKey: ["live-session-config"],
@@ -997,7 +987,6 @@ export function LiveSessionsPanel({
       return deepLink;
     },
     onSuccess: (deepLink) => {
-      setSetupOpen(false);
       onPairComplete?.();
       toast.success(german ? "Dieser Mac wird verbunden…" : "Connecting this Mac…");
       window.setTimeout(() => window.location.assign(deepLink), 0);
@@ -1037,8 +1026,6 @@ export function LiveSessionsPanel({
   const brainstormCount = visibleSessions.filter((session) => session.purpose === "brainstorm").length;
   const brainstormView = sessionPurpose === "brainstorm";
   const conversationView = sessionPurpose === "conversation";
-  const desktopAvailable = config.data?.desktop.status === "available";
-
   return (
     <section
       className="mt-7"
@@ -1107,37 +1094,16 @@ export function LiveSessionsPanel({
               <p className="mt-2 max-w-2xl text-[0.8125rem] leading-relaxed text-muted-foreground">
                 {brainstormView
                   ? german
-                    ? "Wähle im Companion den Modus Brainstorming. Er erfasst ausschließlich dein Mikrofon; Zusammenfassung, Themen, Ideen, offene Fragen und nächste Schritte erscheinen anschließend hier."
-                    : "Choose Brainstorm in the Companion. It captures your microphone only; the summary, themes, ideas, open questions and next steps then appear here."
+                    ? "Ein separat bereitgestellter, kompatibler Desktop-Client kann private Brainstormings vom Mikrofon an diesen Arbeitsbereich senden."
+                    : "A separately supplied compatible desktop client can send private microphone brainstorms to this workspace."
                   : conversationView
                     ? german
-                      ? "Wähle im Companion den Modus Live-Gespräch. Nach Einwilligung werden Mikrofon und Systemaudio transkribiert; das vollständige Gespräch erscheint anschließend hier."
-                      : "Choose Live conversation in the Companion. After consent, microphone and system audio are transcribed and the complete conversation appears here."
+                      ? "Ein separat bereitgestellter, kompatibler Desktop-Client kann nach Einwilligung transkribierte Live-Gespräche an diesen Arbeitsbereich senden."
+                      : "A separately supplied compatible desktop client can send consented, transcribed live conversations to this workspace."
                     : german
-                      ? "Der Companion erfasst Live-Gespräche nach Einwilligung sowie private Brainstormings und ordnet beide dem passenden Arbeitsbereich zu."
-                      : "The Companion captures consented live conversations and private brainstorms, then routes each to its matching workspace."}
+                      ? "Diese Ansicht unterstützt Sessions aus einem separat bereitgestellten, kompatiblen Desktop-Client."
+                      : "This view supports sessions from a separately supplied compatible desktop client."}
               </p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                {desktopAvailable && config.data?.desktop.download_url ? (
-                  <Button asChild className="rounded-full">
-                    <a href={config.data.desktop.download_url}>
-                      <Download className="size-4" /> {german ? "macOS Preview laden" : "Download macOS preview"}
-                    </a>
-                  </Button>
-                ) : (
-                  <Button className="rounded-full" disabled>
-                    <Download className="size-4" /> {german ? "macOS Companion nicht verfügbar" : "macOS companion unavailable"}
-                  </Button>
-                )}
-                <Button variant="outline" className="rounded-full" onClick={() => setSetupOpen(true)}>
-                  {german ? "Einrichtung" : "Setup guide"}
-                </Button>
-              </div>
-              {config.data?.desktop.minimum_version && (
-                <p className="mt-3 font-mono text-[0.625rem] text-muted-foreground">
-                  {german ? "Mindestversion" : "Minimum companion version"} {config.data.desktop.minimum_version}
-                </p>
-              )}
             </div>
           </div>
         </div>
@@ -1157,11 +1123,6 @@ export function LiveSessionsPanel({
                     ? "Aufnahme im Companion starten; die Session erscheint im passenden Arbeitsbereich."
                     : "Start capture in the Companion; the session appears in its matching workspace."}
             </p>
-            {desktopAvailable && config.data?.desktop.download_url && (
-              <Button asChild variant="outline" size="sm" className="h-8 rounded-full">
-                <a href={config.data.desktop.download_url}><Download className="size-3.5" /> {german ? "macOS Preview" : "macOS preview"}</a>
-              </Button>
-            )}
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {visibleSessions.map((session) => (
@@ -1177,17 +1138,16 @@ export function LiveSessionsPanel({
       )}
 
       <Dialog
-        open={setupOpen}
+        open={Boolean(pairRequest)}
         onOpenChange={(open) => {
-          setSetupOpen(open);
           if (!open && pairRequest) onPairComplete?.();
         }}
       >
         <DialogContent className="max-h-[min(92vh,54rem)] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle className="font-serif text-2xl">{german ? "Companion Preview einrichten" : "Set up the Companion preview"}</DialogTitle>
+            <DialogTitle className="font-serif text-2xl">{german ? "Desktop-Client verbinden" : "Connect desktop client"}</DialogTitle>
             <DialogDescription>
-              {german ? "Installiere die frühe macOS Preview, verbinde diesen Mac und wähle für jede Session den passenden Modus." : "Install the early macOS preview, connect this Mac and choose the right mode for each session."}
+              {german ? "Ein separat bereitgestellter, kompatibler Desktop-Client fordert Zugriff auf diesen Arbeitsbereich an." : "A separately supplied compatible desktop client is requesting access to this workspace."}
             </DialogDescription>
           </DialogHeader>
           {pairRequest && (
@@ -1222,33 +1182,6 @@ export function LiveSessionsPanel({
                 </div>
               </div>
             </div>
-          )}
-          <ol className="space-y-4">
-            {[
-              german
-                ? ["1", "Installieren und verbinden", "Installiere die macOS Preview und verbinde diesen Mac über den Browser mit deinem Konto."]
-                : ["1", "Install and connect", "Install the macOS preview and connect this Mac to your account through the browser."],
-              german
-                ? ["2", "Modus wählen", "Wähle Live-Gespräch für Calls oder Brainstorming, wenn du allein frei sprechen und deine Gedanken strukturieren möchtest."]
-                : ["2", "Choose a mode", "Choose Live conversation for calls, or Brainstorm when you want to speak freely alone and structure your thoughts."],
-              german
-                ? ["3", "Passende Audiofreigabe", "Brainstorming benötigt nur Mikrofon und Spracherkennung. Für Live-Gespräche erlaube zusätzlich Systemaudio."]
-                : ["3", "Allow the matching audio", "Brainstorm needs microphone and speech recognition only. For live conversations, grant microphone, system audio and speech recognition access in macOS Settings."],
-              german
-                ? ["4", "Teilnehmende informieren", "Erkläre bei einem Live-Gespräch deutlich, dass es transkribiert wird, und hole die Einwilligung ein. Ein Solo-Brainstorming hat keine Teilnehmenden-Einwilligung."]
-                : ["4", "Notify participants", "For a live conversation, state clearly that it is being transcribed, then obtain consent. A solo brainstorm has no participant-consent step."],
-              german
-                ? ["5", "Session starten", `Wähle einen Titel${activeProjectId ? " und das aktive Projekt" : " und optional ein Projekt"}; starte dann die Session im Companion.`]
-                : ["5", "Start the session", `Choose a title${activeProjectId ? " and the active project" : " and optionally a project"}, then start the session in the companion.`],
-            ].map(([number, title, description]) => (
-              <li key={number} className="flex gap-3">
-                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-secondary font-mono text-[0.6875rem] text-moss">{number}</span>
-                <div><p className="text-[0.8125rem] font-medium text-foreground">{title}</p><p className="mt-0.5 text-[0.75rem] leading-relaxed text-muted-foreground">{description}</p></div>
-              </li>
-            ))}
-          </ol>
-          {desktopAvailable && config.data?.desktop.download_url && (
-            <Button asChild className="rounded-full"><a href={config.data.desktop.download_url}><Download className="size-4" /> {german ? "macOS Preview laden" : "Download macOS preview"}</a></Button>
           )}
         </DialogContent>
       </Dialog>

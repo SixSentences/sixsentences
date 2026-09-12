@@ -141,8 +141,8 @@ function tourSteps(isGerman: boolean): Step[] {
         t("Mit dem Würfel eine Beispielfrage einsetzen", "Use the dice to insert an example"),
       ],
       hint: t(
-        "Stärkere Modelle und umfangreichere Ausführung wirken sich entsprechend stärker auf die Nutzung aus.",
-        "Stronger models and more extensive execution have a proportionally larger usage impact.",
+        "Stärkere Modelle und umfangreichere Ausführung können Qualität und Laufzeit verändern.",
+        "Stronger models and more extensive execution can change quality and runtime.",
       ),
       placement: "above",
       compactPlacement: "top",
@@ -192,8 +192,8 @@ function tourSteps(isGerman: boolean): Step[] {
         t("Webquellen: graue Literatur", "Web sources: grey literature"),
       ],
       hint: t(
-        "Mehr Quellen erhöhen Abdeckung, Laufzeit und Nutzung. „Mehr“ ist nicht automatisch „besser“.",
-        "More sources increase coverage, runtime and usage. More is not automatically better.",
+        "Mehr Quellen erhöhen Abdeckung und Laufzeit. „Mehr“ ist nicht automatisch „besser“.",
+        "More sources increase coverage and runtime. More is not automatically better.",
       ),
       action: "open-review-settings",
       placement: "below",
@@ -836,8 +836,8 @@ function manuscriptTourSteps(isGerman: boolean): Step[] {
       chapter: t("Agent", "Agent"),
       title: t("Modell und Änderungsmodus bewusst wählen", "Choose the model and edit mode deliberately"),
       body: t(
-        "Unten stellst du die Aufgabe. Der Modellwähler beeinflusst Qualität und Nutzung. Auto Apply übernimmt Text-Patches direkt; ausgeschaltet wartet jede Änderung auf dein Apply. Markierte Passagen reisen automatisch mit.",
-        "Give the task at the bottom. Model choice affects quality and usage. Auto Apply lands text patches immediately; when off, every change waits for Apply. Selected passages travel with the prompt.",
+        "Unten stellst du die Aufgabe. Der Modellwähler beeinflusst Ergebnisqualität und Laufzeit. Auto Apply übernimmt Text-Patches direkt; ausgeschaltet wartet jede Änderung auf dein Apply. Markierte Passagen reisen automatisch mit.",
+        "Give the task at the bottom. Model choice affects result quality and runtime. Auto Apply lands text patches immediately; when off, every change waits for Apply. Selected passages travel with the prompt.",
       ),
       features: [
         t("Modell auswählen", "Choose a model"),

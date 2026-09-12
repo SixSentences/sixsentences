@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, ExternalLink, Globe2, Laptop2, Loader2, Trash2 } from "lucide-react";
+import { Globe2, Laptop2, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
@@ -17,13 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { resolveBrowserCaptureDistribution } from "@/lib/browser-capture-distribution.mjs";
 import { formatDate } from "@/lib/format";
-
-const browserCaptureDistribution = resolveBrowserCaptureDistribution({
-  nodeEnv: process.env.NODE_ENV,
-  storeUrl: process.env.NEXT_PUBLIC_BROWSER_CAPTURE_STORE_URL,
-});
 
 export function BrowserCaptureDevices() {
   const { me } = useAuth();
@@ -65,69 +59,11 @@ export function BrowserCaptureDevices() {
           <DialogTitle>{german ? "Verbundene Browser" : "Connected browsers"}</DialogTitle>
           <DialogDescription>
             {german
-              ? "Widerrufe Browser, die keine Quellen mehr in deiner Library speichern dürfen."
-              : "Revoke browsers that should no longer save sources to your Library."}
+              ? "Verwalte die widerrufbaren Zugänge kompatibler Capture-Clients. Diese Open-Source-Distribution enthält keine Browser-Erweiterung."
+              : "Manage revocable access for compatible capture clients. This open-source distribution does not include a browser extension."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-          {browserCaptureDistribution ? (
-            <div className="rounded-2xl border border-border bg-muted/20 p-4">
-              {browserCaptureDistribution.kind === "store" ? (
-                <>
-                  <p className="text-[0.8125rem] font-medium">
-                    {german ? "Browser Capture installieren" : "Install Browser Capture"}
-                  </p>
-                  <p className="mt-1 text-[0.71875rem] leading-relaxed text-muted-foreground">
-                    {german
-                      ? "Installiere die Chrome-Erweiterung aus dem Chrome Web Store. Updates werden danach automatisch bereitgestellt."
-                      : "Install the Chrome extension from the Chrome Web Store. Updates are delivered automatically."}
-                  </p>
-                  <Button asChild size="sm" className="mt-3 h-8 rounded-full">
-                    <a
-                      href={browserCaptureDistribution.href}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <ExternalLink className="size-3.5" />
-                      {german ? "Chrome Web Store öffnen" : "Open Chrome Web Store"}
-                    </a>
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <p className="text-[0.8125rem] font-medium">
-                    {german ? "Chrome- und Edge-Preview installieren oder aktualisieren" : "Install or update the Chrome and Edge preview"}
-                  </p>
-                  <ol className="mt-2 list-inside list-decimal space-y-1 text-[0.71875rem] leading-relaxed text-muted-foreground">
-                    <li>{german ? "ZIP laden und entpacken." : "Download and unzip the package."}</li>
-                    <li>{german ? "chrome://extensions oder edge://extensions öffnen." : "Open chrome://extensions or edge://extensions."}</li>
-                    <li>{german ? "Entwicklermodus aktivieren und „Entpackte Erweiterung laden“ wählen." : "Enable Developer mode and choose Load unpacked."}</li>
-                    <li>{german ? "Bei einer bestehenden Preview alle Dateien im geladenen Ordner ersetzen und auf „Neu laden“ klicken." : "For an existing preview, replace every file in its loaded folder and click Reload."}</li>
-                  </ol>
-                  <Button asChild size="sm" className="mt-3 h-8 rounded-full">
-                    <a href={browserCaptureDistribution.href} download>
-                      <Download className="size-3.5" />
-                      {german ? "Preview herunterladen" : "Download preview"}
-                    </a>
-                  </Button>
-                  <p className="mt-2 text-[0.625rem] text-muted-foreground">
-                    {german ? "Version 0.1.9 · Entpackte Previews aktualisieren sich nicht automatisch · Version im Popup prüfen" : "Version 0.1.9 · unpacked previews do not auto-update · verify the version in the popup"}
-                  </p>
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-border bg-muted/20 p-4">
-              <p className="text-[0.8125rem] font-medium">
-                {german ? "Chrome-Erweiterung in Prüfung" : "Chrome extension under review"}
-              </p>
-              <p className="mt-1 text-[0.71875rem] leading-relaxed text-muted-foreground">
-                {german
-                  ? "Der Installationslink erscheint hier, sobald die Erweiterung im Chrome Web Store freigegeben ist."
-                  : "The install link will appear here as soon as the extension is approved in the Chrome Web Store."}
-              </p>
-            </div>
-          )}
           {devices.isLoading ? (
             <div className="grid min-h-24 place-items-center"><Loader2 className="size-4 animate-spin text-moss" /></div>
           ) : (devices.data?.devices.length ?? 0) === 0 ? (

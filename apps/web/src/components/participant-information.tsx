@@ -26,7 +26,7 @@ export function ParticipantNoticeContent({ notice }: { notice: ParticipantNotice
             </section>
           ))}
           {notice.privacy_notice_url && <a className="block underline underline-offset-2" href={notice.privacy_notice_url} target="_blank" rel="noreferrer">{de ? "Datenschutzhinweis der Studie" : "Study privacy notice"}</a>}
-          <a className="block underline underline-offset-2" href={notice.platform_privacy_url} target="_blank" rel="noreferrer">{de ? "SixSentences Datenschutz" : "SixSentences privacy notice"}</a>
+          <a className="block underline underline-offset-2" href={notice.platform_privacy_url} target="_blank" rel="noreferrer">{de ? "Datenschutzhinweis der Instanz" : "Deployment privacy notice"}</a>
           <p className="text-xs text-muted-foreground">{de ? "Fassung" : "Version"} {notice.version}</p>
         </div>
       </details>
@@ -42,8 +42,8 @@ const fields: Array<{ key: keyof ParticipantInformation; label: string; hint?: s
   { key: "purpose", label: "Purpose of this study", multiline: true, max: 2000 },
   { key: "data_categories", label: "What data and answers are collected?", hint: "Include respondent labels, transcript and audio if applicable. Do not request sensitive or special-category data.", multiline: true, max: 1500 },
   { key: "legal_basis_details", label: "Explain the legal basis", hint: "Consent: describe the specific purpose. Public task: identify the statutory basis. Legitimate interests: identify the concrete interests and assess participants' rights.", multiline: true, max: 1500 },
-  { key: "retention_period", label: "Deletion deadline or concrete retention criteria", hint: "You must implement this period. This field does not schedule automatic deletion; platform backup periods are disclosed separately.", multiline: true, max: 1500 },
-  { key: "additional_recipients", label: "Who in your institution or outside it receives the data?", hint: "State explicitly if there are no additional recipients. SixSentences and its service providers are disclosed separately.", multiline: true, max: 1500 },
+  { key: "retention_period", label: "Deletion deadline or concrete retention criteria", hint: "You must implement this period. This field does not schedule automatic deletion; the deployment's backup periods must be disclosed separately.", multiline: true, max: 1500 },
+  { key: "additional_recipients", label: "Who in your institution or outside it receives the data?", hint: "State explicitly if there are no additional recipients. The deployment operator and its service providers must be disclosed separately.", multiline: true, max: 1500 },
   { key: "additional_transfers", label: "Additional international transfers and safeguards", hint: "State explicitly if none. For your own transfers, name countries, safeguards and where participants can obtain a copy.", multiline: true, max: 1500 },
   { key: "supervisory_authority", label: "Competent supervisory authority and complaint contact", max: 1000 },
   { key: "privacy_notice_url", label: "Institution / study privacy notice (optional HTTPS link)", max: 2000 },
@@ -107,10 +107,15 @@ export function ParticipantInformationEditor({ value, onSave, gaps = [] }: {
       </div>
       <label className="flex items-start gap-2 text-sm leading-relaxed">
         <input type="checkbox" className="mt-1" checked={draft.researcher_reviewed ?? false} onChange={(event) => change("researcher_reviewed", event.target.checked)} />
-        I am authorized by the controller, have assessed the stated legal basis, and have reviewed these facts and the platform processing disclosures. No additional publication or optional use is included in this participation.
+        I am authorized by the controller, have assessed the stated legal basis, and have reviewed these facts and the deployment&apos;s processing disclosures. No additional publication or optional use is included in this participation.
       </label>
       <p className="text-xs text-muted-foreground">A completeness check is not legal approval. Confirm your institution's processing agreement and any international-transfer safeguards before inviting participants.</p>
-      <p className="flex gap-4 text-xs"><a href={publicLegalUrl("privacy")} target="_blank" rel="noreferrer" className="underline">Platform privacy disclosures</a><a href={publicLegalUrl("dpa")} target="_blank" rel="noreferrer" className="underline">Processing agreement</a></p>
+      {publicLegalUrl("privacy") || publicLegalUrl("dpa") ? (
+        <p className="flex gap-4 text-xs">
+          {publicLegalUrl("privacy") ? <a href={publicLegalUrl("privacy")!} target="_blank" rel="noreferrer" className="underline">Deployment privacy notice</a> : null}
+          {publicLegalUrl("dpa") ? <a href={publicLegalUrl("dpa")!} target="_blank" rel="noreferrer" className="underline">Processing agreement</a> : null}
+        </p>
+      ) : null}
       <Button disabled={saving} onClick={async () => {
         setSaving(true); setResult("");
         try { await onSave(draft); setResult("Participant information saved."); }

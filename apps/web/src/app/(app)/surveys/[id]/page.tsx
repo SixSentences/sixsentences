@@ -1427,7 +1427,7 @@ export default function SurveyWorkspacePage() {
                 <section className="min-w-0 rounded-3xl border border-border bg-card p-6">
                   <p className="font-mono text-[0.625rem] uppercase tracking-[0.18em] text-moss">Participant link</p>
                   <h2 className="mt-2 font-serif text-2xl text-foreground">Collect responses anywhere</h2>
-                  <p className="mt-2 text-[0.78125rem] leading-relaxed text-muted-foreground">The hosted form works without a SixSentences account. Participant identity is optional and off by default.</p>
+                  <p className="mt-2 text-[0.78125rem] leading-relaxed text-muted-foreground">The public form works without a SixSentences account. Participant identity is optional and off by default.</p>
                   <div className="mt-5 flex items-center gap-2 rounded-2xl border border-border bg-secondary/40 p-2 pl-4">
                     <span className="min-w-0 flex-1 truncate font-mono text-[0.6875rem] text-muted-foreground">{publicUrl}</span>
                     <Button size="sm" className="rounded-full" onClick={() => { void navigator.clipboard.writeText(publicUrl); toast.success("Survey link copied."); }}><Clipboard className="size-3.5" /> Copy</Button>
