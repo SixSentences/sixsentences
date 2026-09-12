@@ -453,6 +453,12 @@ export default function VoiceStudyBuilderPage() {
       toast.error("Raise the fieldwork limit to at least the session cap first.");
       return;
     }
+    if (study.spoken_processing_ready !== true) {
+      toast.error(
+        "Approve the exact spoken-processing scope in Participant information before starting a pilot.",
+      );
+      return;
+    }
     pilotStartInFlight.current = true;
     setStarting(true);
     try {
@@ -638,7 +644,10 @@ export default function VoiceStudyBuilderPage() {
   }
 
   const configured = voiceConfig?.configured ?? true;
-  const publicSpokenAvailable = voiceConfig?.public_spoken_available ?? false;
+  const studySpokenProcessingReady = study.spoken_processing_ready === true;
+  const publicSpokenGloballyAvailable = voiceConfig?.public_spoken_available ?? false;
+  const publicSpokenAvailable =
+    publicSpokenGloballyAvailable && studySpokenProcessingReady;
   const maxLiveSessionMinutes = voiceConfig?.max_live_session_minutes;
   const currentSessionCapExceedsLimit =
     typeof maxLiveSessionMinutes === "number" &&
@@ -786,7 +795,7 @@ export default function VoiceStudyBuilderPage() {
               settlingSession ||
               currentSessionCapExceedsLimit ||
               !studyLimitsAreValid ||
-              (!pendingPilotFinalize && !configured)
+              (!pendingPilotFinalize && (!configured || !studySpokenProcessingReady))
             }
             onClick={() => {
               if (pendingPilotFinalize) {
@@ -806,6 +815,8 @@ export default function VoiceStudyBuilderPage() {
                 ? `Choose a session cap of ${maxLiveSessionMinutes} minutes or less first.`
                 : !studyLimitsAreValid
                   ? "Raise the fieldwork limit to at least the session cap first."
+                : !studySpokenProcessingReady
+                  ? "Approve the exact spoken-processing scope in Participant information first."
                 : undefined
             }
           >
@@ -1324,12 +1335,18 @@ export default function VoiceStudyBuilderPage() {
                     <p className="mb-3 text-[0.6875rem] leading-relaxed text-muted-foreground">
                       How she sounds, paces and structures the conversations.
                     </p>
-                    {!publicSpokenAvailable && (
+                    {!studySpokenProcessingReady ? (
+                      <p className="mb-3 rounded-xl border border-amber-500/30 bg-amber-50 px-3 py-2 text-[0.6875rem] leading-relaxed text-amber-800 dark:bg-amber-300/10 dark:text-amber-200">
+                        Spoken processing is not approved for the current study scope. The
+                        spoken pilot stays disabled and participation links remain written-only
+                        until you complete the spoken-processing approval below.
+                      </p>
+                    ) : !publicSpokenGloballyAvailable ? (
                       <p className="mb-3 rounded-xl border border-border bg-secondary/45 px-3 py-2 text-[0.6875rem] leading-relaxed text-muted-foreground">
                         Voice controls apply to your authenticated spoken pilot. Public
                         participation links currently open the written AI interview.
                       </p>
-                    )}
+                    ) : null}
                     <div className="space-y-3">
                       <div className="space-y-1.5">
                         <Label className="text-[0.6875rem]">Tone</Label>
@@ -1508,8 +1525,10 @@ export default function VoiceStudyBuilderPage() {
                   </div>
 
                   <ParticipantInformationEditor
-                    key={study.id}
+                    key={`${study.id}:${study.updated_at}`}
                     value={{ language: study.language, ...study.participant_information }}
+                    gaps={study.participant_information_gaps ?? []}
+                    requireDpia
                     onSave={(participant_information) => updateSetting.mutateAsync({ participant_information })}
                   />
                   </div>

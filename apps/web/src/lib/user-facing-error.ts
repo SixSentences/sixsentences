@@ -1,11 +1,9 @@
 const DEFAULT_PUBLIC_ERROR = "That didn't work. Please try again.";
 const DEFAULT_STORED_ERROR = "We couldn't process this item. Please try again.";
 
-export type AvailabilityErrorKind = "feature" | "resource" | "concurrency" | "limit" | "unavailable";
+export type AvailabilityErrorKind = "resource" | "concurrency" | "limit" | "unavailable";
 
 const AVAILABILITY_KIND_BY_CODE: Readonly<Record<string, AvailabilityErrorKind>> = {
-  feature_not_in_plan: "feature",
-  upgrade_required: "feature",
   capacity_exhausted: "resource",
   capacity_unavailable: "resource",
   voice_interview_capacity_unavailable: "resource",
@@ -48,7 +46,6 @@ const PUBLIC_ERROR_BY_CODE: Readonly<Record<string, string>> = {
   conversation_complete_has_no_payload: "There is no completed conversation to save yet.",
   conversation_consent_required: "Confirm the participant information before starting the conversation.",
   entitlement_limit: "This action is currently unavailable. Please try again or contact the workspace operator.",
-  feature_not_in_plan: "This action is not enabled on the current deployment.",
   fulltext_access_gap: "Some full texts are unavailable. Review the available sources before continuing.",
   fulltext_review_pending: "Complete the pending full-text review before continuing.",
   github_connection_failed: "The repository could not be connected. Review the access settings and try again.",
@@ -104,7 +101,6 @@ const PUBLIC_ERROR_BY_CODE: Readonly<Record<string, string>> = {
   search_coverage_uncertain: "Search coverage could not be confirmed. Review the search before continuing.",
   search_coverage_undetermined: "Search coverage could not be determined. Review the search before continuing.",
   selection_not_on_page: "Select text that is visible on the current page.",
-  upgrade_required: "This action is not enabled on the current deployment.",
   voice_interview_capacity_unavailable:
     "This interview cannot start because the required resources are unavailable. Please try again later or contact the research team.",
   voice_study_budget_below_session_cap:

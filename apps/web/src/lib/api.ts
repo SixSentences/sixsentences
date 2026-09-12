@@ -1,9 +1,9 @@
 /**
- * Typed client for a compatible SixSentences workspace API.
+ * Typed client for the bundled self-hosted SixSentences workspace API.
  *
  * Auth is an opaque bearer token kept in localStorage. Error contract:
  * 401 for the current token clears the session and announces `six:unauthorized`.
- * 402 uses stable codes to distinguish feature access and resource limits.
+ * Legacy 402 responses use stable codes to distinguish deployment resource limits.
  */
 
 import type { WriterSelection } from "@/lib/writer-selection";

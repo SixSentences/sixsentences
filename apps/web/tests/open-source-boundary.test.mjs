@@ -1,9 +1,36 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
 const read = (path) => readFileSync(join(process.cwd(), path), "utf8");
+
+function sourceFiles(directory) {
+  return readdirSync(join(process.cwd(), directory), { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? sourceFiles(path) : [path];
+  });
+}
+
+test("the complete source tree excludes hosted commercial and operator surfaces", () => {
+  const source = sourceFiles("src").map(read).join("\n");
+
+  assert.doesNotMatch(
+    source,
+    /stripe|checkout|billing|subscription|price_eur|capacity_topup|feature_not_in_plan|upgrade_required|(?:app|api)\.sixsentences\.com/i,
+  );
+  for (const path of [
+    "src/app/(app)/admin/page.tsx",
+    "src/app/(app)/plans/page.tsx",
+    "src/components/settings/plan-card.tsx",
+    "src/components/settings/upgrade-dialog.tsx",
+    "src/components/shell/credit-badge.tsx",
+    "src/lib/billing-reconciliation.ts",
+    "src/lib/billing-sync.ts",
+  ]) {
+    assert.equal(existsSync(join(process.cwd(), path)), false, path);
+  }
+});
 
 test("registration legal versions belong to the deployment and fail closed", () => {
   const legal = read("src/lib/legal.ts");
@@ -120,13 +147,18 @@ test("provider catalogs and optional companion distribution stay operator-owned"
   assert.match(repository, /Continue only if the configured API stores the PAT encrypted/);
 });
 
-test("wire types describe a compatible API rather than a bundled hosted backend", () => {
+test("wire types describe the bundled self-hosted API rather than a hosted backend", () => {
   const api = read("src/lib/api.ts");
   const types = read("src/lib/types.ts");
+  const errors = read("src/lib/user-facing-error.ts");
 
-  assert.match(api, /Typed client for a compatible SixSentences workspace API/);
-  assert.match(types, /Wire types for a compatible SixSentences workspace API/);
+  assert.match(api, /Typed client for the bundled self-hosted SixSentences workspace API/);
+  assert.match(types, /Wire types for the bundled self-hosted SixSentences workspace API/);
   assert.doesNotMatch(`${api}\n${types}`, /SixSentences_ core API|FastAPI responses/);
+  assert.doesNotMatch(
+    `${api}\n${types}\n${errors}`,
+    /stripe|checkout|billing|subscription|price_eur|capacity_topup|feature_not_in_plan|upgrade_required/i,
+  );
 });
 
 test("visible workflow guidance describes quality and runtime without usage economics", () => {
@@ -151,6 +183,20 @@ test("the hosted ideas board and moderation API are excluded", () => {
   assert.doesNotMatch(api, /api\.features|createFeature|voteFeature|\/features/);
   assert.doesNotMatch(queries, /useFeatures|\["features"\]/);
   assert.doesNotMatch(types, /FeatureRequest|FeatureStatus/);
+});
+
+test("the self-hosted developer API reference is present without commercial contracts", () => {
+  const docs = read("src/app/(app)/docs/page.tsx");
+  const menu = read("src/components/shell/user-menu.tsx");
+
+  assert.match(menu, /href="\/docs"/);
+  assert.match(docs, /Developer API/);
+  assert.match(docs, /public-api\/openapi\.json/);
+  assert.match(docs, /Settings → API keys/);
+  assert.doesNotMatch(
+    docs,
+    /billing|stripe|checkout|pricing|subscription|price_eur|orgs\/current\/plan|capacity_percent|plan entitlements/i,
+  );
 });
 
 test("registration never offers or enables operator marketing", () => {
