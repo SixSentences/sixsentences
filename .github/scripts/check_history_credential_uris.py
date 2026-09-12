@@ -18,7 +18,9 @@ _CREDENTIAL_URI_RE: Final = re.compile(
     re.IGNORECASE,
 )
 _SYNTHETIC_USERNAMES: Final = frozenset({"example", "test", "user", "username"})
-_SYNTHETIC_PASSWORDS: Final = frozenset({"example", "password", "placeholder", "secret", "test"})
+_SYNTHETIC_PASSWORDS: Final = frozenset(
+    {"example", "pass", "password", "placeholder", "secret", "test"}
+)
 _RESERVED_HOSTS: Final = frozenset({"example.com", "example.net", "example.org"})
 _RESERVED_SUFFIXES: Final = (".example", ".invalid", ".localhost", ".test")
 # These two literals were introduced by this scanner's own synthetic unit tests
@@ -58,8 +60,10 @@ def _is_explicit_synthetic_fixture(username: str, password: str, host: str) -> b
     """Allow only obvious placeholders hosted by reserved example domains."""
 
     normalized_host = host.removeprefix("[").removesuffix("]").casefold()
-    reserved_host = normalized_host in _RESERVED_HOSTS or normalized_host.endswith(
-        _RESERVED_SUFFIXES
+    reserved_host = (
+        normalized_host in _RESERVED_HOSTS
+        or any(normalized_host.endswith(f".{host}") for host in _RESERVED_HOSTS)
+        or normalized_host.endswith(_RESERVED_SUFFIXES)
     )
     return (
         reserved_host

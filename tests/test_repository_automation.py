@@ -321,6 +321,17 @@ diff --git a/tests/example.py b/tests/example.py
     assert [violation.label() for violation in violations] == ["aaaaaaaaaaaa:tests/example.py:2"]
 
 
+def test_history_uri_scan_allows_placeholder_credentials_on_reserved_subdomains() -> None:
+    patch = """__SIX_COMMIT__dddddddddddddddddddddddddddddddddddddddd
+diff --git a/tests/example.py b/tests/example.py
++++ b/tests/example.py
+@@ -0,0 +1 @@
++safe = "redis://user:pass@cache.research.example.org/0"
+"""
+
+    assert URI_HISTORY.find_violations(patch) == []
+
+
 def test_history_uri_scan_never_includes_the_detected_value_in_diagnostics() -> None:
     unsafe_uri = "https://" + "operator:do-not-print-this" + "@internal.example.com/api"
     patch = f"""__SIX_COMMIT__bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
