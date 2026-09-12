@@ -548,4 +548,4 @@ def analyze_rows(
 def analyze(dataset: ParsedDataset, recipe: AnalysisRecipe) -> AnalysisResult:
     """Execute a typed recipe over a parsed dataset's complete row set."""
 
-    return analyze_rows(dataset.rows, recipe)
+    return analyze_rows(dataset.rows, recipe, limits=dataset.limits)

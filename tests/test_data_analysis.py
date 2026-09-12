@@ -213,6 +213,17 @@ def test_analysis_rejects_row_limit_instead_of_sampling() -> None:
         )
 
 
+def test_analysis_preserves_the_limits_used_to_parse_a_dataset() -> None:
+    limits = replace(DEFAULT_LIMITS, max_rows=DEFAULT_LIMITS.max_rows + 1)
+    csv = b"value\n" + b"1\n" * limits.max_rows
+
+    dataset = parse_dataset(csv, "large.csv", limits=limits)
+    result = analyze(dataset, MissingnessRecipe())
+
+    assert dataset.limits is limits
+    assert result.rows == limits.max_rows
+
+
 def test_analysis_rejects_overflow_instead_of_emitting_nonfinite_json() -> None:
     with pytest.raises(DatasetAnalysisError, match="overflow"):
         analyze_rows(
