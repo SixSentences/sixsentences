@@ -4,7 +4,7 @@ message: >-
   surrounding search, screening, and analysis method.
 title: SixSentences
 type: software
-version: 0.1.0-alpha.1
+version: 0.2.0-alpha.1
 date-released: 2026-09-12
 authors:
   - name: SixSentences contributors
@@ -17,6 +17,8 @@ keywords:
   - systematic literature search
   - evidence synthesis
   - research data analysis
+  - self-hosting
+  - research interviews
   - information retrieval
   - meta-analysis
   - PRISMA
