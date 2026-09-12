@@ -4,7 +4,7 @@
 
 <h1 align="center">SixSentences</h1>
 
-<p align="center"><strong>Open research software for work that stays inspectable.</strong></p>
+<p align="center"><strong>An inspectable research workspace—from literature discovery to evidence, data, figures, and writing.</strong></p>
 
 <p align="center">
   Discover evidence&nbsp;&nbsp;·&nbsp;&nbsp;Analyse research data&nbsp;&nbsp;·&nbsp;&nbsp;Trace decisions&nbsp;&nbsp;·&nbsp;&nbsp;Build research workflows
@@ -13,9 +13,11 @@
 <p align="center">
   <a href="https://sixsentences.com">Website</a>
   &nbsp;·&nbsp;
-  <a href="https://app.sixsentences.com">Hosted workspace</a>
+  <a href="https://app.sixsentences.com">Hosted app</a>
   &nbsp;·&nbsp;
-  <a href="#quick-start">Quick start</a>
+  <a href="#quick-start">Get started</a>
+  &nbsp;·&nbsp;
+  <a href="docs/PROJECT_OVERVIEW.md">Documentation</a>
   &nbsp;·&nbsp;
   <a href="ROADMAP.md">Roadmap</a>
   &nbsp;·&nbsp;
@@ -31,19 +33,19 @@
   <a href="LICENSE"><img alt="Apache-2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-5C4EE5?style=flat-square"></a>
 </p>
 
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/03663048-70df-4666-bcb0-4c91785225a1" width="800" alt="Animated overview of the SixSentences research workspace">
+</p>
+
+<p align="center"><sub>The repository includes the sanitized workspace client in <code>apps/web</code>; hosted infrastructure and commercial services remain separate.</sub></p>
+
 > [!IMPORTANT]
 > **Early alpha (`v0.1.0-alpha.1`).** Public APIs, UI contracts, and serialized
 > outputs may change. SixSentences makes transformations and assumptions easier
 > to inspect; it does not guarantee an exhaustive search, methodological
 > compliance, or scientifically valid conclusions.
 
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/03663048-70df-4666-bcb0-4c91785225a1" width="800" alt="Animated overview of the SixSentences research workspace">
-</p>
-
-<p align="center"><sub><strong>Product preview.</strong> The sanitized web client is included in <code>apps/web</code>. The hosted API, model orchestration, billing, administration, and operations shown or implied by the product remain separate.</sub></p>
-
-## One project, two open surfaces
+## What is open
 
 SixSentences is broader than a systematic-review library. This repository opens
 two complementary parts of the research workspace while keeping their runtime
@@ -301,18 +303,3 @@ own terms; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 The SixSentences name, logo, icon, and visual identity are project marks and are
 not licensed for reuse under Apache-2.0. Customary attribution and nominative
 use remain permitted; see [TRADEMARKS.md](TRADEMARKS.md).
-
-<details>
-<summary>Accessible transcript for the product preview</summary>
-
-Research moves fast. Your tools should, too. Meet SixSentences, the AI-powered
-workspace built for scientific research. Run systematic literature reviews,
-discover relevant papers automatically, and jump straight to the passages that
-matter. Every source stays organized, with metadata extracted automatically
-into your library. Create scientific graphics directly in Visual Lab. Analyze
-surveys, interviews, and research data with AI. Then bring your sources,
-analyses, and visuals together in Manuscript, and write with AI and LaTeX. With
-the PC companion and browser extension, SixSentences stays wherever you
-research.
-
-</details>
