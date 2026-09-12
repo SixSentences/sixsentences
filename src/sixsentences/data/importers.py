@@ -419,6 +419,7 @@ def parse_dataset(
         rows=rows,
         profile=profile_rows(rows, limits=limits),
         import_notes=tuple(notes),
+        limits=limits,
     )
 
 

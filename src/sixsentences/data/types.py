@@ -116,3 +116,4 @@ class ParsedDataset:
     rows: tuple[Row, ...]
     profile: DatasetProfile
     import_notes: tuple[str, ...]
+    limits: DatasetLimits = DEFAULT_LIMITS
