@@ -202,6 +202,9 @@ def _verify_sdist(path: Path, *, package_version: str) -> None:
             metadata_members = [member for member in members if member.name.endswith("/PKG-INFO")]
             if len(metadata_members) != 1:
                 raise ReleaseValidationError(f"{path.name} must contain one PKG-INFO file")
+            lockfile_members = [member for member in members if member.name.endswith("/uv.lock")]
+            if len(lockfile_members) != 1 or not lockfile_members[0].isfile():
+                raise ReleaseValidationError(f"{path.name} must contain one regular uv.lock file")
             extracted = archive.extractfile(metadata_members[0])
             if extracted is None:
                 raise ReleaseValidationError(f"{path.name} PKG-INFO is not a regular file")

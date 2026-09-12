@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import io
 import sys
+import tarfile
 from datetime import date
+from email.message import Message
 from pathlib import Path
 from types import ModuleType
 
@@ -156,3 +159,29 @@ def test_checksum_verification_fails_on_changed_or_unlisted_artifacts(tmp_path: 
     (tmp_path / "unlisted.tar.gz").write_bytes(b"extra")
     with pytest.raises(RELEASE.ReleaseValidationError, match="exactly cover"):
         RELEASE.verify_checksums(tmp_path)
+
+
+def _write_sdist(path: Path, *, include_lockfile: bool) -> None:
+    root = "sixsentences_engine-0.1.0a1"
+    metadata = Message()
+    metadata["Name"] = "sixsentences-engine"
+    metadata["Version"] = "0.1.0a1"
+    payloads = {f"{root}/PKG-INFO": metadata.as_bytes()}
+    if include_lockfile:
+        payloads[f"{root}/uv.lock"] = b"version = 1\n"
+    with tarfile.open(path, mode="w:gz") as archive:
+        for name, payload in payloads.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            archive.addfile(info, fileobj=io.BytesIO(payload))
+
+
+def test_sdist_gate_requires_lockfile(tmp_path: Path) -> None:
+    archive = tmp_path / "sixsentences_engine-0.1.0a1.tar.gz"
+    _write_sdist(archive, include_lockfile=False)
+
+    with pytest.raises(RELEASE.ReleaseValidationError, match="uv.lock"):
+        RELEASE._verify_sdist(archive, package_version="0.1.0a1")
+
+    _write_sdist(archive, include_lockfile=True)
+    RELEASE._verify_sdist(archive, package_version="0.1.0a1")

@@ -71,6 +71,7 @@ include = [
     "/DCO",
     "/LICENSE",
     "/pyproject.toml",
+    "/uv.lock",
 ]
 
 [tool.pytest.ini_options]
