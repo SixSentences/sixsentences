@@ -26,6 +26,7 @@ def _load_script(name: str) -> ModuleType:
 
 
 DCO = _load_script("check_dco")
+CLA = _load_script("check_cla")
 RELEASE = _load_script("release")
 
 
@@ -162,6 +163,46 @@ Signed-off-by: dependabot[bot] <support@github.com>
         pull_request_author="dependabot[bot]",
     )
     assert not_final.signoffs == ()
+
+
+def test_cla_acceptance_requires_the_pull_request_author_and_exact_comment() -> None:
+    acceptance = CLA.ACCEPTANCE
+    comments = [
+        {"user": {"login": "reviewer"}, "body": acceptance},
+        {"user": {"login": "contributor"}, "body": f"quoted: {acceptance}"},
+        {"user": {"login": "contributor"}, "body": acceptance},
+    ]
+
+    assert CLA._accepted(comments, author="contributor") is True
+    assert CLA._accepted(comments[:2], author="contributor") is False
+
+
+def test_cla_instruction_marker_is_detected_without_trusting_comment_author() -> None:
+    comments = [
+        {
+            "user": {"login": "github-actions[bot]"},
+            "body": f"{CLA.INSTRUCTION_MARKER}\nInstructions",
+        }
+    ]
+
+    assert CLA._has_instruction(comments) is True
+
+
+def test_workflow_job_environment_avoids_step_only_runner_context() -> None:
+    workflows = Path(__file__).parents[1] / ".github" / "workflows"
+    invalid: list[str] = []
+    for workflow in sorted(workflows.glob("*.yml")):
+        in_job_environment = False
+        for line_number, line in enumerate(workflow.read_text(encoding="utf-8").splitlines(), 1):
+            if line.startswith("    env:"):
+                in_job_environment = True
+                continue
+            if in_job_environment and line.strip() and len(line) - len(line.lstrip()) <= 4:
+                in_job_environment = False
+            if in_job_environment and "${{ runner." in line:
+                invalid.append(f"{workflow.name}:{line_number}")
+
+    assert invalid == []
 
 
 @pytest.mark.parametrize(

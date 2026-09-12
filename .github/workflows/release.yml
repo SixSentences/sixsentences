@@ -186,7 +186,7 @@ jobs:
     env:
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONHASHSEED: "42"
-      UV_PROJECT_ENVIRONMENT: ${{ runner.temp }}/sixsentences-release-api-env
+      UV_PROJECT_ENVIRONMENT: /tmp/sixsentences-release-api-env
     steps:
       - name: Check out the tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
