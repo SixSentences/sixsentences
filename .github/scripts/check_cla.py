@@ -13,7 +13,8 @@ import urllib.request
 from typing import Final
 
 ACCEPTANCE: Final = "I have read and agree to the SixSentences CLA."
-INSTRUCTION_MARKER: Final = "<!-- sixsentences-cla-instructions -->"
+STATUS_CONTEXT: Final = "CLA / acceptance"
+EXEMPT_AUTHORS: Final = frozenset({"dependabot[bot]"})
 
 
 def _request(url: str, *, token: str, method: str = "GET", payload: object | None = None) -> object:
@@ -53,7 +54,9 @@ def _comments(api_url: str, *, token: str, repository: str, number: int) -> list
         page += 1
 
 
-def _author_login(api_url: str, *, token: str, repository: str, number: int) -> str:
+def _pull_request_identity(
+    api_url: str, *, token: str, repository: str, number: int
+) -> tuple[str, str]:
     payload = _request(f"{api_url}/repos/{repository}/pulls/{number}", token=token)
     if not isinstance(payload, dict):
         raise ValueError("GitHub pull-request response was not an object")
@@ -61,7 +64,11 @@ def _author_login(api_url: str, *, token: str, repository: str, number: int) -> 
     login = user.get("login") if isinstance(user, dict) else None
     if not isinstance(login, str) or not login:
         raise ValueError("pull request has no author login")
-    return login
+    head = payload.get("head")
+    sha = head.get("sha") if isinstance(head, dict) else None
+    if not isinstance(sha, str) or len(sha) != 40:
+        raise ValueError("pull request has no valid head SHA")
+    return login, sha
 
 
 def _accepted(comments: list[dict[str, object]], *, author: str) -> bool:
@@ -74,27 +81,30 @@ def _accepted(comments: list[dict[str, object]], *, author: str) -> bool:
     return False
 
 
-def _has_instruction(comments: list[dict[str, object]]) -> bool:
-    return any(
-        isinstance(comment.get("body"), str) and INSTRUCTION_MARKER in str(comment["body"])
-        for comment in comments
-    )
-
-
-def _post_instruction(api_url: str, *, token: str, repository: str, number: int) -> None:
-    body = (
-        f"{INSTRUCTION_MARKER}\n"
-        "This project requires both DCO sign-off on every commit and acceptance "
-        f"of [CLA.md](https://github.com/{repository}/blob/main/CLA.md). The "
-        "pull-request author can accept by "
-        "posting this exact standalone comment:\n\n"
-        f"```text\n{ACCEPTANCE}\n```"
+def _set_status(
+    api_url: str,
+    *,
+    token: str,
+    repository: str,
+    sha: str,
+    accepted: bool,
+) -> None:
+    state = "success" if accepted else "failure"
+    description = (
+        "Accepted by the pull-request author."
+        if accepted
+        else "PR author must post the exact CLA.md acceptance comment."
     )
     _request(
-        f"{api_url}/repos/{repository}/issues/{number}/comments",
+        f"{api_url}/repos/{repository}/statuses/{sha}",
         token=token,
         method="POST",
-        payload={"body": body},
+        payload={
+            "state": state,
+            "context": STATUS_CONTEXT,
+            "description": description,
+            "target_url": f"https://github.com/{repository}/blob/main/CLA.md",
+        },
     )
 
 
@@ -107,7 +117,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Check CLA acceptance and leave one instruction when it is missing."""
+    """Publish the CLA result against the exact pull-request head commit."""
 
     args = _parser().parse_args(argv)
     token = os.environ.get("GITHUB_TOKEN", "")
@@ -115,30 +125,35 @@ def main(argv: list[str] | None = None) -> int:
         print("CLA check failed: GITHUB_TOKEN is missing.", file=sys.stderr)
         return 2
     try:
-        author = _author_login(
+        author, head_sha = _pull_request_identity(
             args.api_url, token=token, repository=args.repository, number=args.number
         )
         comments = _comments(
             args.api_url, token=token, repository=args.repository, number=args.number
         )
-        if _accepted(comments, author=author):
-            print(f"CLA acceptance verified for @{author} on pull request #{args.number}.")
-            return 0
-        if not _has_instruction(comments):
-            _post_instruction(
-                args.api_url,
-                token=token,
-                repository=args.repository,
-                number=args.number,
-            )
+        exempt = author in EXEMPT_AUTHORS
+        accepted = exempt or _accepted(comments, author=author)
+        _set_status(
+            args.api_url,
+            token=token,
+            repository=args.repository,
+            sha=head_sha,
+            accepted=accepted,
+        )
     except (OSError, ValueError, urllib.error.HTTPError) as exc:
         print(f"CLA check could not run: {exc}", file=sys.stderr)
         return 2
+    if exempt:
+        print(f"CLA exemption verified for trusted automation author @{author}.")
+        return 0
+    if accepted:
+        print(f"CLA acceptance verified for @{author} on pull request #{args.number}.")
+        return 0
     print(
         f"CLA acceptance is missing: @{author} must post the exact comment from CLA.md.",
         file=sys.stderr,
     )
-    return 1
+    return 0
 
 
 if __name__ == "__main__":

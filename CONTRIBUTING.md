@@ -133,8 +133,9 @@ under the project license. Every author and declared co-author must add their
 own matching sign-off; maintainers and automation must not invent one for
 someone else. GitHub's private `noreply` address is acceptable.
 
-The pull-request author must also read `CLA.md` and post its exact acceptance
-sentence as a standalone PR comment. A repository-local workflow verifies the
-public record; no external CLA application or separately stored token is used.
+For every pull request, its author must also read `CLA.md` and post the exact
+acceptance sentence as a standalone PR comment. A repository-local workflow
+binds that public acceptance to the exact head commit; no external CLA
+application or separately stored token is used.
 
 Review and merge authority is described in [GOVERNANCE.md](GOVERNANCE.md).

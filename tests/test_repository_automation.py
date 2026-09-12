@@ -26,6 +26,7 @@ def _load_script(name: str) -> ModuleType:
 
 
 DCO = _load_script("check_dco")
+CLA = _load_script("check_cla")
 RELEASE = _load_script("release")
 
 
@@ -162,6 +163,59 @@ Signed-off-by: dependabot[bot] <support@github.com>
         pull_request_author="dependabot[bot]",
     )
     assert not_final.signoffs == ()
+
+
+def test_cla_acceptance_requires_the_pull_request_author_and_exact_comment() -> None:
+    acceptance = CLA.ACCEPTANCE
+    comments = [
+        {"user": {"login": "reviewer"}, "body": acceptance},
+        {"user": {"login": "contributor"}, "body": f"quoted: {acceptance}"},
+        {"user": {"login": "contributor"}, "body": acceptance},
+    ]
+
+    assert CLA._accepted(comments, author="contributor") is True
+    assert CLA._accepted(comments[:2], author="contributor") is False
+
+
+def test_cla_status_is_bound_to_the_exact_pull_request_head(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str, object | None]] = []
+
+    def request(
+        url: str, *, token: str, method: str = "GET", payload: object | None = None
+    ) -> object:
+        assert token == "synthetic-token"
+        calls.append((url, method, payload))
+        return {}
+
+    monkeypatch.setattr(CLA, "_request", request)
+    sha = "a" * 40
+
+    CLA._set_status(
+        "https://api.github.test",
+        token="synthetic-token",
+        repository="example/project",
+        sha=sha,
+        accepted=True,
+    )
+
+    assert calls == [
+        (
+            f"https://api.github.test/repos/example/project/statuses/{sha}",
+            "POST",
+            {
+                "state": "success",
+                "context": "CLA / acceptance",
+                "description": "Accepted by the pull-request author.",
+                "target_url": "https://github.com/example/project/blob/main/CLA.md",
+            },
+        )
+    ]
+
+
+def test_cla_exempts_only_the_trusted_dependency_bot() -> None:
+    assert frozenset({"dependabot[bot]"}) == CLA.EXEMPT_AUTHORS
 
 
 @pytest.mark.parametrize(

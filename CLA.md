@@ -43,9 +43,14 @@ I have read and agree to the SixSentences CLA.
 
 The repository-local CLA workflow verifies that public comment using GitHub's
 built-in token. It sends no acceptance record to an external CLA service and
-uses no separately stored secret. Deleting or editing the comment makes the
-check fail for an open pull request; acceptance for already merged
-contributions remains part of the public review record.
+uses no separately stored secret. The resulting status is bound to the exact
+pull-request head commit, so later commits require a fresh evaluation. The
+license granted by a valid acceptance is irrevocable as described above.
+
+Pull requests authored by GitHub's verified `dependabot[bot]` account are
+exempt because the bot cannot enter a legal agreement. Its mechanical lockfile
+and dependency updates still require DCO validation, automated checks, and
+maintainer review.
 
 This Agreement may be revised only through the process in
 [GOVERNANCE.md](GOVERNANCE.md). A revision applies to later contributions after
