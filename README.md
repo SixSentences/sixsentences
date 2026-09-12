@@ -7,6 +7,27 @@
 Transparent, composable building blocks for systematic literature-search
 workflows.
 
+https://github.com/user-attachments/assets/26bcfc2f-2f2d-432f-bf33-0e8e0645fa14
+
+*45-second overview of the separately operated hosted SixSentences product.
+The interface and hosted features shown above are not included in this engine
+repository.*
+
+<details>
+<summary>Video transcript</summary>
+
+Research moves fast. Your tools should, too. Meet SixSentences, the AI-powered
+workspace built for scientific research. Run systematic literature reviews,
+discover relevant papers automatically, and jump straight to the passages that
+matter. Every source stays organized, with metadata extracted automatically
+into your library. Create scientific graphics directly in Visual Lab. Analyze
+surveys, interviews, and research data with AI. Then bring your sources,
+analyses, and visuals together in Manuscript, and write with AI and LaTeX. With
+the PC companion and browser extension, SixSentences stays wherever you
+research.
+
+</details>
+
 SixSentences Engine parses and translates Boolean queries, searches a local
 DuckDB/Parquet corpus, ranks scholarly metadata with decomposed scores, and
 formats caller-supplied review counts as PRISMA outputs. It is a small Python
