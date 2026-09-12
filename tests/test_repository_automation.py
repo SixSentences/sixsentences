@@ -31,6 +31,7 @@ DCO = _load_script("check_dco")
 CLA = _load_script("check_cla")
 RELEASE = _load_script("release")
 STATUS = _load_script("publish_status")
+URI_HISTORY = _load_script("check_history_credential_uris")
 REPOSITORY_ROOT = Path(__file__).parents[1]
 
 
@@ -288,8 +289,38 @@ def test_security_workflow_scans_complete_history_without_provider_calls() -> No
     assert "head: ${{ github.sha }}" in workflow
     assert "--no-verification" in workflow
     assert "--results=verified,unknown,unverified" in workflow
+    assert "--exclude-detectors=URI" in workflow
+    assert "python .github/scripts/check_history_credential_uris.py" in workflow
     assert "--no-update" not in workflow
     assert "fetch-depth: 0" in workflow
+
+
+def test_history_uri_scan_allows_only_explicit_reserved_domain_placeholders() -> None:
+    patch = """__SIX_COMMIT__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+diff --git a/tests/example.py b/tests/example.py
++++ b/tests/example.py
+@@ -0,0 +1,2 @@
++safe = "https://user:password@example.org/resource"
++unsafe = "https://service-account:live-looking-value@research.example.com/resource"
+"""
+
+    violations = URI_HISTORY.find_violations(patch)
+
+    assert [violation.label() for violation in violations] == ["aaaaaaaaaaaa:tests/example.py:2"]
+
+
+def test_history_uri_scan_never_includes_the_detected_value_in_diagnostics() -> None:
+    patch = """__SIX_COMMIT__bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+diff --git a/config.txt b/config.txt
++++ b/config.txt
+@@ -0,0 +1 @@
++endpoint=https://operator:do-not-print-this@internal.example.com/api
+"""
+
+    [violation] = URI_HISTORY.find_violations(patch)
+
+    assert violation.label() == "bbbbbbbbbbbb:config.txt:1"
+    assert "do-not-print-this" not in violation.label()
 
 
 def test_cla_status_is_bound_to_the_exact_pull_request_head(

@@ -28,6 +28,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Reject credential-bearing URIs across reachable history
+        run: python .github/scripts/check_history_credential_uris.py
       - name: Scan every reachable commit without credential verification
         uses: trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c # v3.97.4
         with:
@@ -35,7 +37,7 @@ jobs:
           base: ""
           head: ${{ github.sha }}
           version: 3.97.4
-          extra_args: --no-verification --results=verified,unknown,unverified
+          extra_args: --no-verification --results=verified,unknown,unverified --exclude-detectors=URI
 
   secrets:
     name: Repository secret scan
