@@ -18,6 +18,25 @@ permissions:
   contents: read
 
 jobs:
+  history-secrets:
+    name: Git history secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out the complete reachable history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan every reachable commit without credential verification
+        uses: trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c # v3.97.4
+        with:
+          path: ./
+          base: ""
+          head: ${{ github.sha }}
+          version: 3.97.4
+          extra_args: --no-verification --results=verified,unknown,unverified --fail --no-update
+
   secrets:
     name: Repository secret scan
     runs-on: ubuntu-24.04

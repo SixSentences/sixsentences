@@ -89,11 +89,13 @@ with minimal host privileges.
 
 ### Dependencies and artifacts
 
-Lockfiles, CodeQL, dependency review, secret/configuration scanning, checksums,
-SBOMs, and provenance attestations are defense in depth. They do not prove that
-an artifact is vulnerability-free. Verify immutable tags, image digests,
-checksums, and attestations before deploying, and review changes to pinned
-GitHub Actions like any other executable dependency.
+Lockfiles, CodeQL, dependency review, current-tree and full-history secret
+scanning, configuration scanning, checksums, SBOMs, and provenance attestations
+are defense in depth. The history scanner does not submit candidate credentials
+to provider APIs for online verification. These controls do not prove that an
+artifact is vulnerability-free. Verify immutable tags, image digests, checksums,
+and attestations before deploying, and review changes to pinned GitHub Actions
+like any other executable dependency.
 
 ## Good-faith research
 

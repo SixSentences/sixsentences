@@ -264,6 +264,20 @@ def test_release_publication_requires_the_protected_environment() -> None:
     assert "\n    needs: [build, attest, self-hosting]\n" in publish_job
 
 
+def test_security_workflow_scans_complete_history_without_provider_calls() -> None:
+    workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "security.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c" in workflow
+    assert "version: 3.97.4" in workflow
+    assert 'base: ""' in workflow
+    assert "head: ${{ github.sha }}" in workflow
+    assert "--no-verification" in workflow
+    assert "--results=verified,unknown,unverified" in workflow
+    assert "fetch-depth: 0" in workflow
+
+
 def test_cla_status_is_bound_to_the_exact_pull_request_head(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

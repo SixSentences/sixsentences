@@ -16,6 +16,8 @@ or production configuration.
 - [ ] Current files and the complete public Git history have been scanned for
       secrets, key material, credentials, personal data, database dumps, logs,
       user uploads, and production artifacts.
+- [ ] The current-tree and no-verification history scanners pass at the exact
+      release commit; findings are investigated rather than broadly ignored.
 - [ ] Dependency and source-license notices are current.
 
 ## Version and review
