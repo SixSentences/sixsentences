@@ -25,7 +25,10 @@ or production configuration.
 
 ## Version and review
 
-- [ ] Engine, API, web, citation, changelog, release-note, and tag versions agree.
+- [ ] Engine and API PEP 440 versions, the API's exact engine pin, web and
+      browser-extension npm metadata/locks, citation, changelog, release note,
+      and tag versions agree; Companion plist and source versions agree with
+      each other.
 - [ ] `CITATION.cff` uses the tagged commit's UTC date.
 - [ ] The release commit is reviewed, DCO-signed, CLA-accepted, contained in
       `main`, and clean; the annotated release tag has a trusted SSH signature.

@@ -14,7 +14,7 @@ dependencies = [
     "pydantic==2.13.4",
     "pydantic-settings==2.14.2",
     "pypdf==6.16.2",
-    "sixsentences-engine==0.1.0a1",
+    "sixsentences-engine==0.2.0a1",
     "sqlalchemy==2.0.51",
     "uvicorn==0.51.0",
     "websockets==16.1.1",

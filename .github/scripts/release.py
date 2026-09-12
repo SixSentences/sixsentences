@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import plistlib
 import re
 import subprocess
 import sys
@@ -32,6 +33,13 @@ _TAG_RE: Final = re.compile(
 )
 _CHECKSUM_RE: Final = re.compile(r"^(?P<digest>[0-9a-f]{64}) [ *](?P<name>[^/\r\n]+)$")
 _DISTRIBUTION_NAME: Final = "sixsentences-engine"
+_API_DISTRIBUTION_NAME: Final = "sixsentences-community-api"
+_WEB_PACKAGE_NAME: Final = "@sixsentences/web"
+_EXTENSION_PACKAGE_NAME: Final = "@sixsentences/browser-extension"
+_ENGINE_DEPENDENCY_RE: Final = re.compile(
+    r"^sixsentences[-_.]engine(?=$|[\s<>=!~;\[])",
+    re.IGNORECASE,
+)
 
 
 class ReleaseValidationError(ValueError):
@@ -64,16 +72,200 @@ def release_version(package_version: str) -> ReleaseVersion:
     return ReleaseVersion(package_version, public, f"v{public}")
 
 
-def _read_project_version(root: Path) -> str:
-    with (root / "pyproject.toml").open("rb") as handle:
-        document = tomllib.load(handle)
+def _read_toml_document(path: Path) -> dict[str, object]:
     try:
-        value = document["project"]["version"]
-    except (KeyError, TypeError) as exc:
-        raise ReleaseValidationError("pyproject.toml has no project.version") from exc
+        with path.open("rb") as handle:
+            document = tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        raise ReleaseValidationError(f"cannot read valid TOML from {path}") from exc
+    return document
+
+
+def _read_json_document(path: Path) -> dict[str, object]:
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ReleaseValidationError(f"cannot read valid JSON from {path}") from exc
+    if not isinstance(document, dict):
+        raise ReleaseValidationError(f"{path} must contain a JSON object")
+    return document
+
+
+def _read_project_version(path: Path) -> str:
+    document = _read_toml_document(path)
+    project = document.get("project")
+    value = project.get("version") if isinstance(project, dict) else None
     if not isinstance(value, str):
-        raise ReleaseValidationError("pyproject.toml project.version must be a string")
+        raise ReleaseValidationError(f"{path} project.version must be a string")
     return value
+
+
+def _locked_package_version(path: Path, *, package_name: str) -> str:
+    document = _read_toml_document(path)
+    packages = document.get("package")
+    if not isinstance(packages, list):
+        raise ReleaseValidationError(f"{path} has no package list")
+    matches = [
+        item
+        for item in packages
+        if isinstance(item, dict) and item.get("name") == package_name
+    ]
+    if len(matches) != 1:
+        raise ReleaseValidationError(f"{path} must contain exactly one {package_name} package")
+    value = matches[0].get("version")
+    if not isinstance(value, str):
+        raise ReleaseValidationError(f"{path} {package_name} version must be a string")
+    return value
+
+
+def _validate_python_projects(root: Path, version: ReleaseVersion) -> None:
+    root_lock_version = _locked_package_version(
+        root / "uv.lock",
+        package_name=_DISTRIBUTION_NAME,
+    )
+    if root_lock_version != version.package:
+        raise ReleaseValidationError(
+            f"uv.lock {_DISTRIBUTION_NAME} version {root_lock_version!r} "
+            f"does not match {version.package!r}"
+        )
+
+    api_path = root / "services" / "api" / "pyproject.toml"
+    api_document = _read_toml_document(api_path)
+    project = api_document.get("project")
+    if not isinstance(project, dict):
+        raise ReleaseValidationError(f"{api_path} has no project table")
+    api_version = project.get("version")
+    if api_version != version.package:
+        raise ReleaseValidationError(
+            f"{api_path} project.version {api_version!r} does not match {version.package!r}"
+        )
+    dependencies = project.get("dependencies")
+    if not isinstance(dependencies, list) or not all(
+        isinstance(item, str) for item in dependencies
+    ):
+        raise ReleaseValidationError(f"{api_path} project.dependencies must be a string list")
+    engine_dependencies = [
+        item for item in dependencies if _ENGINE_DEPENDENCY_RE.match(item.strip())
+    ]
+    expected_dependency = f"{_DISTRIBUTION_NAME}=={version.package}"
+    if engine_dependencies != [expected_dependency]:
+        raise ReleaseValidationError(
+            f"{api_path} must contain exactly {expected_dependency!r}"
+        )
+
+    api_lock = root / "services" / "api" / "uv.lock"
+    for package_name in (_API_DISTRIBUTION_NAME, _DISTRIBUTION_NAME):
+        locked_version = _locked_package_version(api_lock, package_name=package_name)
+        if locked_version != version.package:
+            raise ReleaseValidationError(
+                f"{api_lock} {package_name} version {locked_version!r} "
+                f"does not match {version.package!r}"
+            )
+
+
+def _validate_npm_project(
+    root: Path,
+    *,
+    directory: str,
+    package_name: str,
+    expected_version: str,
+) -> None:
+    project_root = root / "apps" / directory
+    package_path = project_root / "package.json"
+    package = _read_json_document(package_path)
+    if package.get("name") != package_name:
+        raise ReleaseValidationError(f"{package_path} name does not match {package_name!r}")
+    if package.get("version") != expected_version:
+        raise ReleaseValidationError(
+            f"{package_path} version {package.get('version')!r} "
+            f"does not match {expected_version!r}"
+        )
+
+    lock_path = project_root / "package-lock.json"
+    lock = _read_json_document(lock_path)
+    packages = lock.get("packages")
+    locked_root = packages.get("") if isinstance(packages, dict) else None
+    if not isinstance(locked_root, dict):
+        raise ReleaseValidationError(f"{lock_path} has no root package entry")
+    for source, name, value in (
+        (lock_path, "name", lock.get("name")),
+        (lock_path, "version", lock.get("version")),
+        (lock_path, "root package name", locked_root.get("name")),
+        (lock_path, "root package version", locked_root.get("version")),
+    ):
+        expected = package_name if "name" in name else expected_version
+        if value != expected:
+            raise ReleaseValidationError(
+                f"{source} {name} {value!r} does not match {expected!r}"
+            )
+
+
+def _read_swift_static_string(path: Path, *, name: str) -> str:
+    try:
+        source = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ReleaseValidationError(f"cannot read {path}") from exc
+    pattern = re.compile(
+        rf'^\s*static\s+let\s+{re.escape(name)}\s*=\s*"([^"\\]+)"\s*$',
+        re.MULTILINE,
+    )
+    matches = pattern.findall(source)
+    if len(matches) != 1:
+        raise ReleaseValidationError(f"{path} must declare one literal static let {name}")
+    return matches[0]
+
+
+def _validate_companion_version(root: Path) -> None:
+    plist_path = root / "apps" / "companion-macos" / "AppBundle" / "Info.plist"
+    try:
+        with plist_path.open("rb") as handle:
+            info = plistlib.load(handle)
+    except (OSError, plistlib.InvalidFileException, ValueError) as exc:
+        raise ReleaseValidationError(f"cannot read valid plist from {plist_path}") from exc
+    swift_path = (
+        root
+        / "apps"
+        / "companion-macos"
+        / "Sources"
+        / "SixSentencesCompanion"
+        / "CompanionRelease.swift"
+    )
+    comparisons = (
+        (
+            "CFBundleShortVersionString",
+            "release",
+            _read_swift_static_string(swift_path, name="release"),
+        ),
+        ("CFBundleVersion", "build", _read_swift_static_string(swift_path, name="build")),
+    )
+    for plist_key, swift_name, swift_value in comparisons:
+        plist_value = info.get(plist_key) if isinstance(info, dict) else None
+        if not isinstance(plist_value, str) or not plist_value:
+            raise ReleaseValidationError(f"{plist_path} {plist_key} must be a non-empty string")
+        if plist_value != swift_value:
+            raise ReleaseValidationError(
+                f"Companion {plist_key} {plist_value!r} does not match "
+                f"CompanionApplicationVersion.{swift_name} {swift_value!r}"
+            )
+
+
+def validate_component_versions(root: Path, version: ReleaseVersion) -> None:
+    """Fail closed unless every released component has coherent version metadata."""
+
+    _validate_python_projects(root, version)
+    _validate_npm_project(
+        root,
+        directory="web",
+        package_name=_WEB_PACKAGE_NAME,
+        expected_version=version.public,
+    )
+    _validate_npm_project(
+        root,
+        directory="browser-extension",
+        package_name=_EXTENSION_PACKAGE_NAME,
+        expected_version=version.public,
+    )
+    _validate_companion_version(root)
 
 
 def _read_cff_scalar(root: Path, key: str) -> str:
@@ -91,9 +283,10 @@ def validate_files(root: Path, *, tag: str, commit_date: date) -> ReleaseVersion
 
     if _TAG_RE.fullmatch(tag) is None:
         raise ReleaseValidationError("release tag has unsupported syntax")
-    version = release_version(_read_project_version(root))
+    version = release_version(_read_project_version(root / "pyproject.toml"))
     if tag != version.tag:
         raise ReleaseValidationError(f"tag {tag!r} does not match expected {version.tag!r}")
+    validate_component_versions(root, version)
     cff_version = _read_cff_scalar(root, "version")
     if cff_version != version.public:
         raise ReleaseValidationError(

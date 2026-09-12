@@ -21,16 +21,20 @@ pull request and use a new prerelease version; never move or reuse the tag.
 ## Prepare the release pull request
 
 1. Set the PEP 440 engine version in `pyproject.toml` and `uv.lock`.
-2. Set the equivalent public version in `services/api/pyproject.toml`,
+2. Set the same PEP 440 version in `services/api/pyproject.toml`, pin its
+   `sixsentences-engine` dependency with `==` to that version, and regenerate
+   `services/api/uv.lock`.
+3. Set the equivalent public version in
    `apps/web/package.json`, `apps/web/package-lock.json`,
    `apps/browser-extension/package.json`,
    `apps/browser-extension/package-lock.json`, and `CITATION.cff`.
-3. Set `CITATION.cff`'s UTC date to the release commit date.
-4. Move entries from `Unreleased` to a dated `CHANGELOG.md` section.
-5. Add `docs/releases/<tag>.md` and update user-facing deployment examples.
-6. Confirm the Companion's independent client/build version remains intentional
-   and its exact `Package.resolved` graph is unchanged after resolution.
-7. Complete every item in [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
+4. Set `CITATION.cff`'s UTC date to the release commit date.
+5. Move entries from `Unreleased` to a dated `CHANGELOG.md` section.
+6. Add `docs/releases/<tag>.md` and update user-facing deployment examples.
+7. Confirm the Companion's independent client/build version remains intentional,
+   that `Info.plist` exactly matches `CompanionRelease.swift`, and that its exact
+   `Package.resolved` graph is unchanged after resolution.
+8. Complete every item in [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
 For this release, `0.2.0a1` in Python metadata maps to public version
 `0.2.0-alpha.1` and tag `v0.2.0-alpha.1`. Beta and release-candidate suffixes
@@ -41,6 +45,8 @@ maintainer keys from protected `main`. Only after signature, syntax, ancestry,
 and metadata validation do jobs check out the exact verified commit SHA. The
 tag must be contained in `origin/main`, match all canonical metadata, and have a
 release note and changelog entry for the tagged commit's UTC date.
+Metadata validation fails closed on missing, malformed, duplicated, or drifting
+Python, npm, citation, and Companion version declarations.
 
 ## Create the tag and stage the reviewed preview
 

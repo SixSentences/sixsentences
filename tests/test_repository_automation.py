@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import plistlib
 import sys
 import tarfile
 import urllib.request
@@ -556,11 +557,90 @@ def test_release_version_mapping_rejects_unsupported_versions(value: str) -> Non
         RELEASE.release_version(value)
 
 
-def test_release_file_gate_matches_pyproject_cff_changelog_and_notes(tmp_path: Path) -> None:
+def _write_release_metadata_tree(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "sixsentences-engine"\nversion = "0.1.0a1"\n',
         encoding="utf-8",
     )
+    (tmp_path / "uv.lock").write_text(
+        'version = 1\n[[package]]\nname = "sixsentences-engine"\nversion = "0.1.0a1"\n',
+        encoding="utf-8",
+    )
+
+    api = tmp_path / "services" / "api"
+    api.mkdir(parents=True)
+    (api / "pyproject.toml").write_text(
+        "\n".join(
+            (
+                "[project]",
+                'name = "sixsentences-community-api"',
+                'version = "0.1.0a1"',
+                'dependencies = ["sixsentences-engine==0.1.0a1"]',
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    (api / "uv.lock").write_text(
+        "\n".join(
+            (
+                "version = 1",
+                "[[package]]",
+                'name = "sixsentences-community-api"',
+                'version = "0.1.0a1"',
+                "[[package]]",
+                'name = "sixsentences-engine"',
+                'version = "0.1.0a1"',
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    for directory, package_name in (
+        ("web", "@sixsentences/web"),
+        ("browser-extension", "@sixsentences/browser-extension"),
+    ):
+        app = tmp_path / "apps" / directory
+        app.mkdir(parents=True)
+        package = {"name": package_name, "version": "0.1.0-alpha.1"}
+        (app / "package.json").write_text(json.dumps(package), encoding="utf-8")
+        package_lock = {
+            **package,
+            "lockfileVersion": 3,
+            "packages": {"": package},
+        }
+        (app / "package-lock.json").write_text(
+            json.dumps(package_lock),
+            encoding="utf-8",
+        )
+
+    companion = tmp_path / "apps" / "companion-macos"
+    app_bundle = companion / "AppBundle"
+    source = companion / "Sources" / "SixSentencesCompanion"
+    app_bundle.mkdir(parents=True)
+    source.mkdir(parents=True)
+    (app_bundle / "Info.plist").write_bytes(
+        plistlib.dumps(
+            {
+                "CFBundleShortVersionString": "8.4.2",
+                "CFBundleVersion": "19",
+            }
+        )
+    )
+    (source / "CompanionRelease.swift").write_text(
+        "\n".join(
+            (
+                "enum CompanionApplicationVersion {",
+                '    static let release = "8.4.2"',
+                '    static let build = "19"',
+                "}",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+
     (tmp_path / "CITATION.cff").write_text(
         "version: 0.1.0-alpha.1\ndate-released: 2026-09-12\n",
         encoding="utf-8",
@@ -573,6 +653,10 @@ def test_release_file_gate_matches_pyproject_cff_changelog_and_notes(tmp_path: P
     notes.mkdir(parents=True)
     (notes / "v0.1.0-alpha.1.md").write_text("# Release\n", encoding="utf-8")
 
+
+def test_release_file_gate_matches_every_component_and_release_file(tmp_path: Path) -> None:
+    _write_release_metadata_tree(tmp_path)
+
     result = RELEASE.validate_files(
         tmp_path,
         tag="v0.1.0-alpha.1",
@@ -580,6 +664,128 @@ def test_release_file_gate_matches_pyproject_cff_changelog_and_notes(tmp_path: P
     )
 
     assert result.package == "0.1.0a1"
+
+
+def test_repository_component_versions_are_release_coherent() -> None:
+    package_version = RELEASE._read_project_version(REPOSITORY_ROOT / "pyproject.toml")
+
+    RELEASE.validate_component_versions(
+        REPOSITORY_ROOT,
+        RELEASE.release_version(package_version),
+    )
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "old", "new", "error"),
+    [
+        ("uv.lock", 'version = "0.1.0a1"', 'version = "9.9.9"', "uv.lock"),
+        (
+            "services/api/pyproject.toml",
+            'version = "0.1.0a1"',
+            'version = "9.9.9"',
+            "project.version",
+        ),
+        (
+            "services/api/pyproject.toml",
+            "sixsentences-engine==0.1.0a1",
+            "sixsentences-engine>=0.1.0a1",
+            "must contain exactly",
+        ),
+        (
+            "services/api/uv.lock",
+            'name = "sixsentences-engine"\nversion = "0.1.0a1"',
+            'name = "sixsentences-engine"\nversion = "9.9.9"',
+            "does not match",
+        ),
+        (
+            "apps/web/package.json",
+            '"version": "0.1.0-alpha.1"',
+            '"version": "9.9.9"',
+            "does not match",
+        ),
+        (
+            "apps/web/package-lock.json",
+            '"version": "0.1.0-alpha.1"',
+            '"version": "9.9.9"',
+            "does not match",
+        ),
+        (
+            "apps/browser-extension/package.json",
+            '"version": "0.1.0-alpha.1"',
+            '"version": "9.9.9"',
+            "does not match",
+        ),
+        (
+            "apps/browser-extension/package-lock.json",
+            '"version": "0.1.0-alpha.1"',
+            '"version": "9.9.9"',
+            "does not match",
+        ),
+        (
+            "CITATION.cff",
+            "version: 0.1.0-alpha.1",
+            "version: 9.9.9",
+            "CITATION.cff version",
+        ),
+    ],
+)
+def test_release_file_gate_rejects_component_version_drift(
+    tmp_path: Path,
+    relative_path: str,
+    old: str,
+    new: str,
+    error: str,
+) -> None:
+    _write_release_metadata_tree(tmp_path)
+    path = tmp_path / relative_path
+    contents = path.read_text(encoding="utf-8")
+    assert old in contents
+    path.write_text(contents.replace(old, new, 1), encoding="utf-8")
+
+    with pytest.raises(RELEASE.ReleaseValidationError, match=error):
+        RELEASE.validate_files(
+            tmp_path,
+            tag="v0.1.0-alpha.1",
+            commit_date=date(2026, 9, 12),
+        )
+
+
+@pytest.mark.parametrize(
+    ("plist_key", "swift_name", "old_value", "new_value"),
+    [
+        ("CFBundleShortVersionString", "release", "8.4.2", "8.4.3"),
+        ("CFBundleVersion", "build", "19", "20"),
+    ],
+)
+def test_release_file_gate_rejects_companion_internal_version_drift(
+    tmp_path: Path,
+    plist_key: str,
+    swift_name: str,
+    old_value: str,
+    new_value: str,
+) -> None:
+    _write_release_metadata_tree(tmp_path)
+    swift_path = (
+        tmp_path
+        / "apps"
+        / "companion-macos"
+        / "Sources"
+        / "SixSentencesCompanion"
+        / "CompanionRelease.swift"
+    )
+    contents = swift_path.read_text(encoding="utf-8")
+    contents = contents.replace(
+        f'static let {swift_name} = "{old_value}"',
+        f'static let {swift_name} = "{new_value}"',
+    )
+    swift_path.write_text(contents, encoding="utf-8")
+
+    with pytest.raises(RELEASE.ReleaseValidationError, match=plist_key):
+        RELEASE.validate_files(
+            tmp_path,
+            tag="v0.1.0-alpha.1",
+            commit_date=date(2026, 9, 12),
+        )
 
 
 def test_checksum_verification_fails_on_changed_or_unlisted_artifacts(tmp_path: Path) -> None:
