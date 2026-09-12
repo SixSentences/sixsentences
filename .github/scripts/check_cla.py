@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Final
 
@@ -27,8 +28,12 @@ def _request(url: str, *, token: str, method: str = "GET", payload: object | Non
             "X-GitHub-Api-Version": "2022-11-28",
         },
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.load(response)
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as exc:
+        path = urllib.parse.urlsplit(url).path
+        raise ValueError(f"GitHub API {method} {path} returned HTTP {exc.code}") from exc
 
 
 def _comments(api_url: str, *, token: str, repository: str, number: int) -> list[dict[str, object]]:
