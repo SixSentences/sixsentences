@@ -288,6 +288,7 @@ def test_security_workflow_scans_complete_history_without_provider_calls() -> No
     assert "head: ${{ github.sha }}" in workflow
     assert "--no-verification" in workflow
     assert "--results=verified,unknown,unverified" in workflow
+    assert "--no-update" not in workflow
     assert "fetch-depth: 0" in workflow
 
 
