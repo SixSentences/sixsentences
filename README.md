@@ -17,7 +17,7 @@
   &nbsp;·&nbsp;
   <a href="#quick-start">Get started</a>
   &nbsp;·&nbsp;
-  <a href="docs/PROJECT_OVERVIEW.md">Documentation</a>
+  <a href="apps/web/README.md">Web client</a>
   &nbsp;·&nbsp;
   <a href="ROADMAP.md">Roadmap</a>
   &nbsp;·&nbsp;
