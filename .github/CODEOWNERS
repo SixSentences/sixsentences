@@ -1,15 +1,25 @@
-# The founding maintainer reviews all changes until a maintainer team exists.
+# Founding-maintainer ownership. Replace individual ownership with reviewed
+# organization teams as the maintainer group grows.
 * @L4XB
 
-# Keep policy, automation, and release authority explicitly owned.
+# Security, policy, contribution, and release authority.
 /.github/ @L4XB
-/apps/web/ @L4XB
 /CODE_OF_CONDUCT.md @L4XB
+/CLA.md @L4XB
 /CONTRIBUTING.md @L4XB
 /DCO @L4XB
 /GOVERNANCE.md @L4XB
 /LICENSE @L4XB
 /SECURITY.md @L4XB
 /TRADEMARKS.md @L4XB
+/docs/RELEASING.md @L4XB
+/docs/RELEASE_CHECKLIST.md @L4XB
+
+# Persistent state, trust boundaries, and distributable artifacts.
+/services/api/ @L4XB
+/apps/web/ @L4XB
+/deploy/community/ @L4XB
+/compose.yaml @L4XB
+/Dockerfile @L4XB
 /pyproject.toml @L4XB
 /uv.lock @L4XB

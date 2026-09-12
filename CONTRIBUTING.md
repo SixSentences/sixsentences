@@ -1,54 +1,52 @@
-# Contributing
+# Contributing to SixSentences
 
-Thank you for helping improve SixSentences. This repository welcomes focused
-contributions to both open surfaces:
+Thank you for improving open, inspectable research software. Focused bug fixes,
+tests, documentation, accessibility improvements, and well-bounded features are
+welcome across the engine, API, web application, and self-hosting stack.
 
-- the typed Python research engine and CLI under `src/sixsentences`; and
-- the sanitized Next.js research-workspace client under `apps/web`.
+All participation follows the [Code of Conduct](CODE_OF_CONDUCT.md). Report
+vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
-## Before you start
+## Choose the right starting point
 
-For a small, well-bounded fix, open a pull request directly. Open an issue first
-for a new public API, serialized format, dependency, network integration,
-research-method claim, or substantial interface behavior so its compatibility
-and maintenance cost can be discussed.
+Small fixes can go directly to a pull request. Start with an issue or discussion
+for any new public API, database migration, serialized format, dependency,
+external service, research-method claim, or substantial UI behavior.
 
-The following remain outside this repository's contribution scope:
+The community edition includes the complete research application and its
+reference deployment. These remain out of scope:
 
-- the marketing and landing website;
-- the hosted SaaS backend and private provider orchestration;
-- billing, pricing, checkout, subscriptions, administration, and operator code;
-- production deployment, monitoring, backup, analytics, or private
-  configuration;
-- the browser extension and macOS companion until they have their own reviewed
-  source-release boundary; and
-- customer data, proprietary corpora, or scholarly full text without explicit
-  redistribution rights.
+- payments, plans, subscriptions, checkout, and hosted-service administration;
+- the separately deployed marketing website and commercial operations;
+- production credentials, configuration, telemetry, backups, or incident data;
+- customer or participant data and non-redistributable research material; and
+- provider accounts or credentials operated by SixSentences.
 
-Client-side contracts for authentication and research services are in scope;
-the corresponding hosted implementations are not. Do not present the Python
-package as a compatible server for the web client.
+Provider-neutral interfaces, self-hosting controls, and operator-supplied
+integrations are in scope when their privacy, cost, failure, and data-egress
+boundaries are explicit.
 
-## Development setup
+## Workflow
 
-### Python engine
+`main` contains reviewed release-ready history; `develop` is the integration
+branch. Create a short-lived branch such as `fix/interview-retention` or
+`feat/ris-import` from `develop` and open the pull request back to `develop`.
+Release pull requests promote `develop` to `main`. Urgent fixes branch from
+`main` and are merged back into `develop` after release.
 
-Requirements:
+Keep each pull request focused. Use Conventional Commit subjects where
+practical: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, or `chore:`. Do not
+mix dependency refreshes or unrelated refactoring into a behavioral change.
 
-- Python 3.12 or newer;
-- `uv`; and
-- Git.
+## Local setup and checks
 
-```bash
-git clone https://github.com/SixSentences/sixsentences.git
-cd sixsentences
+Use the committed lockfiles. Supported runtimes are Python 3.12–3.14, Node.js
+22.9 or newer, `uv`, npm, and Docker Compose 2.33.1 or newer.
+
+### Research engine
+
+```console
 uv sync --frozen --group dev
-uv run pytest -q
-```
-
-Before opening a Python pull request, run:
-
-```bash
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy src/sixsentences
@@ -56,113 +54,87 @@ uv run pytest -q
 uv build
 ```
 
-### Web client
+### Application API and worker
 
-Requirements:
-
-- Node.js 22.9 or newer;
-- npm; and
-- a compatible API only when exercising API-backed flows.
-
-```bash
-cd apps/web
-npm ci
-cp .env.example .env.local
-npm run dev
+```console
+uv sync --project services/api --frozen --all-groups
+uv run --project services/api ruff check services/api/src services/api/scripts services/api/tests
+uv run --project services/api mypy services/api/src
+uv run --project services/api pytest services/api/tests
+uv run --project services/api python services/api/scripts/audit_boundary.py
+uv run --project services/api python services/api/scripts/check_web_contracts.py --require-complete
 ```
 
-Before opening a web pull request, run:
+### Web application
 
-```bash
+```console
+cd apps/web
+npm ci
 npm run typecheck
 npm run test:security
 npm run test:ui
 npm run build
 ```
 
-Use the committed lockfiles. Do not update unrelated dependencies as part of a
-feature or bug fix.
+### Self-hosting definition
 
-## Code and research standards
+```console
+bash deploy/community/test.sh
+bash deploy/community/init-env.sh --local --output /tmp/sixsentences-contribution.env
+bash deploy/community/preflight.sh /tmp/sixsentences-contribution.env
+```
 
-Keep code, comments, commit messages, and public documentation in English.
+Use synthetic data only. Never add `.env` files, keys, tokens, database dumps,
+logs, user exports, production screenshots, private prompts, full-text articles,
+or other material whose redistribution rights are unclear.
 
-Python changes should use type hints. Public functions and classes should have
-docstrings. Tests that depend on randomness must set `random`, NumPy, and
-PyTorch seeds as applicable; use `42` unless a test requires another fixed
-value. Tensor code should document important dimensions, for example
-`# x: (B, S, D)`.
+## Engineering standards
 
-Web changes should preserve strict TypeScript, accessible names and keyboard
-behavior, explicit loading/error/empty states, and the established responsive
-layouts. Keep API calls in the typed client boundary rather than scattering
-ad-hoc requests across components. A browser-visible `NEXT_PUBLIC_*` variable
-must never contain a secret.
+- Keep code, comments, commits, and public documentation in English.
+- Add Python type hints and docstrings to public classes and functions.
+- Preserve strict TypeScript, accessible names, keyboard behavior, and clear
+  loading, error, and empty states.
+- Set deterministic seeds for tests that use randomness; use `42` by default.
+- Document important tensor dimensions, for example `# x: (B, S, D)`.
+- Keep network calls, cost limits, data retention, and provider egress explicit.
+- Surface methodological assumptions and limits. Do not imply that software
+  establishes completeness, causality, compliance, or scientific validity.
+- Add a migration and rollback note for persistent-schema changes.
 
-Research-facing changes must make transformations, assumptions, exclusions,
-and method limits visible. Tests and examples must not overstate completeness,
-compliance, causality, model reliability, or scientific validity.
+## Pull-request evidence
 
-## Pull requests
+A pull request should state:
 
-Keep a pull request focused on one concern. Include:
+- the problem and chosen behavior;
+- affected components and public contracts;
+- exact validation commands and results;
+- migration, rollback, or compatibility impact;
+- privacy, security, accessibility, data-license, and network implications; and
+- screenshots or a short recording for material UI changes, using synthetic
+  content only.
 
-- the problem and the chosen behavior;
-- user-visible, API-contract, serialization, or compatibility effects;
-- tests for the change, or a short explanation when tests are not applicable;
-- documentation updates for public behavior;
-- any privacy, accessibility, data-license, network, or dependency implications;
-  and
-- screenshots or a short recording for material interface changes, with no
-  personal, production, or copyrighted research data.
+Passing automation is required but does not replace review. Changes affecting
+authentication, tenancy, participant data, external providers, uploads,
+retention, deletion, or release automation receive an explicit security and
+privacy review.
 
-Use Conventional Commit subjects where practical, such as `fix:`, `feat:`,
-`docs:`, `refactor:`, or `test:`. Do not add generated corpora, scholarly
-full text, credentials, `.env` files, production logs, user exports, or
-personal data. Fixtures must be synthetic or clearly redistributable and as
-small as practical.
+## DCO and contributor agreement
 
-Maintainers may ask that a large pull request be split or narrowed to preserve
-the open-source boundary.
+SixSentences requires both the [Developer Certificate of Origin 1.1](DCO) and
+the repository's [Contributor License Agreement](CLA.md). Sign every commit
+with your own public Git identity:
 
-## Developer Certificate of Origin
-
-The project uses the [Developer Certificate of Origin 1.1](DCO), not a separate
-contributor license agreement. The root [`DCO`](DCO) file is an unchanged copy
-of the text published at
-[developercertificate.org](https://developercertificate.org/). By signing off a
-commit, you certify that you have the right to submit the contribution under
-the project's license and agree that it is public.
-
-Apache-2.0 plus per-commit DCO certification is the project's inbound
-contribution mechanism. A CLA would add a separate legal and personal-data
-process that the project does not currently need. Adopting one later would
-require a public governance proposal and appropriate legal review; it would not
-be imposed retroactively without that process.
-
-Sign every commit with Git's `-s` flag:
-
-```bash
+```console
 git commit -s -m "fix: describe the change"
 ```
 
-This adds a trailer like:
+The resulting `Signed-off-by` trailer certifies that you may submit the work
+under the project license. Every author and declared co-author must add their
+own matching sign-off; maintainers and automation must not invent one for
+someone else. GitHub's private `noreply` address is acceptable.
 
-```text
-Signed-off-by: Your Name <your-email@example.com>
-```
+The pull-request author must also read `CLA.md` and post its exact acceptance
+sentence as a standalone PR comment. A repository-local workflow verifies the
+public record; no external CLA application or separately stored token is used.
 
-Use your own identity and an email address you are comfortable making public in
-Git history. GitHub's private `noreply` address is acceptable. Each human
-contributor must add their own sign-off. Automation and other people must not
-invent or append that personal certification on a contributor's behalf.
-
-## Review expectations
-
-Reviews assess correctness, tests, typing, compatibility, accessibility,
-research-method claims, data provenance, security, dependency licensing, and
-scope. Passing automation is necessary but does not guarantee acceptance.
-Maintainers make final merge decisions under [GOVERNANCE.md](GOVERNANCE.md).
-
-All participants must follow the [Code of Conduct](CODE_OF_CONDUCT.md). Report
-security concerns according to [SECURITY.md](SECURITY.md).
+Review and merge authority is described in [GOVERNANCE.md](GOVERNANCE.md).

@@ -2,91 +2,126 @@
 
 SixSentences is an open-source project stewarded through the
 [SixSentences GitHub organization](https://github.com/SixSentences). This file
-describes how decisions are made for the community Python engine and web
-client. It does not govern the separately operated hosted service.
+governs the community source tree. The separately operated hosted service,
+marketing site, and commercial terms are not governed by this repository.
 
 ## Roles
 
-- **Contributors** report issues, improve documentation, review proposals, or
-  submit code under the DCO.
+- **Contributors** report issues, improve documentation, review proposals, and
+  submit work under the DCO.
 - **Reviewers** are trusted contributors who provide substantive review but may
-  not have merge access.
-- **Maintainers** have repository write access and are responsible for scope,
-  release quality, security response, moderation, and merge decisions.
+  not have merge or release access.
+- **Maintainers** have repository write access and are accountable for scope,
+  review quality, releases, security response, and moderation.
 
-The repository's GitHub permissions are the source of truth for current
-maintainers. The project begins in a founding-maintainer phase. As sustained
-contributors emerge, maintainers should distribute review and release access to
-reduce single-person dependency.
+Repository permissions and `CODEOWNERS` are the source of truth for current
+authority. The project begins in a founding-maintainer phase. Maintainers should
+distribute review and release access as sustained contributors emerge, reducing
+single-person dependency without weakening review.
 
 ## Decisions
 
-Routine fixes and compatible improvements use lazy consensus through issues and
-pull-request review: maintainers consider technical evidence, user impact, and
-raised objections, then make a documented merge decision.
+Routine, compatible changes use lazy consensus through issues and pull
+requests. Maintainers consider technical evidence, user impact, maintenance
+cost, and unresolved objections, then record the merge decision.
 
-Open an issue before work on:
+Open a proposal before work on:
 
-- a breaking public-API or serialized-format change;
-- a new runtime dependency or network integration;
-- a change to licensing, governance, or the open-source/hosted boundary;
-- removal of a documented capability; or
-- a substantial research-method claim.
+- a breaking API, schema, migration, or serialized-format change;
+- a new runtime dependency, network integration, or data processor;
+- a research-method or compliance claim;
+- removal of a documented capability;
+- licensing, governance, or contribution-policy changes; or
+- movement of functionality across the community/hosted boundary.
 
-The issue should state the problem, alternatives, compatibility impact, and a
-migration path. Maintainers seek consensus, but consensus is not unanimity. If
-agreement cannot be reached in reasonable time, maintainers record the decision
-and rationale in the issue. Security decisions may remain confidential until a
-coordinated disclosure is safe.
+The proposal should describe the problem, alternatives, compatibility and
+migration impact, privacy/security effects, and a practical rollback. Consensus
+is sought but does not require unanimity. If agreement is not possible,
+maintainers document the decision and rationale. Security discussions may stay
+private until coordinated disclosure is safe.
 
-## Changes and review
+## Branches, review, and merge
 
-Once two active maintainers exist, at least one non-author maintainer approval
-is required before merge and authors must not be the sole reviewer of a
-substantive change. During the founding single-maintainer phase, the founding
-maintainer may merge after passing CI, focused self-review, and a documented
-issue; this exception ends when a second active maintainer joins.
+`main` contains reviewed release-ready history and `develop` is the integration
+branch. Ordinary work uses short-lived branches into `develop`; release pull
+requests promote `develop` to `main`. Urgent fixes branch from `main` and are
+merged back into `develop`. Releases are tagged from reviewed `main` commits.
+Force pushes to either protected branch and movement or deletion of release
+tags are prohibited.
 
-Contributions must pass required checks and carry DCO sign-offs. Maintainers may
-decline a correct contribution when its long-term maintenance cost or scope does
-not fit the project. A decline should include a concise explanation.
+Pull requests must pass the applicable engine, API, web, self-hosting,
+dependency, CodeQL, secret/configuration, and DCO checks. Required checks are a
+floor: a maintainer may request focused tests, threat analysis, migration
+evidence, or a release rehearsal proportional to risk.
 
-## Becoming a maintainer
+Once two active maintainers exist, a substantive change requires approval from
+at least one non-author maintainer. Authors do not approve their own work.
+During the founding single-maintainer phase, the founding maintainer may merge
+after all required checks pass, a line-by-line self-review is recorded on the
+pull request, and security-sensitive changes have a focused test or documented
+rehearsal. This exception ends when a second active maintainer joins.
 
-A contributor may be invited after demonstrating sustained, constructive work,
-sound review judgment, respect for scope and research claims, responsible
-handling of security and privacy, and adherence to the Code of Conduct. Existing
-maintainers decide invitations and record the change publicly.
+Maintainers may decline a correct contribution when its long-term maintenance
+cost, risk, or scope does not fit the project. The decision should include a
+concise explanation.
 
-Maintainers may step down at any time. Access may be removed for prolonged
-inactivity, compromised credentials, repeated policy violations, or conduct
-enforcement. Except for urgent security cases, the person should be notified
-before access changes.
+## Release authority
+
+Only maintainers with release permission may create `v*` tags, publish GitHub
+releases, or push community container images. A release must:
+
+1. come from a reviewed commit contained in `main`;
+2. pass the complete source, application, self-hosting, and security gates;
+3. have aligned versions, changelog, citation metadata, and release notes;
+4. publish checksums and available SBOM/provenance attestations;
+5. be smoke-tested from its immutable artifacts; and
+6. follow [docs/RELEASING.md](docs/RELEASING.md) and the release checklist.
+
+Release tags are immutable. A failed release is replaced by a new version, not
+by moving a tag. Pre-`1.0` releases may contain breaking changes, but those
+changes require migration notes and an explicit changelog entry.
+
+## Community and hosted boundary
+
+The community repository contains the research engine, application API,
+background worker, web workspace, database migrations, self-hosting definition,
+and tests needed to run the research application. Provider connections use
+operator-supplied accounts and explicit processing controls.
+
+Billing, checkout, subscriptions, commercial-plan enforcement, hosted-service
+administration, the production deployment, the marketing site, customer data,
+and production credentials remain separate. Apache-2.0 permits commercial use
+of community code; separate operation does not grant the hosted service special
+rights over outside contributions.
+
+## Becoming or leaving a maintainer
+
+A contributor may be invited after sustained constructive work, sound review
+judgment, responsible handling of security and privacy, respect for research
+claims, and adherence to the Code of Conduct. Existing maintainers decide and
+record invitations publicly.
+
+Maintainers may step down at any time. Access may be removed for compromised
+credentials, prolonged inactivity, repeated policy violations, or conduct
+enforcement. Except for urgent security cases, the affected person should be
+notified before access changes.
 
 ## Conflicts of interest
 
-Reviewers and maintainers disclose material interests that could affect a
-decision and recuse themselves where appropriate. Commercial use of the Apache-
-licensed project is allowed and is not itself a conflict; undisclosed influence
-over technical or research-method claims is.
+Reviewers and maintainers disclose material interests and recuse themselves
+where appropriate. Commercial use of Apache-licensed code is allowed and is not
+itself a conflict. Undisclosed influence over technical, security, privacy, or
+research-method claims is a conflict.
 
-## Releases and compatibility
+## Contributions and amendments
 
-Releases use semantic versioning, with PEP 440 equivalents for Python package
-versions. A release identifies the complete tagged source tree; downloadable
-Python wheels and source distributions cover only the engine package unless a
-release explicitly says otherwise. While the project is below `1.0`, breaking
-changes may occur in minor releases, but they should be announced and
-accompanied by practical migration notes. A release must come from a reviewed
-commit with passing required checks for every included surface.
+Contributions are accepted under Apache-2.0 through per-commit certification
+under the [Developer Certificate of Origin 1.1](DCO) and public acceptance of
+the repository [Contributor License Agreement](CLA.md). The CLA grants a
+license, not copyright ownership, and its verifier sends no record to an
+external service. The project will not claim rights it has not received or
+relicense contributions incompatibly without the permissions required to do so.
 
-Project contributions are accepted under Apache-2.0 through the DCO. The
-project will not claim rights it has not received or relicense contributed code
-incompatibly without the permissions required to do so.
-
-## Amendments
-
-Governance changes use a pull request with an issue describing the reason and
-impact. Material amendments should remain open long enough for active
-contributors to comment before merge, except when an urgent security or legal
-issue requires prompt action.
+Governance changes require a public issue and pull request describing their
+impact. Material changes should remain open long enough for active contributors
+to comment, except when urgent security or legal risk requires prompt action.
