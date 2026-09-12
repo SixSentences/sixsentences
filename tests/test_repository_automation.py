@@ -254,6 +254,16 @@ def test_workflow_job_environment_avoids_step_only_runner_context() -> None:
     assert invalid == []
 
 
+def test_release_publication_requires_the_protected_environment() -> None:
+    workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
+    publish_job = workflow.split("\n  publish:\n", maxsplit=1)[1]
+
+    assert "\n    environment: community-release\n" in publish_job
+    assert "\n    needs: [build, attest, self-hosting]\n" in publish_job
+
+
 def test_cla_status_is_bound_to_the_exact_pull_request_head(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

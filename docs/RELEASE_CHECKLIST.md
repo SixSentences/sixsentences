@@ -52,6 +52,8 @@ or production configuration.
       only asset in the draft before automation uploads the build artifacts.
 - [ ] The GitHub release is a prerelease, its links and preview resolve, and its
       downloadable assets exactly match the release notes.
+- [ ] A release maintainer reviewed the completed workflow evidence and approved
+      the protected `community-release` environment before publication.
 - [ ] A maintainer independently verifies checksums, attestations, image digests,
       fresh startup, and the private vulnerability-reporting link.
 

@@ -69,6 +69,11 @@ are validated from the tag. Images remain deployment-built during this alpha;
 in particular, public origins and legal versions are compile-time browser
 configuration, so a generic web image would be misleading.
 
+After every build, test, attestation, and self-hosting dependency passes, the
+publish job pauses at the protected `community-release` environment. A release
+maintainer must inspect the workflow evidence and explicitly approve that job;
+automation cannot publish merely because a tag exists.
+
 The GitHub release remains a prerelease while the project is in alpha. The
 product-overview GIF is a presentation asset, not an executable artifact;
 review it for personal, customer, participant, and non-redistributable content,
