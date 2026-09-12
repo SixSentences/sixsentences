@@ -1,4 +1,4 @@
-name: Release Python engine prerelease
+name: Release community prerelease
 
 on:
   push:
@@ -49,8 +49,8 @@ jobs:
         run: uv sync --frozen --group dev
       - name: Run the release quality gate
         run: |
-          uv run ruff check .
-          uv run ruff format --check .
+          uv run ruff check src tests .github/scripts
+          uv run ruff format --check src tests .github/scripts
           uv run mypy src/sixsentences
           uv run pytest -q
       - name: Build one source distribution
@@ -174,6 +174,40 @@ jobs:
             release/sixsentences_engine-${{ needs.build.outputs.package-version }}.tar.gz
           sbom-path: release/sixsentences-engine-${{ needs.build.outputs.public-version }}.cdx.json
 
+  application-api:
+    name: Validate tagged application API and worker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: services/api
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONHASHSEED: "42"
+      UV_PROJECT_ENVIRONMENT: ${{ runner.temp }}/sixsentences-release-api-env
+    steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up pinned uv and Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+          version: "0.10.12"
+          enable-cache: false
+      - name: Install the frozen API environment
+        run: uv sync --frozen --group dev
+      - name: Run API quality, test, and boundary gates
+        run: |
+          uv run --frozen --no-sync ruff check src scripts tests
+          uv run --frozen --no-sync mypy src
+          uv run --frozen --no-sync pytest -q
+          uv run --frozen --no-sync python scripts/audit_boundary.py
+          uv run --frozen --no-sync python scripts/check_web_contracts.py --require-complete
+
   web-source:
     name: Validate tagged web source (not a published artifact)
     runs-on: ubuntu-24.04
@@ -213,9 +247,43 @@ jobs:
       - name: Build the tagged web source for production
         run: npm run build
 
+  self-hosting:
+    name: Validate tagged self-hosting and container builds
+    needs: [application-api, web-source]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test deployment scripts and boundaries
+        run: bash deploy/community/test.sh
+      - name: Generate and validate disposable local configuration
+        run: |
+          bash deploy/community/init-env.sh --local --output "$RUNNER_TEMP/selfhost.env"
+          bash deploy/community/preflight.sh "$RUNNER_TEMP/selfhost.env"
+      - name: Build the tagged API image
+        run: docker build --tag sixsentences-community-api:${{ github.ref_name }} --file Dockerfile .
+      - name: Build the tagged origin-specific web image
+        run: |
+          docker build \
+            --tag sixsentences-community-web:${{ github.ref_name }} \
+            --file apps/web/Dockerfile \
+            --build-arg NEXT_PUBLIC_SIX_API_URL=http://127.0.0.1/api \
+            --build-arg NEXT_PUBLIC_APP_URL=http://127.0.0.1 \
+            --build-arg NEXT_PUBLIC_LEGAL_BASE_URL=http://127.0.0.1/legal \
+            --build-arg SIX_ALLOW_INSECURE_LOCAL_HTTP=true \
+            --build-arg NEXT_PUBLIC_TERMS_VERSION=release-test-v1 \
+            --build-arg NEXT_PUBLIC_PRIVACY_VERSION=release-test-v1 \
+            --build-arg NEXT_PUBLIC_DPA_VERSION=release-test-v1 \
+            apps/web
+
   publish:
-    name: Publish source prerelease with Python engine artifacts
-    needs: [build, attest, web-source]
+    name: Publish community source prerelease with engine artifacts
+    needs: [build, attest, self-hosting]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -237,7 +305,7 @@ jobs:
           {
             printf '%s\n' \
               '> [!NOTE]' \
-              '> This release publishes the tagged community source tree. The downloadable, attested build artifacts below cover only the `sixsentences-engine` Python distribution; no prebuilt web application, container, hosted service, or deployment stack is published.' \
+              '> This release publishes the complete tagged community application source. The downloadable, attested build artifacts below cover the `sixsentences-engine` Python distribution. API and web containers are validated from the tag but remain deployment-built so configuration is explicit.' \
               ''
             cat release/RELEASE_NOTES.md
           } > "$RUNNER_TEMP/release-notes.md"
@@ -263,7 +331,7 @@ jobs:
               --verify-tag \
               --draft=false \
               --prerelease \
-              --title "SixSentences ${RELEASE_TAG} · source + Python engine artifacts" \
+              --title "SixSentences ${RELEASE_TAG} · community source + engine artifacts" \
               --notes-file "$RUNNER_TEMP/release-notes.md"
           else
             gh release create "$RELEASE_TAG" \
@@ -274,6 +342,6 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --verify-tag \
               --prerelease \
-              --title "SixSentences ${RELEASE_TAG} · source + Python engine artifacts" \
+              --title "SixSentences ${RELEASE_TAG} · community source + engine artifacts" \
               --notes-file "$RUNNER_TEMP/release-notes.md"
           fi

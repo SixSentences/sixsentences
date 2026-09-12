@@ -1,0 +1,39 @@
+name: Documentation improvement
+description: Report unclear, missing, or incorrect community documentation.
+title: "docs: "
+labels:
+  - documentation
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Location
+      description: Link the page, file, heading, command, or UI text.
+      placeholder: deploy/community/README.md#production-tls-setup
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is unclear, missing, outdated, or incorrect?
+    validations:
+      required: true
+  - type: textarea
+    id: improvement
+    attributes:
+      label: Suggested improvement
+      description: Describe the smallest useful correction and the behavior it should match.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I checked the current `main` branch and searched existing issues.
+          required: true
+        - label: This report contains no secret, personal data, participant content, or production detail.
+          required: true
+        - label: I agree to follow the Code of Conduct.
+          required: true

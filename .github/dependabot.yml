@@ -2,6 +2,7 @@ version: 2
 updates:
   - package-ecosystem: uv
     directory: /
+    target-branch: develop
     schedule:
       interval: weekly
       day: monday
@@ -37,8 +38,67 @@ updates:
           - minor
           - patch
 
+  - package-ecosystem: uv
+    directory: /services/api
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:22"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      - dependency-name: sixsentences-engine
+    groups:
+      community-runtime-dependencies:
+        applies-to: version-updates
+        patterns:
+          - httpx
+          - pillow
+          - pydantic
+          - pypdf
+        update-types:
+          - minor
+          - patch
+      community-development-dependencies:
+        applies-to: version-updates
+        patterns:
+          - mypy
+          - pytest
+          - ruff
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:32"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: docker
+    directory: /apps/web
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:33"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+
   - package-ecosystem: github-actions
     directory: /
+    target-branch: develop
     schedule:
       interval: weekly
       day: monday
@@ -58,6 +118,7 @@ updates:
 
   - package-ecosystem: npm
     directory: /apps/web
+    target-branch: develop
     schedule:
       interval: weekly
       day: monday

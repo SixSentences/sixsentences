@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Proposals should solve a concrete open-source workflow problem. The current repository includes the web application source and the Python research engine, but not a complete self-hosted backend. Hosted billing, operations, customer configuration, and production evidence stay out of scope.
+        Proposals should solve a concrete community workflow problem. The repository includes the complete self-hosted research application. Payments, commercial plans, hosted administration, the production deployment, and the marketing site stay out of scope.
   - type: textarea
     id: problem
     attributes:
@@ -19,7 +19,7 @@ body:
     id: proposal
     attributes:
       label: Proposed behavior
-      description: Describe inputs, outputs, failure modes, and the smallest useful application or engine interface.
+      description: Describe inputs, outputs, failure modes, and the smallest useful engine, API, web, worker, or deployment behavior.
     validations:
       required: true
   - type: textarea
@@ -44,7 +44,7 @@ body:
     attributes:
       label: Submission checks
       options:
-        - label: This proposal fits the community source tree and does not require hosted-production secrets, customer data, billing, or operations.
+        - label: This proposal fits the community source tree and does not require production secrets, customer data, payment/subscription code, or hosted administration.
           required: true
         - label: I searched existing issues and discussions for the same proposal.
           required: true
