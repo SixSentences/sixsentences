@@ -3,6 +3,7 @@
 
 # Keep policy, automation, and release authority explicitly owned.
 /.github/ @L4XB
+/apps/web/ @L4XB
 /CODE_OF_CONDUCT.md @L4XB
 /CONTRIBUTING.md @L4XB
 /DCO @L4XB

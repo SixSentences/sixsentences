@@ -76,6 +76,42 @@ jobs:
       - name: Smoke-test the CLI
         run: uv run sixsentences --help
 
+  web:
+    name: Web type-check, tests, and production build (Node 22.9)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: apps/web
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_BROWSER_CAPTURE_STORE_URL: ""
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ""
+      NEXT_PUBLIC_LEGAL_BASE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SIX_API_URL: http://127.0.0.1:8000
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up pinned Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.9.0"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install the locked web environment
+        run: npm ci
+      - name: Type-check the web application
+        run: npm run typecheck
+      - name: Test every web test file
+        run: node --test tests/*.test.mjs
+      - name: Build the web application for production
+        run: npm run build
+
   dco:
     name: DCO sign-off
     if: github.event_name == 'pull_request'

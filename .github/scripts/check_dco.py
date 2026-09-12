@@ -14,6 +14,7 @@ from typing import Final
 _IDENTITY_RE: Final = re.compile(r"^(?P<name>[^<>\r\n]+?)\s+<(?P<email>[^<>\s@]+@[^<>\s@]+)>$")
 _OBJECT_ID_RE: Final = re.compile(r"^[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?$")
 _DEPENDABOT_PR_AUTHOR: Final = "dependabot[bot]"
+_DEPENDABOT_FOOTER: Final = "Signed-off-by: dependabot[bot] <support@github.com>"
 
 
 @dataclass(frozen=True)
@@ -77,8 +78,26 @@ def parse_trailer_output(output: str) -> IdentityTrailers:
     return IdentityTrailers(tuple(signoffs), tuple(coauthors))
 
 
-def interpret_identity_trailers(message: str) -> IdentityTrailers:
-    """Ask Git to isolate the real footer before parsing identity trailers."""
+def _has_exact_final_dependabot_footer(message: str) -> bool:
+    """Return whether the last non-empty line is GitHub's canonical bot footer."""
+
+    non_empty_lines = [line for line in message.splitlines() if line.strip()]
+    return bool(non_empty_lines) and non_empty_lines[-1] == _DEPENDABOT_FOOTER
+
+
+def interpret_identity_trailers(
+    message: str,
+    *,
+    author: Identity | None = None,
+    pull_request_author: str = "",
+) -> IdentityTrailers:
+    """Ask Git to isolate the real footer before parsing identity trailers.
+
+    Dependabot appends a YAML metadata block to some update messages. Git then
+    declines to treat the final sign-off as a trailer. The narrow fallback below
+    is available only for GitHub's known bot identity in a Dependabot-owned pull
+    request, and only for the exact canonical footer as the last non-empty line.
+    """
 
     result = subprocess.run(
         ["git", "interpret-trailers", "--parse"],
@@ -87,7 +106,18 @@ def interpret_identity_trailers(message: str) -> IdentityTrailers:
         capture_output=True,
         text=True,
     )
-    return parse_trailer_output(result.stdout)
+    trailers = parse_trailer_output(result.stdout)
+    if (
+        pull_request_author == _DEPENDABOT_PR_AUTHOR
+        and author in _DEPENDABOT_AUTHORS
+        and _DEPENDABOT_SIGNOFF not in trailers.signoffs
+        and _has_exact_final_dependabot_footer(message)
+    ):
+        return IdentityTrailers(
+            signoffs=(*trailers.signoffs, _DEPENDABOT_SIGNOFF),
+            coauthors=trailers.coauthors,
+        )
+    return trailers
 
 
 def validate_identities(
@@ -156,7 +186,11 @@ def validate_commit(commit: str, *, pull_request_author: str = "") -> list[str]:
         raise ValueError(f"could not read author and message for {commit_id}")
     author_name, author_email, message = parts
     author = Identity.parse(f"{author_name} <{author_email}>")
-    trailers = interpret_identity_trailers(message)
+    trailers = interpret_identity_trailers(
+        message,
+        author=author,
+        pull_request_author=pull_request_author,
+    )
     return validate_identities(
         author,
         trailers,

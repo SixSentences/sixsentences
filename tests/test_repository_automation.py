@@ -99,6 +99,71 @@ Signed-off-by: dependabot[bot] <support@github.com>
     )
 
 
+def test_dependabot_metadata_block_accepts_only_exact_trusted_final_footer() -> None:
+    author = _identity("dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>")
+    message = """chore(deps): bump next from 16.3.3 to 16.3.4
+
+Bumps [next](https://github.com/vercel/next.js) from 16.3.3 to 16.3.4.
+
+---
+updated-dependencies:
+- dependency-name: next
+  dependency-version: 16.3.4
+  dependency-type: direct:production
+  update-type: version-update:semver-patch
+...
+Signed-off-by: dependabot[bot] <support@github.com>
+"""
+
+    assert DCO.interpret_identity_trailers(message).signoffs == ()
+
+    trusted = DCO.interpret_identity_trailers(
+        message,
+        author=author,
+        pull_request_author="dependabot[bot]",
+    )
+    assert (
+        DCO.validate_identities(
+            author,
+            trusted,
+            pull_request_author="dependabot[bot]",
+        )
+        == []
+    )
+
+    wrong_pr = DCO.interpret_identity_trailers(
+        message,
+        author=author,
+        pull_request_author="human-contributor",
+    )
+    assert wrong_pr.signoffs == ()
+
+    human = _identity("Alice Example <alice@example.com>")
+    wrong_author = DCO.interpret_identity_trailers(
+        message,
+        author=human,
+        pull_request_author="dependabot[bot]",
+    )
+    assert wrong_author.signoffs == ()
+
+    noncanonical = DCO.interpret_identity_trailers(
+        message.replace(
+            "Signed-off-by: dependabot[bot] <support@github.com>",
+            "signed-off-by: dependabot[bot] <support@github.com>",
+        ),
+        author=author,
+        pull_request_author="dependabot[bot]",
+    )
+    assert noncanonical.signoffs == ()
+
+    not_final = DCO.interpret_identity_trailers(
+        message + "unexpected metadata tail\n",
+        author=author,
+        pull_request_author="dependabot[bot]",
+    )
+    assert not_final.signoffs == ()
+
+
 @pytest.mark.parametrize(
     ("package", "public", "tag"),
     [

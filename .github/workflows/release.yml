@@ -1,4 +1,4 @@
-name: Release prerelease
+name: Release Python engine prerelease
 
 on:
   push:
@@ -15,7 +15,7 @@ permissions: {}
 
 jobs:
   build:
-    name: Validate and build release artifacts
+    name: Validate and build Python engine artifacts
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -88,10 +88,10 @@ jobs:
             --directory release \
             --package-version "$PACKAGE_VERSION" \
             --public-version "$PUBLIC_VERSION"
-      - name: Preserve the single release candidate
+      - name: Preserve the Python engine release candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-candidate-${{ github.ref_name }}
+          name: python-engine-release-candidate-${{ github.ref_name }}
           path: release/
           if-no-files-found: error
           retention-days: 14
@@ -99,7 +99,7 @@ jobs:
           include-hidden-files: false
 
   verify:
-    name: Install and verify release artifacts
+    name: Install and verify Python engine artifacts
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -113,7 +113,7 @@ jobs:
       - name: Restore the release candidate
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-candidate-${{ github.ref_name }}
+          name: python-engine-release-candidate-${{ github.ref_name }}
           path: release
       - name: Set up pinned uv and Python
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
@@ -147,7 +147,7 @@ jobs:
             sixsentences --help
 
   attest:
-    name: Attest release provenance and SBOM
+    name: Attest Python engine provenance and SBOM
     needs: [build, verify]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -160,7 +160,7 @@ jobs:
       - name: Restore the verified release candidate
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-candidate-${{ github.ref_name }}
+          name: python-engine-release-candidate-${{ github.ref_name }}
           path: release
       - name: Attest build provenance
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
@@ -174,9 +174,45 @@ jobs:
             release/sixsentences_engine-${{ needs.build.outputs.package-version }}.tar.gz
           sbom-path: release/sixsentences-engine-${{ needs.build.outputs.public-version }}.cdx.json
 
+  web-source:
+    name: Validate tagged web source (not a published artifact)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: apps/web
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_BROWSER_CAPTURE_STORE_URL: ""
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ""
+      NEXT_PUBLIC_LEGAL_BASE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SIX_API_URL: http://127.0.0.1:8000
+    steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up pinned Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.9.0"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install the locked web environment
+        run: npm ci
+      - name: Type-check the tagged web source
+        run: npm run typecheck
+      - name: Test every tagged web test file
+        run: node --test tests/*.test.mjs
+      - name: Build the tagged web source for production
+        run: npm run build
+
   publish:
-    name: Publish GitHub prerelease
-    needs: [build, attest]
+    name: Publish source prerelease with Python engine artifacts
+    needs: [build, attest, web-source]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -185,7 +221,7 @@ jobs:
       - name: Restore the attested release candidate
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-candidate-${{ github.ref_name }}
+          name: python-engine-release-candidate-${{ github.ref_name }}
           path: release
       - name: Recheck artifact checksums
         working-directory: release
@@ -195,6 +231,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
+          {
+            printf '%s\n' \
+              '> [!NOTE]' \
+              '> This release publishes the tagged community source tree. The downloadable, attested build artifacts below cover only the `sixsentences-engine` Python distribution; no prebuilt web application, container, hosted service, or deployment stack is published.' \
+              ''
+            cat release/RELEASE_NOTES.md
+          } > "$RUNNER_TEMP/release-notes.md"
           gh release create "$RELEASE_TAG" \
             release/*.whl \
             release/*.tar.gz \
@@ -203,5 +246,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --prerelease \
-            --title "SixSentences ${RELEASE_TAG}" \
-            --notes-file release/RELEASE_NOTES.md
+            --title "SixSentences ${RELEASE_TAG} · source + Python engine artifacts" \
+            --notes-file "$RUNNER_TEMP/release-notes.md"
