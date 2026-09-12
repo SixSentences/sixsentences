@@ -35,7 +35,7 @@ The release workflow checks that the tag resolves to the checked-out commit, is
 contained in `origin/main`, matches all canonical metadata, and has a release
 note and changelog entry for the tagged commit's UTC date.
 
-## Create the tag
+## Create the tag and stage the reviewed preview
 
 After the release pull request is merged and all required checks are green:
 
@@ -44,7 +44,23 @@ git switch main
 git pull --ff-only
 git tag -a v0.2.0-alpha.1 -m "SixSentences v0.2.0-alpha.1"
 git push origin v0.2.0-alpha.1
+gh release create v0.2.0-alpha.1 \
+  /absolute/path/to/sixsentences-overview.gif \
+  --repo SixSentences/sixsentences \
+  --verify-tag \
+  --draft \
+  --prerelease \
+  --latest=false \
+  --title "SixSentences v0.2.0-alpha.1 · release candidate" \
+  --notes "Release automation will replace these draft notes after every gate passes."
 ```
+
+Run the two publication commands together in one supervised release session.
+The tag starts the workflow; the workflow will fail closed unless the draft
+exists, contains only `sixsentences-overview.gif`, and that asset matches
+`docs/assets/sixsentences-overview.sha256`. A failed workflow never publishes
+the draft. Correct the draft and rerun the failed workflow without moving or
+reusing the tag.
 
 The workflow rebuilds and retests from the tag. Python wheels are built from the
 source distribution and installed in isolation. API and web sources are tested
@@ -54,9 +70,10 @@ in particular, public origins and legal versions are compile-time browser
 configuration, so a generic web image would be misleading.
 
 The GitHub release remains a prerelease while the project is in alpha. The
-product-overview GIF is a presentation asset, not an executable artifact; review
-it for personal, customer, participant, and non-redistributable content before
-uploading it as `sixsentences-overview.gif`.
+product-overview GIF is a presentation asset, not an executable artifact;
+review it for personal, customer, participant, and non-redistributable content,
+render it without audio, and verify its committed checksum before staging it as
+`sixsentences-overview.gif`.
 
 ## Verify published artifacts
 

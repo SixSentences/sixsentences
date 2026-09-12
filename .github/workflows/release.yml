@@ -297,6 +297,43 @@ jobs:
       - name: Recheck artifact checksums
         working-directory: release
         run: sha256sum --check SHA256SUMS
+      - name: Verify the reviewed product-preview draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json isDraft \
+            --jq '.isDraft' > "$RUNNER_TEMP/release-is-draft"; then
+            echo "A draft release with the reviewed preview asset is required." >&2
+            exit 1
+          fi
+          if [[ "$(<"$RUNNER_TEMP/release-is-draft")" != "true" ]]; then
+            echo "Refusing to modify an already-published release." >&2
+            exit 1
+          fi
+
+          gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json assets \
+            --jq '.assets[].name' > "$RUNNER_TEMP/release-draft-assets"
+          if [[ "$(wc -l < "$RUNNER_TEMP/release-draft-assets" | tr -d ' ')" != "1" ]] \
+            || ! grep -Fxq 'sixsentences-overview.gif' "$RUNNER_TEMP/release-draft-assets"; then
+            echo "The draft must contain only sixsentences-overview.gif before publication." >&2
+            exit 1
+          fi
+
+          mkdir -p "$RUNNER_TEMP/release-preview"
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern sixsentences-overview.gif \
+            --dir "$RUNNER_TEMP/release-preview"
+          (
+            cd "$RUNNER_TEMP/release-preview"
+            sha256sum --check "$GITHUB_WORKSPACE/docs/assets/sixsentences-overview.sha256"
+          )
       - name: Publish the immutable GitHub prerelease
         env:
           GH_TOKEN: ${{ github.token }}
@@ -310,38 +347,26 @@ jobs:
             cat release/RELEASE_NOTES.md
           } > "$RUNNER_TEMP/release-notes.md"
 
-          if gh release view "$RELEASE_TAG" \
+          if [[ "$(gh release view "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --json isDraft \
-            --jq '.isDraft' > "$RUNNER_TEMP/release-is-draft" 2>/dev/null; then
-            if [[ "$(<"$RUNNER_TEMP/release-is-draft")" != "true" ]]; then
-              echo "Refusing to replace an already-published release." >&2
-              exit 1
-            fi
-
-            gh release upload "$RELEASE_TAG" \
-              release/*.whl \
-              release/*.tar.gz \
-              release/*.cdx.json \
-              release/SHA256SUMS \
-              --repo "$GITHUB_REPOSITORY" \
-              --clobber
-            gh release edit "$RELEASE_TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --verify-tag \
-              --draft=false \
-              --prerelease \
-              --title "SixSentences ${RELEASE_TAG} · community source + engine artifacts" \
-              --notes-file "$RUNNER_TEMP/release-notes.md"
-          else
-            gh release create "$RELEASE_TAG" \
-              release/*.whl \
-              release/*.tar.gz \
-              release/*.cdx.json \
-              release/SHA256SUMS \
-              --repo "$GITHUB_REPOSITORY" \
-              --verify-tag \
-              --prerelease \
-              --title "SixSentences ${RELEASE_TAG} · community source + engine artifacts" \
-              --notes-file "$RUNNER_TEMP/release-notes.md"
+            --jq '.isDraft')" != "true" ]]; then
+            echo "The verified release draft is no longer editable." >&2
+            exit 1
           fi
+
+          gh release upload "$RELEASE_TAG" \
+            release/*.whl \
+            release/*.tar.gz \
+            release/*.cdx.json \
+            release/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+          gh release edit "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --draft=false \
+            --prerelease \
+            --latest=false \
+            --title "SixSentences ${RELEASE_TAG} · community source + engine artifacts" \
+            --notes-file "$RUNNER_TEMP/release-notes.md"

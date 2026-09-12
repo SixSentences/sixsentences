@@ -48,7 +48,8 @@ or production configuration.
       origin-specific web image is not published as a generic artifact.
 - [ ] No alpha image is published under a mutable `latest` tag.
 - [ ] The 16:9 product GIF was reviewed for rights and sensitive content, contains
-      no audio, and is uploaded as `sixsentences-overview.gif`.
+      no audio, matches `docs/assets/sixsentences-overview.sha256`, and is the
+      only asset in the draft before automation uploads the build artifacts.
 - [ ] The GitHub release is a prerelease, its links and preview resolve, and its
       downloadable assets exactly match the release notes.
 - [ ] A maintainer independently verifies checksums, attestations, image digests,
