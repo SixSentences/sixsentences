@@ -40,12 +40,13 @@ This policy covers code distributed from this repository:
 - the Python research engine and CLI;
 - the application API, database migrations, and worker;
 - the Next.js web application;
+- the self-hostable browser extension source and build tooling;
 - the reference Docker Compose deployment and backup/restore tooling; and
 - repository build, test, security, and release automation.
 
 The marketing website, official hosted deployment, provider accounts, billing,
-commercial administration, browser extension, macOS companion, and production
-infrastructure are operated separately. Do not probe `sixsentences.com`,
+commercial administration, macOS companion, browser-store distribution, and
+production infrastructure are operated separately. Do not probe `sixsentences.com`,
 `app.sixsentences.com`, official APIs, or any other live system without explicit
 prior authorization. Publication of source code is not authorization to test a
 hosted service.
@@ -73,6 +74,12 @@ session material from cross-site scripting, logs, analytics, screenshots, and
 third-party scripts. Deploy behind HTTPS, preserve Content Security Policy and
 security headers, and review every change to CORS, OAuth redirects, tenancy,
 authorization, public capability URLs, or browser storage.
+
+The browser extension stores a revocable API key in trusted extension storage.
+Its build requires deployment-specific app and API URLs, and its pairing
+callback must be allowlisted exactly by the API. Do not add broad persistent
+site permissions, expose the key to content scripts, or reuse another
+distribution's extension identity.
 
 ### Data and research content
 

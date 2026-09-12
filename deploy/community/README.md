@@ -83,6 +83,17 @@ All external features are off when their credentials are empty.
 Never put provider credentials in `NEXT_PUBLIC_*` values. Browser-visible build
 arguments contain origins, versions and an optional public OAuth client ID only.
 
+## Browser Capture
+
+Build the extension in `apps/browser-extension` for this deployment's exact
+`SIX_PUBLIC_ORIGIN` and `SIX_PUBLIC_API_URL`. Load the generated directory
+unpacked, then copy the ID shown by Chrome or Edge. Set
+`SIX_BROWSER_CAPTURE_REDIRECT_URIS` to exactly
+`https://<extension-id>.chromiumapp.org/` and restart the API before pairing.
+The variable is intentionally empty in generated configuration, so an unknown
+extension can never pair by default. See the extension README for the stable-ID
+option, local HTTP exception, permission boundary, and deterministic build.
+
 ## Updates and scaling
 
 Create and verify a backup before changing images. Re-run the preflight, build

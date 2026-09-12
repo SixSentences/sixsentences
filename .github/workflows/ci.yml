@@ -158,6 +158,35 @@ jobs:
       - name: Build the web application for production
         run: npm run build
 
+  browser-extension:
+    name: Browser extension contracts and deterministic build (Node 22.9)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/browser-extension
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up pinned Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.9.0"
+          cache: npm
+          cache-dependency-path: apps/browser-extension/package-lock.json
+      - name: Install the locked extension environment
+        run: npm ci
+      - name: Run contract and security tests
+        run: npm test
+      - name: Build deployment-bound unpacked runtime
+        env:
+          APP_ORIGIN: https://research.example.invalid
+          API_ORIGIN: https://research.example.invalid/api
+          SIX_EXTENSION_ALLOW_INSECURE_LOOPBACK: "false"
+        run: node scripts/build.mjs --out "$RUNNER_TEMP/sixsentences-browser-extension"
+
   self-hosting:
     name: Self-hosting definition and container builds
     runs-on: ubuntu-24.04

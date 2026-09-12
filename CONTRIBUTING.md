@@ -2,7 +2,8 @@
 
 Thank you for improving open, inspectable research software. Focused bug fixes,
 tests, documentation, accessibility improvements, and well-bounded features are
-welcome across the engine, API, web application, and self-hosting stack.
+welcome across the engine, API, web application, browser extension, and
+self-hosting stack.
 
 All participation follows the [Code of Conduct](CODE_OF_CONDUCT.md). Report
 vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
@@ -18,6 +19,7 @@ reference deployment. These remain out of scope:
 
 - payments, plans, subscriptions, checkout, and hosted-service administration;
 - the separately deployed marketing website and commercial operations;
+- browser-store publishing, signing identities, and packaged downloads;
 - production credentials, configuration, telemetry, backups, or incident data;
 - customer or participant data and non-redistributable research material; and
 - provider accounts or credentials operated by SixSentences.
@@ -75,6 +77,21 @@ npm run test:security
 npm run test:ui
 npm run build
 ```
+
+### Browser extension
+
+```console
+cd apps/browser-extension
+npm ci
+npm test
+APP_ORIGIN=https://research.example.org \
+API_ORIGIN=https://research.example.org/api \
+node scripts/build.mjs --out /tmp/sixsentences-extension
+```
+
+Use synthetic origins and fixtures. Changes to capture permissions, pairing,
+credential storage, URL sanitization, or PDF transfer require focused security
+tests and an explicit review of the generated manifest.
 
 ### Self-hosting definition
 

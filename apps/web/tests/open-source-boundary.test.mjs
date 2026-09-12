@@ -80,14 +80,14 @@ test("legal and provider disclosures are deployment-neutral", () => {
   assert.match(sources, /Reviewers authorized by this deployment/);
 });
 
-test("the excluded browser extension has no download or store distribution surface", () => {
+test("the source-built browser extension has no hosted download or store distribution surface", () => {
   const devices = read("src/components/library/browser-capture-devices.tsx");
   const library = read("src/app/(app)/library/page.tsx");
 
   assert.equal(existsSync(join(process.cwd(), "src/lib/browser-capture-distribution.mjs")), false);
   assert.doesNotMatch(devices, /Download|ExternalLink|Chrome Web Store|preview\.zip|storeUrl/);
   assert.doesNotMatch(library, /click Browser Capture|Saved in one click/);
-  assert.match(devices, /does not include a browser extension/);
+  assert.match(devices, /apps\/browser-extension/);
 });
 
 test("removed hosted account-switching UI leaves no client API surface", () => {

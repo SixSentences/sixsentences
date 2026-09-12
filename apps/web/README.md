@@ -35,7 +35,9 @@ Not included:
 
 - billing, pricing, checkout, subscriptions, administration, or operator tools;
 - the separate marketing/landing website;
-- the browser extension or macOS companion; or
+- the browser-extension runtime, which is built separately from
+  `../browser-extension`;
+- the macOS companion; or
 - production configuration, credentials, customer data, or historical binary
   downloads.
 

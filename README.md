@@ -67,9 +67,9 @@ workspace:
 | **Automate deliberately** | Run background jobs and optional AI-assisted workflows against operator-selected providers, budgets, and data-processing controls. |
 
 The community edition is a complete application stack: a Next.js workspace,
-FastAPI service, PostgreSQL database, background worker, Caddy edge proxy, and
-the typed Python research engine. No customer data, production configuration,
-or provider credential is bundled.
+FastAPI service, PostgreSQL database, background worker, Caddy edge proxy,
+Manifest V3 browser-capture client, and the typed Python research engine. No
+customer data, production configuration, or provider credential is bundled.
 
 ## Quick start
 
@@ -101,15 +101,17 @@ flowchart LR
     A --> D[(Application files)]
     Q[Background worker] --> P
     Q --> D
+    X[Browser Capture] -->|pair and save| A
     A --> E[Research engine]
     Q --> E
-    E -. operator-enabled .-> X[Metadata, mail, model, speech, and parser providers]
+    E -. operator-enabled .-> O[Metadata, mail, model, speech, and parser providers]
 ```
 
 ```text
 src/sixsentences/       Python research engine and CLI
 services/api/           Application API, migrations, worker, and tests
 apps/web/               Next.js research workspace
+apps/browser-extension/ Self-hostable Chromium capture client
 deploy/community/       Self-hosting, preflight, backup, and restore tooling
 compose.yaml            PostgreSQL + API + worker + web + Caddy
 ```
@@ -141,6 +143,12 @@ uv run --project services/api pytest services/api/tests
 
 # Web
 cd apps/web && npm ci && npm run typecheck && npm test && npm run build
+
+# Browser extension
+cd apps/browser-extension && npm ci && npm test
+APP_ORIGIN=https://research.example.org \
+API_ORIGIN=https://research.example.org/api \
+node scripts/build.mjs --out /tmp/sixsentences-extension
 ```
 
 The CI workflow also validates the application contract, self-hosting boundary,

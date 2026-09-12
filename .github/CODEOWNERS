@@ -19,6 +19,7 @@
 # Persistent state, trust boundaries, and distributable artifacts.
 /services/api/ @L4XB
 /apps/web/ @L4XB
+/apps/browser-extension/ @L4XB
 /deploy/community/ @L4XB
 /compose.yaml @L4XB
 /Dockerfile @L4XB

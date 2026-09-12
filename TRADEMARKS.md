@@ -33,7 +33,8 @@ The following source files contain or render official SixSentences marks:
 
 - `docs/assets/sixsentences-mark.svg`;
 - `apps/web/src/app/icon.svg`;
-- `apps/web/src/components/brand/six-mark.tsx`; and
+- `apps/web/src/components/brand/six-mark.tsx`;
+- `apps/browser-extension/src/icons/icon.svg` and the PNG sizes beside it; and
 - the SixSentences mark and wordmark rendered by
   `apps/web/src/app/opengraph-image.tsx`.
 

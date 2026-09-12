@@ -99,6 +99,14 @@ The source repository does not commit `node_modules`, a `.next` build, or
 platform-native npm binaries. `npm ci` obtains dependencies described by the
 lockfile for the selected platform.
 
+## Browser extension
+
+`apps/browser-extension` has no third-party runtime or development package
+dependencies. Its generated unpacked directory contains project source, the
+package `LICENSE` and `NOTICE`, deployment-bound configuration, and the four
+project-owned PNG icons listed in `TRADEMARKS.md`. Browser software and APIs are
+provided by the user's Chromium-based browser and are not redistributed here.
+
 ## Public-data connectors
 
 The repository contains connector code for third-party data services. It does
@@ -131,6 +139,6 @@ retrieval date and dataset revision used for research outputs.
 
 The repository does not include the marketing site, SaaS backend, production
 data, provider credentials, historical application ZIPs, signed companion
-binaries, browser-extension packages, or proprietary corpora. Lottie animations
+binaries, prebuilt browser-store packages, or proprietary corpora. Lottie animations
 and locally bundled font files whose exact redistribution provenance was not
 established for this release were excluded rather than relicensed.
