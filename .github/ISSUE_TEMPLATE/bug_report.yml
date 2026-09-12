@@ -1,0 +1,65 @@
+name: Bug report
+description: Report reproducible incorrect behavior in the community engine.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the report. Remove secrets, personal data, copyrighted full text, and production details before submitting. Use the private security advisory flow for vulnerabilities.
+  - type: input
+    id: version
+    attributes:
+      label: Engine version
+      description: Provide the release version or full commit hash.
+      placeholder: 0.1.0a1 or 0123456789abcdef...
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include Python version, operating system, architecture, and installation method.
+      placeholder: Python 3.12.10, macOS arm64, uv
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide the smallest synthetic input and exact command or code that reproduces the issue.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include sanitized output or traceback when useful.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Mention data-source terms, query-target limitations, or recent dependency changes when relevant.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I reproduced this against a supported version or current `main`.
+          required: true
+        - label: This report contains no secret, personal data, private corpus record, or production detail.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true
+        - label: I agree to follow the Code of Conduct.
+          required: true

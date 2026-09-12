@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/SixSentences/sixsentences/security/advisories/new
+    about: Report suspected vulnerabilities privately; never disclose them in an issue.
+  - name: Questions and design discussion
+    url: https://github.com/SixSentences/sixsentences/discussions
+    about: Ask usage questions or discuss ideas that are not yet bounded proposals.

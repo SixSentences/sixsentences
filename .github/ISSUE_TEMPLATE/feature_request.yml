@@ -1,0 +1,52 @@
+name: Feature proposal
+description: Propose a focused addition to the portable community engine.
+title: "proposal: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Proposals should solve a concrete engine problem and stay outside the hosted UI, accounts, billing, and deployment layers.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow limitation exists, and who encounters it?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe inputs, outputs, failure modes, and the smallest useful public interface.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Include a caller-side solution or documentation-only option where applicable.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and research-method implications
+      description: Note schema changes, statistical assumptions, migration needs, and claims that require evidence.
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies, network, and data terms
+      description: Identify any proposed package, service, corpus, license, rate limit, or privacy boundary.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: This proposal fits the community engine rather than the hosted product.
+          required: true
+        - label: I searched existing issues and discussions for the same proposal.
+          required: true
+        - label: I agree to follow the Code of Conduct.
+          required: true

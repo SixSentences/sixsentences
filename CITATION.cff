@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: >-
+  If you use SixSentences Engine, cite the exact release or commit and describe
+  the surrounding search and screening method.
+title: SixSentences Engine
+type: software
+version: 0.1.0-alpha.1
+date-released: 2026-09-12
+authors:
+  - name: SixSentences contributors
+repository-code: https://github.com/SixSentences/sixsentences
+url: https://github.com/SixSentences/sixsentences
+license: Apache-2.0
+keywords:
+  - systematic literature search
+  - evidence synthesis
+  - information retrieval
+  - PRISMA
+  - OpenAlex
