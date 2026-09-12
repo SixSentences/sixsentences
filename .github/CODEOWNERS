@@ -4,6 +4,7 @@
 
 # Security, policy, contribution, and release authority.
 /.github/ @L4XB
+/.github/release-maintainers.allowed_signers @L4XB
 /CODE_OF_CONDUCT.md @L4XB
 /CLA.md @L4XB
 /CONTRIBUTING.md @L4XB

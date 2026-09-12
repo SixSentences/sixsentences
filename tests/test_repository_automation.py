@@ -261,7 +261,20 @@ def test_release_publication_requires_the_protected_environment() -> None:
     publish_job = workflow.split("\n  publish:\n", maxsplit=1)[1]
 
     assert "\n    environment: community-release\n" in publish_job
-    assert "\n    needs: [build, attest, self-hosting]\n" in publish_job
+    assert "\n    needs: [build, attest, self-hosting, preview]\n" in publish_job
+
+
+def test_release_dispatch_checks_out_and_verifies_one_explicit_signed_tag() -> None:
+    workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "\n  workflow_dispatch:\n" in workflow
+    assert "\n  push:\n" not in workflow
+    assert workflow.count("ref: ${{ inputs.tag }}") == 6
+    assert 'git verify-tag "$RELEASE_TAG"' in workflow
+    assert "release-maintainers.allowed_signers" in workflow
+    assert "\n  preview:\n" in workflow
 
 
 def test_security_workflow_scans_complete_history_without_provider_calls() -> None:

@@ -25,7 +25,7 @@ or production configuration.
 - [ ] Engine, API, web, citation, changelog, release-note, and tag versions agree.
 - [ ] `CITATION.cff` uses the tagged commit's UTC date.
 - [ ] The release commit is reviewed, DCO-signed, CLA-accepted, contained in
-      `main`, and clean.
+      `main`, and clean; the annotated release tag has a trusted SSH signature.
 - [ ] Required CI, CodeQL, dependency-review, security, and container checks pass.
 - [ ] Release-note claims match tested community behavior and list breaking or
       migration changes.

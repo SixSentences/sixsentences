@@ -42,7 +42,7 @@ After the release pull request is merged and all required checks are green:
 ```console
 git switch main
 git pull --ff-only
-git tag -a v0.2.0-alpha.1 -m "SixSentences v0.2.0-alpha.1"
+git tag -s v0.2.0-alpha.1 -m "SixSentences v0.2.0-alpha.1"
 git push origin v0.2.0-alpha.1
 gh release create v0.2.0-alpha.1 \
   /absolute/path/to/sixsentences-overview.gif \
@@ -53,14 +53,20 @@ gh release create v0.2.0-alpha.1 \
   --latest=false \
   --title "SixSentences v0.2.0-alpha.1 · release candidate" \
   --notes "Release automation will replace these draft notes after every gate passes."
+gh workflow run release.yml \
+  --repo SixSentences/sixsentences \
+  --ref main \
+  -f tag=v0.2.0-alpha.1
 ```
 
-Run the two publication commands together in one supervised release session.
-The tag starts the workflow; the workflow will fail closed unless the draft
-exists, contains only `sixsentences-overview.gif`, and that asset matches
-`docs/assets/sixsentences-overview.sha256`. A failed workflow never publishes
-the draft. Correct the draft and rerun the failed workflow without moving or
-reusing the tag.
+Run the three publication commands together in one supervised release session.
+The explicit workflow dispatch occurs only after the signed tag and draft both
+exist, so there is no tag-push/draft-creation race. The workflow checks out the
+requested tag, verifies its SSH signature against the reviewed public maintainer
+key, and fails closed unless the draft contains only
+`sixsentences-overview.gif` with the checksum committed at that tag. A failed
+workflow never publishes the draft. Correct the draft and rerun the workflow
+without moving or reusing the tag.
 
 The workflow rebuilds and retests from the tag. Python wheels are built from the
 source distribution and installed in isolation. API and web sources are tested
@@ -69,10 +75,11 @@ are validated from the tag. Images remain deployment-built during this alpha;
 in particular, public origins and legal versions are compile-time browser
 configuration, so a generic web image would be misleading.
 
-After every build, test, attestation, and self-hosting dependency passes, the
-publish job pauses at the protected `community-release` environment. A release
-maintainer must inspect the workflow evidence and explicitly approve that job;
-automation cannot publish merely because a tag exists.
+The preview is first checked by a read-only job. After every build, test,
+attestation, self-hosting, and preview dependency passes, the publish job pauses
+at the protected `community-release` environment. A release maintainer must
+inspect the workflow evidence and explicitly approve that job. The write-scoped
+job then rechecks the draft and checksum immediately before publication.
 
 The GitHub release remains a prerelease while the project is in alpha. The
 product-overview GIF is a presentation asset, not an executable artifact;
