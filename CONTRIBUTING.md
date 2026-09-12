@@ -131,7 +131,9 @@ git commit -s -m "fix: describe the change"
 The resulting `Signed-off-by` trailer certifies that you may submit the work
 under the project license. Every author and declared co-author must add their
 own matching sign-off; maintainers and automation must not invent one for
-someone else. GitHub's private `noreply` address is acceptable.
+someone else. GitHub's private `noreply` address is acceptable. A protected
+default-branch verifier reads contribution commits only as Git objects and
+publishes the result against the exact pull-request head commit.
 
 For every pull request, its author must also read `CLA.md` and post the exact
 acceptance sentence as a standalone PR comment. A repository-local workflow

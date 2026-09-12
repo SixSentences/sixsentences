@@ -38,7 +38,7 @@ To accept, the pull-request author must post this exact standalone comment on
 their pull request:
 
 ```text
-I have read and agree to the SixSentences CLA.
+I have read and agree to the SixSentences CLA v1.0.
 ```
 
 The repository-local CLA workflow verifies that public comment using GitHub's

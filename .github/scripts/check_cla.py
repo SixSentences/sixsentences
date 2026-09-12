@@ -12,7 +12,8 @@ import urllib.parse
 import urllib.request
 from typing import Final
 
-ACCEPTANCE: Final = "I have read and agree to the SixSentences CLA."
+CLA_VERSION: Final = "1.0"
+ACCEPTANCE: Final = f"I have read and agree to the SixSentences CLA v{CLA_VERSION}."
 STATUS_CONTEXT: Final = "CLA / acceptance"
 EXEMPT_AUTHORS: Final = frozenset({"dependabot[bot]"})
 
@@ -26,6 +27,7 @@ def _request(url: str, *, token: str, method: str = "GET", payload: object | Non
         headers={
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
             "X-GitHub-Api-Version": "2022-11-28",
         },
     )
@@ -87,14 +89,18 @@ def _set_status(
     token: str,
     repository: str,
     sha: str,
-    accepted: bool,
+    cla_sha: str,
+    state: str,
 ) -> None:
-    state = "success" if accepted else "failure"
-    description = (
-        "Accepted by the pull-request author."
-        if accepted
-        else "PR author must post the exact CLA.md acceptance comment."
-    )
+    descriptions = {
+        "pending": f"Checking the PR author's CLA v{CLA_VERSION} acceptance.",
+        "success": f"Accepted CLA v{CLA_VERSION} by the pull-request author.",
+        "failure": f"PR author must post the exact CLA v{CLA_VERSION} acceptance comment.",
+    }
+    if state not in descriptions:
+        raise ValueError(f"unsupported CLA status state: {state}")
+    if len(cla_sha) != 40 or any(character not in "0123456789abcdef" for character in cla_sha):
+        raise ValueError("CLA source SHA must be a lowercase full Git object id")
     _request(
         f"{api_url}/repos/{repository}/statuses/{sha}",
         token=token,
@@ -102,8 +108,8 @@ def _set_status(
         payload={
             "state": state,
             "context": STATUS_CONTEXT,
-            "description": description,
-            "target_url": f"https://github.com/{repository}/blob/main/CLA.md",
+            "description": descriptions[state],
+            "target_url": f"https://github.com/{repository}/blob/{cla_sha}/CLA.md",
         },
     )
 
@@ -112,6 +118,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", required=True)
     parser.add_argument("--number", required=True, type=int)
+    parser.add_argument("--cla-sha", required=True)
     parser.add_argument("--api-url", default="https://api.github.com")
     return parser
 
@@ -128,6 +135,14 @@ def main(argv: list[str] | None = None) -> int:
         author, head_sha = _pull_request_identity(
             args.api_url, token=token, repository=args.repository, number=args.number
         )
+        _set_status(
+            args.api_url,
+            token=token,
+            repository=args.repository,
+            sha=head_sha,
+            cla_sha=args.cla_sha,
+            state="pending",
+        )
         comments = _comments(
             args.api_url, token=token, repository=args.repository, number=args.number
         )
@@ -138,7 +153,8 @@ def main(argv: list[str] | None = None) -> int:
             token=token,
             repository=args.repository,
             sha=head_sha,
-            accepted=accepted,
+            cla_sha=args.cla_sha,
+            state="success" if accepted else "failure",
         )
     except (OSError, ValueError, urllib.error.HTTPError) as exc:
         print(f"CLA check could not run: {exc}", file=sys.stderr)

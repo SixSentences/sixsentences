@@ -5,7 +5,6 @@ on:
     types: [opened, reopened, synchronize]
   issue_comment:
     types: [created, edited, deleted]
-  workflow_dispatch:
 
 concurrency:
   group: cla-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
@@ -37,8 +36,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
-        run: >-
-          python .github/scripts/check_cla.py
-          --repository "$GITHUB_REPOSITORY"
-          --number "$PR_NUMBER"
-          --api-url "$GITHUB_API_URL"
+        run: |
+          set -euo pipefail
+          cla_source_sha="$(git rev-parse HEAD)"
+          python .github/scripts/check_cla.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --number "$PR_NUMBER" \
+            --cla-sha "$cla_source_sha" \
+            --api-url "$GITHUB_API_URL"

@@ -5,8 +5,10 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import io
+import json
 import sys
 import tarfile
+import urllib.request
 from datetime import date
 from email.message import Message
 from pathlib import Path
@@ -28,6 +30,8 @@ def _load_script(name: str) -> ModuleType:
 DCO = _load_script("check_dco")
 CLA = _load_script("check_cla")
 RELEASE = _load_script("release")
+STATUS = _load_script("publish_status")
+REPOSITORY_ROOT = Path(__file__).parents[1]
 
 
 def _identity(value: str) -> object:
@@ -197,7 +201,8 @@ def test_cla_status_is_bound_to_the_exact_pull_request_head(
         token="synthetic-token",
         repository="example/project",
         sha=sha,
-        accepted=True,
+        cla_sha="b" * 40,
+        state="success",
     )
 
     assert calls == [
@@ -207,8 +212,8 @@ def test_cla_status_is_bound_to_the_exact_pull_request_head(
             {
                 "state": "success",
                 "context": "CLA / acceptance",
-                "description": "Accepted by the pull-request author.",
-                "target_url": "https://github.com/example/project/blob/main/CLA.md",
+                "description": "Accepted CLA v1.0 by the pull-request author.",
+                "target_url": f"https://github.com/example/project/blob/{'b' * 40}/CLA.md",
             },
         )
     ]
@@ -216,6 +221,122 @@ def test_cla_status_is_bound_to_the_exact_pull_request_head(
 
 def test_cla_exempts_only_the_trusted_dependency_bot() -> None:
     assert frozenset({"dependabot[bot]"}) == CLA.EXEMPT_AUTHORS
+
+
+def test_cla_acceptance_names_the_exact_agreement_version() -> None:
+    assert CLA.CLA_VERSION == "1.0"
+    assert CLA.ACCEPTANCE == "I have read and agree to the SixSentences CLA v1.0."
+
+
+def test_cla_replaces_a_stale_success_with_pending_before_reading_comments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    states: list[str] = []
+
+    monkeypatch.setenv("GITHUB_TOKEN", "synthetic-token")
+    monkeypatch.setattr(CLA, "_pull_request_identity", lambda *args, **kwargs: ("alice", "a" * 40))
+    monkeypatch.setattr(
+        CLA,
+        "_set_status",
+        lambda *args, state, **kwargs: states.append(state),
+    )
+
+    def unavailable_comments(*args: object, **kwargs: object) -> list[dict[str, object]]:
+        assert states == ["pending"]
+        raise OSError("synthetic outage")
+
+    monkeypatch.setattr(CLA, "_comments", unavailable_comments)
+
+    result = CLA.main(
+        [
+            "--repository",
+            "example/project",
+            "--number",
+            "42",
+            "--cla-sha",
+            "b" * 40,
+            "--api-url",
+            "https://api.github.test",
+        ]
+    )
+
+    assert result == 2
+    assert states == ["pending"]
+
+
+def test_trusted_cla_workflow_cannot_be_manually_dispatched() -> None:
+    workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "cla.yml").read_text(encoding="utf-8")
+
+    assert "pull_request_target:" in workflow
+    assert "issue_comment:" in workflow
+    assert "workflow_dispatch:" not in workflow
+    assert "statuses: write" in workflow
+    assert "ref: ${{ github.event.repository.default_branch }}" in workflow
+    assert "github.event.pull_request.head.ref" not in workflow
+    assert 'cla_source_sha="$(git rev-parse HEAD)"' in workflow
+
+
+def test_trusted_dco_workflow_treats_contribution_commits_only_as_git_data() -> None:
+    workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "dco.yml").read_text(encoding="utf-8")
+    ci_workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert "pull_request_target:" in workflow
+    assert "workflow_dispatch:" not in workflow
+    assert "statuses: write" in workflow
+    assert "ref: ${{ github.event.repository.default_branch }}" in workflow
+    assert "github.event.pull_request.head.ref" not in workflow
+    assert workflow.count("uses: actions/checkout@") == 1
+    assert 'context "DCO / sign-off"' in workflow
+    assert "--filter=blob:none" in workflow
+    assert "DCO sign-off" not in ci_workflow
+
+
+def test_status_publisher_posts_only_the_validated_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorded: dict[str, object] = {}
+
+    class Response:
+        status = 201
+
+        def __enter__(self) -> Response:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+    def urlopen(request: urllib.request.Request, *, timeout: int) -> Response:
+        recorded["url"] = request.full_url
+        recorded["method"] = request.method
+        recorded["payload"] = json.loads(request.data or b"{}")
+        recorded["timeout"] = timeout
+        return Response()
+
+    monkeypatch.setattr(STATUS.urllib.request, "urlopen", urlopen)
+    sha = "a" * 40
+
+    STATUS.publish_status(
+        "https://api.github.test",
+        token="synthetic-token",
+        repository="example/project",
+        sha=sha,
+        context="DCO / sign-off",
+        state="success",
+        description="Every commit is signed off.",
+        target_url="https://github.com/example/project/blob/main/DCO",
+    )
+
+    assert recorded == {
+        "url": f"https://api.github.test/repos/example/project/statuses/{sha}",
+        "method": "POST",
+        "payload": {
+            "state": "success",
+            "context": "DCO / sign-off",
+            "description": "Every commit is signed off.",
+            "target_url": "https://github.com/example/project/blob/main/DCO",
+        },
+        "timeout": 30,
+    }
 
 
 @pytest.mark.parametrize(
