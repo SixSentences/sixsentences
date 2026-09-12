@@ -104,7 +104,9 @@ test("community source contains no hosted endpoint or commercial gating copy", a
   const textFiles = (await pathsBelow(packageRoot)).filter((path) =>
     /\.(?:js|mjs|json|md|html|css)$/.test(path) || ["LICENSE", "NOTICE"].includes(path));
   const source = (await Promise.all(textFiles.map((path) => readFile(join(packageRoot, path), "utf8")))).join("\n");
-  assert.doesNotMatch(source, /(?:app|api)\.sixsentences\.com/i);
+  const normalizedSource = source.toLowerCase();
+  assert.equal(normalizedSource.includes(["app", "sixsentences", "com"].join(".")), false);
+  assert.equal(normalizedSource.includes(["api", "sixsentences", "com"].join(".")), false);
   const commercialTerms = [
     `feature_not_${"in_plan"}`,
     `upgrade_${"required"}`,
