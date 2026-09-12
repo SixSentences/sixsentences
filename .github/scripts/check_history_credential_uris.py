@@ -12,7 +12,7 @@ from typing import Final
 _COMMIT_PREFIX: Final = "__SIX_COMMIT__"
 _HUNK_RE: Final = re.compile(r"^@@ -\d+(?:,\d+)? \+(?P<line>\d+)(?:,\d+)? @@")
 _CREDENTIAL_URI_RE: Final = re.compile(
-    r"(?P<scheme>https?|wss?)://"
+    r"(?P<scheme>[A-Za-z][A-Za-z0-9+.-]*)://"
     r"(?P<username>[^\s/:@]+):(?P<password>[^\s/@]*)@"
     r"(?P<host>\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]+)",
     re.IGNORECASE,

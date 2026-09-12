@@ -262,7 +262,11 @@ def test_release_publication_requires_the_protected_environment() -> None:
     publish_job = workflow.split("\n  publish:\n", maxsplit=1)[1]
 
     assert "\n    environment: community-release\n" in publish_job
-    assert "\n    needs: [build, attest, self-hosting, preview]\n" in publish_job
+    assert (
+        "\n    needs: [validate, build, attest, self-hosting, tag-security, preview]\n"
+        in publish_job
+    )
+    assert "ref: ${{ needs.validate.outputs.release-sha }}" in publish_job
 
 
 def test_release_dispatch_checks_out_and_verifies_one_explicit_signed_tag() -> None:
@@ -272,9 +276,14 @@ def test_release_dispatch_checks_out_and_verifies_one_explicit_signed_tag() -> N
 
     assert "\n  workflow_dispatch:\n" in workflow
     assert "\n  push:\n" not in workflow
-    assert workflow.count("ref: ${{ inputs.tag }}") == 6
+    assert "ref: ${{ inputs.tag }}" not in workflow
+    assert "ref: ${{ github.sha }}" in workflow
+    assert workflow.count("ref: ${{ needs.validate.outputs.release-sha }}") >= 6
+    assert '[[ "$WORKFLOW_REF" != "refs/heads/main" ]]' in workflow
+    assert 'git worktree add --detach "$RUNNER_TEMP/release-source" "$release_sha"' in workflow
     assert 'git verify-tag "$RELEASE_TAG"' in workflow
     assert "release-maintainers.allowed_signers" in workflow
+    assert "\n  tag-security:\n" in workflow
     assert "\n  preview:\n" in workflow
 
 
@@ -324,6 +333,25 @@ diff --git a/config.txt b/config.txt
     [violation] = URI_HISTORY.find_violations(patch)
 
     assert violation.label() == "bbbbbbbbbbbb:config.txt:1"
+    assert "do-not-print-this" not in violation.label()
+
+
+@pytest.mark.parametrize(
+    "scheme",
+    ["postgresql", "postgres", "redis", "rediss", "mongodb", "mongodb+srv", "amqps"],
+)
+def test_history_uri_scan_covers_non_http_credential_schemes(scheme: str) -> None:
+    unsafe_uri = f"{scheme}://" + "operator:do-not-print-this" + "@internal.example.com/data"
+    patch = f"""__SIX_COMMIT__cccccccccccccccccccccccccccccccccccccccc
+diff --git a/config.txt b/config.txt
++++ b/config.txt
+@@ -0,0 +1 @@
++endpoint={unsafe_uri}
+"""
+
+    [violation] = URI_HISTORY.find_violations(patch)
+
+    assert violation.label() == "cccccccccccc:config.txt:1"
     assert "do-not-print-this" not in violation.label()
 
 
