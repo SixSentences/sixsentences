@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-SixSentences Engine is pre-1.0 software. Security fixes are applied to the
+SixSentences is pre-1.0 software. Security fixes are applied to the
 latest alpha release and the `main` branch. Older alpha releases may not receive
 backports.
 
@@ -32,7 +32,7 @@ Include, where safe:
 Remove credentials, personal data, copyrighted research material, and unrelated
 production information from the report. If GitHub private vulnerability
 reporting is temporarily unavailable, email `legal@sixsentences.com` with the
-subject `CONFIDENTIAL: SixSentences Engine security`. Do not disclose the
+subject `CONFIDENTIAL: SixSentences open-source security`. Do not disclose the
 vulnerability or ask for a contact channel in a public issue.
 
 Maintainers aim to acknowledge reports within five business days, then assess

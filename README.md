@@ -1,20 +1,260 @@
-# SixSentences Engine
+<p align="center">
+  <img src="docs/assets/sixsentences-mark.svg" width="112" alt="SixSentences mark">
+</p>
 
-[![CI](https://github.com/SixSentences/sixsentences/actions/workflows/ci.yml/badge.svg)](https://github.com/SixSentences/sixsentences/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/SixSentences/sixsentences/actions/workflows/codeql.yml/badge.svg)](https://github.com/SixSentences/sixsentences/actions/workflows/codeql.yml)
-[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+<h1 align="center">SixSentences</h1>
 
-Transparent, composable building blocks for systematic literature-search
-workflows.
+<p align="center"><strong>Open building blocks for auditable research workflows.</strong></p>
 
-https://github.com/user-attachments/assets/26bcfc2f-2f2d-432f-bf33-0e8e0645fa14
+<p align="center">
+  Literature discovery&nbsp;&nbsp;·&nbsp;&nbsp;Research data&nbsp;&nbsp;·&nbsp;&nbsp;Evidence synthesis&nbsp;&nbsp;·&nbsp;&nbsp;Reproducible reporting
+</p>
 
-*45-second overview of the separately operated hosted SixSentences product.
-The interface and hosted features shown above are not included in this engine
-repository.*
+<p align="center">
+  <a href="https://sixsentences.com">Website</a>
+  &nbsp;·&nbsp;
+  <a href="#quick-start">Quick start</a>
+  &nbsp;·&nbsp;
+  <a href="#how-it-fits-together">Architecture</a>
+  &nbsp;·&nbsp;
+  <a href="ROADMAP.md">Roadmap</a>
+  &nbsp;·&nbsp;
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/SixSentences/sixsentences/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/SixSentences/sixsentences?include_prereleases&sort=semver&style=flat-square"></a>
+  <a href="https://github.com/SixSentences/sixsentences/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/SixSentences/sixsentences/ci.yml?branch=main&label=CI&style=flat-square"></a>
+  <a href="https://github.com/SixSentences/sixsentences/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://img.shields.io/github/actions/workflow/status/SixSentences/sixsentences/codeql.yml?branch=main&label=CodeQL&style=flat-square"></a>
+  <img alt="Python 3.12–3.14" src="https://img.shields.io/badge/Python-3.12%E2%80%933.14-3776AB?style=flat-square&logo=python&logoColor=white">
+  <a href="LICENSE"><img alt="Apache-2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-5C4EE5?style=flat-square"></a>
+</p>
+
+> [!IMPORTANT]
+> **Early alpha (`v0.1.0-alpha.1`).** APIs and serialized outputs may change.
+> These tools expose transformations and assumptions; they do not guarantee an
+> exhaustive search, methodological compliance, or scientifically valid
+> conclusions.
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/d81dce8a-6020-49c0-94d1-8c4eb8743c52" width="800" alt="Animated overview of the hosted SixSentences research workspace">
+</p>
+
+<p align="center"><sub><strong>Hosted product preview.</strong> The interface and hosted features shown here are not included in this repository.</sub></p>
+
+## Move faster without hiding the research trail
+
+SixSentences is a typed Python toolkit for transparent research workflows. The
+current alpha ships inspectable building blocks for literature discovery and
+evidence synthesis together with bounded, deterministic research-data
+profiling and analysis. Inputs, intermediate results, and decisions remain
+caller-owned.
+
+The broader [hosted SixSentences workspace](https://sixsentences.com) connects
+research questions, literature, datasets, surveys, interviews, scientific
+visuals, and manuscripts. It is operated separately and is not source-released
+in this repository.
+
+## What ships today
+
+### Discover and organize evidence
+
+- Parse one Boolean query into a typed syntax tree and compile parameterized
+  DuckDB predicates.
+- Execute public-metadata searches through the explicit OpenAlex connector, or
+  export query syntax for PubMed, Scopus, Web of Science, and IEEE Xplore with
+  translation losses surfaced to the caller.
+- Build and verify a checksummed, caller-owned DuckDB/Parquet corpus from
+  `WorkRecord` JSONL; no scholarly corpus or full text is bundled.
+- Deduplicate on valid canonical DOIs, preserve companion-report relationships,
+  follow citation links, and rank records with decomposed relevance, citation,
+  recency, and retraction signals.
+
+### Analyse caller-owned research data
+
+- Import bounded CSV, TSV, JSON, and ordinary first-worksheet XLSX tables with
+  explicit file, row, column, cell, archive, and decompression limits.
+- Reject oversized or ambiguous inputs instead of silently sampling or
+  truncating them.
+- Profile every accepted row deterministically, including missingness, types,
+  cardinality, top values, and numeric summaries.
+- Run typed recipes for missingness, descriptive statistics, grouped summaries,
+  complete-case Pearson correlation, and classic DerSimonian–Laird random-effects
+  pooling—with method limits returned alongside each result.
+
+### Trace and report
+
+- Calibrate screening decisions, inspect exploratory reviewer INCLUDE-vote
+  overlap, match source quotations, and record method profiles.
+- Estimate capture-frequency coverage with Chao2 only after the caller makes the
+  required independence assertion; an estimate is never presented as proof of
+  completeness.
+- Render explicit PRISMA 2020 counts as text or deterministic SVG and construct
+  PRISMA-S-style search records without claiming compliance on the caller's
+  behalf.
+- Validate externally generated query expansions without bundling an LLM,
+  provider key, or agent loop.
+
+## Open source and hosted SixSentences
+
+The open-source project starts with portable research primitives. It does not
+pretend that every feature in the integrated product is already available as a
+self-hosted application.
+
+| Capability | Open-source alpha | Hosted workspace |
+| --- | --- | --- |
+| Query translation, local corpus search, ranking, and review reporting | Portable library and CLI primitives | Connected workflow and interface |
+| Bounded tabular import and deterministic analysis | Portable library and CLI primitives | Integrated Data Lab |
+| Projects, workspace UI, and collaboration | Not included | Included |
+| Hosted AI providers and orchestration | Not included | Included |
+| Manuscript/LaTeX, Visual Lab, surveys, and interviews | Portable primitives are roadmap candidates | Included |
+| Accounts, billing, deployment, backups, and analytics | Intentionally out of scope | Operated service |
+
+The website belongs with the separately operated service: putting accounts,
+billing, customer data, private provider configuration, or production
+infrastructure into this repository would make the portable security and
+reproducibility boundary less honest—not more open.
+
+## Quick start
+
+SixSentences supports Python 3.12–3.14. Until a package-index release exists,
+install the exact alpha wheel from GitHub Releases:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install \
+  https://github.com/SixSentences/sixsentences/releases/download/v0.1.0-alpha.1/sixsentences_engine-0.1.0a1-py3-none-any.whl
+sixsentences --help
+```
+
+Parse once, then inspect what a target can and cannot preserve:
+
+```bash
+sixsentences query \
+  '("active learning" OR screen*) AND review' \
+  --target openalex
+```
+
+```json
+{
+  "dropped_fields": [],
+  "dropped_wildcards": [
+    "screen"
+  ],
+  "query": "((\"active learning\" OR screen) AND review)"
+}
+```
+
+Profile and analyse a small synthetic dataset:
+
+```bash
+printf 'group,score\nA,2\nA,4\nB,8\n' > observations.csv
+sixsentences data-profile observations.csv
+sixsentences data-analyze observations.csv group-summary \
+  --group-by group --value-column score --metric mean
+```
+
+Structured commands emit JSON or line-oriented records. Query-syntax exports
+and explicitly selected document formats such as PRISMA text/SVG emit text.
+
+## Command-line map
+
+| Command | Purpose | Network |
+| --- | --- | --- |
+| `query` | Parse and compile for DuckDB, OpenAlex, PubMed, Scopus, Web of Science, or IEEE Xplore | No |
+| `corpus-build` | Build a checksummed local corpus from `WorkRecord` JSONL | No |
+| `corpus-search` | Verify and search a caller-owned local corpus | No |
+| `rank` | Rank JSONL work records against a typed review protocol | No |
+| `coverage` | Estimate capture-frequency coverage with explicit assumptions | No |
+| `prisma` | Render caller-supplied PRISMA counts as text or SVG | No |
+| `expansion-validate` | Validate externally generated query candidates | No |
+| `data-profile` | Import and deterministically profile a bounded table | No |
+| `data-analyze` | Run an explicit deterministic analysis recipe | No |
+| `openalex-search` | Fetch public scholarly metadata from OpenAlex | **Yes** |
+
+Run `sixsentences <command> --help` for the complete input contract. The
+OpenAlex command reads an optional key from `OPENALEX_API_KEY`; anonymous calls
+are suitable only for small demonstrations. Never commit keys or sensitive
+research data.
+
+## How it fits together
+
+```mermaid
+flowchart LR
+    Q[Research question] --> L[Query translation]
+    M[Caller-owned scholarly metadata] --> C[Corpus, deduplication, ranking]
+    L --> C
+    D[Caller-owned tabular data] --> A[Bounded import, profile, analysis]
+    C --> H[Caller-owned decisions]
+    A --> H
+    H --> O[Inspectable JSON, records, text, and SVG]
+```
+
+The caller owns the audit log, screening decisions, source selection, data, and
+workflow state. Networked operations are named explicitly; local operations do
+not hide provider calls. The package has no database service, authentication
+layer, billing code, hosted model dependency, or arbitrary code-execution path.
+
+## Reproducibility and limits
+
+- Pin the package version and complete environment; preserve input hashes,
+  query strings, recipe parameters, and the repository revision with outputs.
+- Pass an explicit reference year to ranking when a stable replay matters.
+- Table profiles use every accepted row. Default import limits are safety and
+  scientific-integrity boundaries, not a sampling policy.
+- XLSX support is deliberately conservative: the first worksheet and cached
+  scalar values are read without executing formulas, macros, scripts, external
+  relationships, or embedded objects.
+- Ranking scores prioritize inspection; correlations do not establish
+  causation; pooled effects do not validate study comparability, bias, or a
+  statistical-analysis plan.
+- PRISMA rendering consumes explicit counters. It cannot infer that a review or
+  search method was compliant.
+
+## Development and review
+
+```bash
+git clone https://github.com/SixSentences/sixsentences.git
+cd sixsentences
+uv sync --frozen --group dev
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy src/sixsentences
+uv run pytest -q
+uv build
+```
+
+Direct dependencies are exactly pinned and the full environment is hash-locked
+in `uv.lock`. CI tests Python 3.12, 3.13, and 3.14; CodeQL, dependency review,
+release smoke tests, checksums, an SBOM, and artifact attestations protect the
+public release path.
+
+Start with [CONTRIBUTING.md](CONTRIBUTING.md), then read
+[GOVERNANCE.md](GOVERNANCE.md) and [ROADMAP.md](ROADMAP.md). Contributions use
+the [Developer Certificate of Origin 1.1](DCO) instead of a separate CLA. Every
+contributor signs off only their own commits. Security reports belong in
+GitHub's private flow described in [SECURITY.md](SECURITY.md), never in a public
+issue.
+
+## Citation
+
+If this toolkit contributes to research, cite the exact release or commit and
+describe the surrounding search, screening, and analysis method. Machine-readable
+metadata is available in [CITATION.cff](CITATION.cff).
+
+## License and marks
+
+Source code and written documentation are licensed under the
+[Apache License 2.0](LICENSE). Dependencies and external data sources retain
+their own terms; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+The SixSentences name, logo, and visual identity are project marks and are not
+licensed for reuse under Apache-2.0. Customary attribution and nominative use
+remain permitted; see [TRADEMARKS.md](TRADEMARKS.md).
 
 <details>
-<summary>Video transcript</summary>
+<summary>Accessible transcript for the hosted-product preview</summary>
 
 Research moves fast. Your tools should, too. Meet SixSentences, the AI-powered
 workspace built for scientific research. Run systematic literature reviews,
@@ -27,175 +267,3 @@ the PC companion and browser extension, SixSentences stays wherever you
 research.
 
 </details>
-
-SixSentences Engine parses and translates Boolean queries, searches a local
-DuckDB/Parquet corpus, ranks scholarly metadata with decomposed scores, and
-formats caller-supplied review counts as PRISMA outputs. It is a small Python
-library and command-line tool designed to be embedded in workflows whose data,
-orchestration, and final decisions remain under the caller's control.
-
-> [!IMPORTANT]
-> **This is an early alpha.** Interfaces and serialized formats may change
-> before `1.0`. The engine assists literature-search workflows; it does not by
-> itself produce a systematic review, guarantee search completeness, validate
-> clinical or regulatory conclusions, or replace expert judgment.
-
-## What is in this repository
-
-- A Boolean query AST and parser with a parameterized DuckDB predicate and
-  translations for OpenAlex, PubMed, Scopus, Web of Science, and IEEE Xplore.
-  The OpenAlex translator explicitly reports field qualifiers and wildcards it
-  cannot preserve.
-- A checksummed local corpus snapshot backed by DuckDB and Parquet.
-- Valid canonical DOI-only destructive deduplication and non-destructive companion-report links.
-- Decomposed ranking signals for relevance, age-normalized citation impact,
-  recency, and retraction penalties.
-- Capture-frequency coverage estimation using Chao2, with the estimate exposed
-  as an estimate rather than a completeness claim.
-- Provider-neutral query-expansion validation and saturation bookkeeping.
-- Citation-snowballing helpers and public-metadata connectors for OpenAlex and
-  Retraction Watch.
-- Screening calibration, exploratory reviewer INCLUDE-vote overlap assessment,
-  source-quote matching, and method-profile utilities.
-- Text and SVG PRISMA 2020 flow rendering plus PRISMA-S-style search records.
-
-The engine favors explicit inputs and inspectable intermediate results. It does
-not hide network calls behind local operations, and it does not contain an LLM
-provider, agent loop, database service, or web application.
-
-## What is intentionally not included
-
-This is the **community engine**, not a source release of the hosted
-SixSentences product. The repository does not contain:
-
-- the SixSentences website or hosted application UI;
-- accounts, authentication, tenancy, subscriptions, billing, or payments;
-- hosted LLM workflows or private provider configuration;
-- production deployment, backup, observability, or operator tooling;
-- production data, credentials, private legal records, or proprietary datasets.
-
-The hosted service at [sixsentences.com](https://sixsentences.com) is operated
-separately and may contain features that are not part of this repository.
-
-## Quick start
-
-Python 3.12 or newer and [uv](https://docs.astral.sh/uv/) are recommended.
-
-```bash
-git clone https://github.com/SixSentences/sixsentences.git
-cd sixsentences
-uv sync --frozen --group dev
-uv run sixsentences --help
-```
-
-Parse a query and inspect its OpenAlex translation:
-
-```bash
-uv run sixsentences query \
-  '("large language model" OR llm) AND screening' \
-  --target openalex
-```
-
-The same parser can produce a parameterized DuckDB predicate:
-
-```bash
-uv run sixsentences query 'title:transformer AND NOT survey' --target duckdb
-```
-
-Library use is equally direct:
-
-```python
-from sixsentences.querylang.compile_openalex import compile_openalex
-from sixsentences.querylang.parser import parse_query
-
-query = parse_query('("active learning" OR screen*) AND review')
-openalex_query, translation_notes = compile_openalex(query)
-
-print(openalex_query)
-print(translation_notes.dropped_fields)
-print(translation_notes.dropped_wildcards)
-```
-
-## Command-line surface
-
-| Command | Purpose |
-| --- | --- |
-| `query` | Parse and compile a Boolean query for DuckDB, OpenAlex, PubMed, Scopus, Web of Science, or IEEE Xplore |
-| `corpus-build` | Build a local checksummed corpus from `WorkRecord` JSONL |
-| `corpus-search` | Search a verified local corpus |
-| `openalex-search` | Fetch public scholarly metadata from OpenAlex |
-| `rank` | Rank JSONL work records against a review protocol |
-| `coverage` | Estimate coverage from capture frequencies |
-| `prisma` | Render explicit PRISMA counters as text or SVG |
-| `expansion-validate` | Validate externally generated query candidates |
-
-Run `uv run sixsentences <command> --help` for inputs and options. Networked
-commands are explicit. OpenAlex permits a few anonymous demo calls, but a free
-API key is strongly recommended and is required for sustained or production
-use; `openalex-search` reads it from `OPENALEX_API_KEY`. Never commit keys or
-downloaded sensitive data.
-
-## Design boundaries
-
-```mermaid
-flowchart LR
-    Q[Boolean query] --> T[Parse and translate]
-    M[Caller-owned metadata] --> C[Checksummed local corpus]
-    T --> C
-    C --> R[Deduplicate and rank]
-    R --> H[Human or caller-owned screening]
-    H --> P[PRISMA and search records]
-```
-
-The caller owns the audit log, screening decisions, source selection, and
-workflow state. PRISMA rendering consumes explicit counters; it does not infer
-that a search was compliant. Coverage estimates require an external basis for
-treating capture occasions as independent and at least two singleton captures.
-The CLI requires the explicit `--occasion-independence-verified` opt-in;
-otherwise it returns an undetermined result. Ranking signals are prioritization
-aids, not relevance judgments.
-
-For reproducible runs, pin the package and lockfile, preserve the input-data
-version and query string, pass an explicit reference year to ranking, and
-record the repository revision alongside outputs.
-
-## Development
-
-```bash
-uv sync --frozen --group dev
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy src/sixsentences
-uv run pytest -q
-uv build
-```
-
-Tests use deterministic fixtures and `PYTHONHASHSEED=42` in CI. Contributions
-should not add secrets, production artifacts, copyrighted full text, or
-personally identifying research data.
-
-Direct dependencies are exactly pinned in `pyproject.toml`, and the complete
-development and runtime dependency graph is hash-locked in `uv.lock`. Use
-`--frozen` for reproducible installs; review and commit an intentional lockfile
-update whenever dependencies change.
-
-Start with [CONTRIBUTING.md](CONTRIBUTING.md), then see
-[GOVERNANCE.md](GOVERNANCE.md) and [ROADMAP.md](ROADMAP.md). Please use GitHub
-Issues for reproducible bugs and bounded proposals. Security reports belong in
-GitHub's private vulnerability-reporting flow described in
-[SECURITY.md](SECURITY.md), never in a public issue.
-
-## Citation
-
-If this engine contributes to research, cite the exact version or commit you
-used and describe the surrounding search and screening method. Machine-readable
-metadata is available in [CITATION.cff](CITATION.cff).
-
-## License and marks
-
-Code and documentation in this repository are licensed under the
-[Apache License 2.0](LICENSE). Dependencies and external data sources retain
-their own terms; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-The license does not grant rights to the SixSentences name, logo, or visual
-identity beyond customary attribution. See [TRADEMARKS.md](TRADEMARKS.md).

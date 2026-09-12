@@ -1,4 +1,4 @@
-"""Run the community engine CLI with ``python -m sixsentences``."""
+"""Run the SixSentences toolkit CLI with ``python -m sixsentences``."""
 
 from sixsentences.cli import main
 

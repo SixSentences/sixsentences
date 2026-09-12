@@ -1,4 +1,4 @@
-"""Portable domain models for the community engine.
+"""Portable domain models for the SixSentences toolkit.
 
 The models deliberately contain no account, tenant, payment, provider, or
 deployment state. Persistence and orchestration remain caller-owned.

@@ -1,6 +1,6 @@
 # Third-party notices
 
-SixSentences Engine depends on open-source packages distributed under their
+The SixSentences open-source toolkit depends on packages distributed under their
 own licenses. Direct runtime dependencies currently include:
 
 | Project | Purpose | License |

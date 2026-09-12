@@ -1,8 +1,8 @@
 # Governance
 
-SixSentences Engine is an open-source project stewarded through the
+SixSentences is an open-source project stewarded through the
 [SixSentences GitHub organization](https://github.com/SixSentences). This file
-describes how decisions are made for the community engine. It does not govern
+describes how decisions are made for the portable toolkit. It does not govern
 the separately operated hosted service.
 
 ## Roles
@@ -29,7 +29,7 @@ Open an issue before work on:
 
 - a breaking public-API or serialized-format change;
 - a new runtime dependency or network integration;
-- a change to licensing, governance, or the engine/hosted boundary;
+- a change to licensing, governance, or the open-source/hosted boundary;
 - removal of a documented capability; or
 - a substantial research-method claim.
 
@@ -67,7 +67,7 @@ before access changes.
 
 Reviewers and maintainers disclose material interests that could affect a
 decision and recuse themselves where appropriate. Commercial use of the Apache-
-licensed engine is allowed and is not itself a conflict; undisclosed influence
+licensed toolkit is allowed and is not itself a conflict; undisclosed influence
 over technical or research-method claims is.
 
 ## Releases and compatibility
