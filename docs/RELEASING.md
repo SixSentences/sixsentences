@@ -1,10 +1,11 @@
 # Releasing SixSentences
 
 Releases come from immutable tags on reviewed `main` commits. GitHub Actions
-validates the complete source tree, publishes Python-engine distributions,
-records checksums and available SBOM/provenance
-attestations, and creates a GitHub prerelease. It does not publish to PyPI or
-npm and uses no long-lived registry credential.
+validates the complete source tree—including the macOS Companion on a pinned
+Xcode toolchain—publishes Python-engine distributions, records checksums and
+available SBOM/provenance attestations, and creates a GitHub prerelease. It does
+not publish to PyPI or npm, does not build a distributable macOS binary, and
+uses no long-lived registry or Apple credential.
 
 ## Authority and protection
 
@@ -21,19 +22,25 @@ pull request and use a new prerelease version; never move or reuse the tag.
 
 1. Set the PEP 440 engine version in `pyproject.toml` and `uv.lock`.
 2. Set the equivalent public version in `services/api/pyproject.toml`,
-   `apps/web/package.json`, `apps/web/package-lock.json`, and `CITATION.cff`.
+   `apps/web/package.json`, `apps/web/package-lock.json`,
+   `apps/browser-extension/package.json`,
+   `apps/browser-extension/package-lock.json`, and `CITATION.cff`.
 3. Set `CITATION.cff`'s UTC date to the release commit date.
 4. Move entries from `Unreleased` to a dated `CHANGELOG.md` section.
 5. Add `docs/releases/<tag>.md` and update user-facing deployment examples.
-6. Complete every item in [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
+6. Confirm the Companion's independent client/build version remains intentional
+   and its exact `Package.resolved` graph is unchanged after resolution.
+7. Complete every item in [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
 For this release, `0.2.0a1` in Python metadata maps to public version
 `0.2.0-alpha.1` and tag `v0.2.0-alpha.1`. Beta and release-candidate suffixes
 map to `-beta.N` and `-rc.N`.
 
-The release workflow checks that the tag resolves to the checked-out commit, is
-contained in `origin/main`, matches all canonical metadata, and has a release
-note and changelog entry for the tagged commit's UTC date.
+The release workflow verifies the tag as Git data using the release verifier and
+maintainer keys from protected `main`. Only after signature, syntax, ancestry,
+and metadata validation do jobs check out the exact verified commit SHA. The
+tag must be contained in `origin/main`, match all canonical metadata, and have a
+release note and changelog entry for the tagged commit's UTC date.
 
 ## Create the tag and stage the reviewed preview
 
@@ -61,19 +68,24 @@ gh workflow run release.yml \
 
 Run the three publication commands together in one supervised release session.
 The explicit workflow dispatch occurs only after the signed tag and draft both
-exist, so there is no tag-push/draft-creation race. The workflow checks out the
-requested tag, verifies its SSH signature against the reviewed public maintainer
-key, and fails closed unless the draft contains only
+exist, so there is no tag-push/draft-creation race. The workflow verifies the
+tag before executing its source and fails closed unless the draft contains only
 `sixsentences-overview.gif` with the checksum committed at that tag. A failed
 workflow never publishes the draft. Correct the draft and rerun the workflow
 without moving or reusing the tag.
 
 The workflow rebuilds and retests from the tag. Python wheels are built from the
 source distribution and installed in isolation. API and web sources are tested
-from locked environments. The self-hosting definition and both container builds
-are validated from the tag. Images remain deployment-built during this alpha;
-in particular, public origins and legal versions are compile-time browser
-configuration, so a generic web image would be misleading.
+from locked environments. Browser-extension contracts and an origin-bound
+unpacked build are validated without a store identity. The macOS Companion's
+boundary, exact dependency resolution, tests, and release compilation run on
+pinned Xcode 26.1.1 without signing or notarization credentials. The exact tag
+is scanned again for current and historical secrets, critical dependency
+vulnerabilities, and deployment misconfiguration. The self-hosting definition
+and both container builds are validated from the tag. Images remain
+deployment-built during this alpha; in particular, public origins and legal
+versions are compile-time browser configuration, so a generic web image would
+be misleading.
 
 The preview is first checked by a read-only job. After every build, test,
 attestation, self-hosting, and preview dependency passes, the publish job pauses
@@ -86,6 +98,11 @@ product-overview GIF is a presentation asset, not an executable artifact;
 review it for personal, customer, participant, and non-redistributable content,
 render it without audio, and verify its committed checksum before staging it as
 `sixsentences-overview.gif`.
+
+The tagged Companion directory is source, not an official native artifact.
+Developer ID signing, Apple notarization, Sparkle feed/key management, appcast
+publication, update provenance, and ZIP/DMG/App Store distribution require a
+separate reviewed pipeline before any binary can be advertised as supported.
 
 ## Verify published artifacts
 

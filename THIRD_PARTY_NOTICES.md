@@ -7,9 +7,14 @@ licenses and terms.
 
 The lockfiles are the canonical inventories for the exact source revision:
 
-- `uv.lock` records the Python runtime and development environment; and
+- `uv.lock` records the Python-engine runtime and development environment;
+- `services/api/uv.lock` records the API and worker dependency graph;
 - `apps/web/package-lock.json` records the web runtime, build, development,
-  and optional platform dependency graph.
+  and optional platform dependency graph;
+- `apps/browser-extension/package-lock.json` records the extension package
+  boundary; and
+- `apps/companion-macos/Package.resolved` records the exact Swift package
+  revision used by the macOS Companion.
 
 A lockfile entry does not by itself prove that a package or optional native
 binary is present in a particular wheel, source distribution, web build,
@@ -106,6 +111,21 @@ dependencies. Its generated unpacked directory contains project source, the
 package `LICENSE` and `NOTICE`, deployment-bound configuration, and the four
 project-owned PNG icons listed in `TRADEMARKS.md`. Browser software and APIs are
 provided by the user's Chromium-based browser and are not redistributed here.
+
+## macOS Companion
+
+The Companion package depends directly on
+[Sparkle 2.9.6](https://github.com/sparkle-project/Sparkle/tree/2.9.6), pinned to
+Git revision `ac2def288cbff5cfc7df3ffef6abdf45b72bcb0a`. Sparkle is available
+under the MIT License and includes separately noticed components under
+permissive licenses. The complete upstream notices distributed with the
+Companion are committed at
+`apps/companion-macos/AppBundle/ThirdPartyNotices.txt`; the bundle build copies
+that file into `Contents/Resources`.
+
+The community release distributes Companion source only. Anyone distributing a
+compiled `.app`, ZIP, DMG, package, update feed, or delta must inspect the exact
+artifact and preserve all required Sparkle and embedded-component notices.
 
 ## Public-data connectors
 

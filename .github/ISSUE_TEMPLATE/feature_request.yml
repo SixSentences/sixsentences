@@ -19,7 +19,7 @@ body:
     id: proposal
     attributes:
       label: Proposed behavior
-      description: Describe inputs, outputs, failure modes, and the smallest useful engine, API, web, worker, or deployment behavior.
+      description: Describe inputs, outputs, failure modes, and the smallest useful engine, API, web, worker, Companion, or deployment behavior.
     validations:
       required: true
   - type: textarea

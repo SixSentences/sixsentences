@@ -1,0 +1,17 @@
+.build/
+.swiftpm/
+dist/
+*.xcuserstate
+.DS_Store
+*.app
+*.zip
+*.dmg
+*.pkg
+*.xcarchive
+*.p12
+*.pfx
+*.pem
+*.key
+*.mobileprovision
+*.provisionprofile
+*.log

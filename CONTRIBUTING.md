@@ -2,8 +2,8 @@
 
 Thank you for improving open, inspectable research software. Focused bug fixes,
 tests, documentation, accessibility improvements, and well-bounded features are
-welcome across the engine, API, web application, browser extension, and
-self-hosting stack.
+welcome across the engine, API, web application, browser extension, macOS
+Companion, and self-hosting stack.
 
 All participation follows the [Code of Conduct](CODE_OF_CONDUCT.md). Report
 vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
@@ -43,7 +43,8 @@ mix dependency refreshes or unrelated refactoring into a behavioral change.
 ## Local setup and checks
 
 Use the committed lockfiles. Supported runtimes are Python 3.12–3.14, Node.js
-22.9 or newer, `uv`, npm, and Docker Compose 2.33.1 or newer.
+22.9 or newer, Xcode 16.4 / Swift 5.10 or newer, `uv`, npm, and Docker Compose
+2.33.1 or newer. Companion CI also pins Xcode 26.1.1 to cover SpeechAnalyzer.
 
 ### Research engine
 
@@ -92,6 +93,21 @@ node scripts/build.mjs --out /tmp/sixsentences-extension
 Use synthetic origins and fixtures. Changes to capture permissions, pairing,
 credential storage, URL sanitization, or PDF transfer require focused security
 tests and an explicit review of the generated manifest.
+
+### macOS Companion
+
+```console
+bash apps/companion-macos/Scripts/audit-community-source.sh
+swift package resolve --package-path apps/companion-macos
+git diff --exit-code -- apps/companion-macos/Package.resolved
+swift test --package-path apps/companion-macos --disable-sandbox
+swift build --package-path apps/companion-macos --configuration release --disable-sandbox
+```
+
+Native changes must keep the deployment origin explicit, preserve local-only
+Apple Speech, test `/interviews/live/*` and `/companion/paper-chats/*`, and
+document local retention and deletion. Pull-request checks use no Developer ID,
+notarization, or Sparkle signing secret.
 
 ### Self-hosting definition
 

@@ -18,6 +18,8 @@ migrations, rollback, and compatibility impact. Use "None" where appropriate.
 - [ ] Web type-check, tests, and production build pass, or the web app is unaffected.
 - [ ] Browser-extension contracts and a deployment-bound build pass, or the
       extension is unaffected.
+- [ ] macOS Companion boundary check, locked resolution, tests, and release build
+      pass on the pinned Xcode toolchains—or the Companion is unaffected.
 - [ ] Self-hosting tests and container builds pass, or deployment is unaffected.
 - [ ] User-facing behavior has a focused test or the omission is explained.
 
@@ -33,6 +35,8 @@ migrations, rollback, and compatibility impact. Use "None" where appropriate.
       were added.
 - [ ] Dependencies and bundled assets are justified, locked, and
       redistribution-compatible—or none were added.
+- [ ] Native-client changes include explicit origin, local-retention/deletion,
+      permission, signing, update, and binary-distribution implications.
 - [ ] Research-method assumptions, limitations, and provenance remain visible—or
       no research-facing behavior changed.
 - [ ] Accessibility and keyboard behavior were reviewed for UI changes—or no UI

@@ -187,6 +187,47 @@ jobs:
           SIX_EXTENSION_ALLOW_INSECURE_LOOPBACK: "false"
         run: node scripts/build.mjs --out "$RUNNER_TEMP/sixsentences-browser-extension"
 
+  companion-macos:
+    name: macOS Companion (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Xcode 16.4 legacy speech
+            os: macos-15
+            developer-dir: /Applications/Xcode_16.4.app/Contents/Developer
+            xcode-version: "Xcode 16.4"
+          - label: Xcode 26.1.1 SpeechAnalyzer
+            os: macos-26
+            developer-dir: /Applications/Xcode_26.1.1.app/Contents/Developer
+            xcode-version: "Xcode 26.1.1"
+    env:
+      DEVELOPER_DIR: ${{ matrix.developer-dir }}
+      SWIFTPM_MODULECACHE_OVERRIDE: /tmp/sixsentences-companion-swift-module-cache
+      CLANG_MODULE_CACHE_PATH: /tmp/sixsentences-companion-clang-module-cache
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require the pinned Apple toolchain
+        run: |
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version | grep -Fx "${{ matrix.xcode-version }}"
+          swift --version
+      - name: Verify plist, scripts, source boundary, and API contracts
+        run: bash apps/companion-macos/Scripts/audit-community-source.sh
+      - name: Resolve the exact Swift dependency graph
+        run: |
+          swift package resolve --package-path apps/companion-macos
+          git diff --exit-code -- apps/companion-macos/Package.resolved
+      - name: Test the macOS Companion
+        run: swift test --package-path apps/companion-macos --disable-sandbox
+      - name: Build release source without signing credentials
+        run: swift build --package-path apps/companion-macos --configuration release --disable-sandbox
+
   self-hosting:
     name: Self-hosting definition and container builds
     runs-on: ubuntu-24.04

@@ -20,8 +20,8 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Include relevant Python and/or Node.js versions, operating system, architecture, browser, and installation method.
-      placeholder: Web, Node.js 22.9.0, Firefox, Linux amd64, Docker Compose
+      description: Include relevant Python, Node.js, Swift/Xcode, operating system, architecture, browser, and installation method.
+      placeholder: Companion, macOS 15, arm64, Xcode 16.4, source build
     validations:
       required: true
   - type: textarea

@@ -41,7 +41,7 @@
 <p align="center">
   <img
     src="https://github.com/SixSentences/sixsentences/releases/download/v0.2.0-alpha.1/sixsentences-overview.gif"
-    width="900"
+    width="720"
     alt="SixSentences research workspace product overview"
   >
 </p>
@@ -68,8 +68,9 @@ workspace:
 
 The community edition is a complete application stack: a Next.js workspace,
 FastAPI service, PostgreSQL database, background worker, Caddy edge proxy,
-Manifest V3 browser-capture client, and the typed Python research engine. No
-customer data, production configuration, or provider credential is bundled.
+Manifest V3 browser-capture client, typed Python research engine, and source for
+the native macOS Companion. No customer data, production configuration,
+provider credential, or signed native binary is bundled.
 
 ## Quick start
 
@@ -78,7 +79,7 @@ loopback-only public origins; use the documented TLS mode and host firewalling
 before accepting real users or research data.
 
 ```console
-git clone https://github.com/SixSentences/sixsentences.git
+git clone --branch v0.2.0-alpha.1 --depth 1 https://github.com/SixSentences/sixsentences.git
 cd sixsentences
 bash deploy/community/init-env.sh --local
 docker compose --env-file .env.selfhost up --build --detach --wait
@@ -90,11 +91,17 @@ mail, external models, web search, or spoken interviews, and read the
 [backup and restore runbook](deploy/community/BACKUP-RESTORE.md) before storing
 user data.
 
+macOS users can also build the source-only
+[Companion](apps/companion-macos/README.md) against the same deployment. It adds
+local Apple Speech for spoken live interviews and brainstorming plus native
+paper chat; the Docker quick start does not build or install a macOS app.
+
 ## Architecture
 
 ```mermaid
 flowchart LR
     B[Browser] -->|HTTPS| C[Caddy]
+    M[macOS Companion] -->|HTTPS · derived /api| C
     C --> W[Next.js web]
     C --> A[FastAPI API]
     A --> P[(PostgreSQL)]
@@ -112,6 +119,7 @@ src/sixsentences/       Python research engine and CLI
 services/api/           Application API, migrations, worker, and tests
 apps/web/               Next.js research workspace
 apps/browser-extension/ Self-hostable Chromium capture client
+apps/companion-macos/   Native Companion source, tests, and local bundle script
 deploy/community/       Self-hosting, preflight, backup, and restore tooling
 compose.yaml            PostgreSQL + API + worker + web + Caddy
 ```
@@ -142,27 +150,33 @@ uv sync --project services/api --frozen --all-groups
 uv run --project services/api pytest services/api/tests
 
 # Web
-cd apps/web && npm ci && npm run typecheck && npm test && npm run build
+(cd apps/web && npm ci && npm run typecheck && npm test && npm run build)
 
 # Browser extension
-cd apps/browser-extension && npm ci && npm test
-APP_ORIGIN=https://research.example.org \
-API_ORIGIN=https://research.example.org/api \
-node scripts/build.mjs --out /tmp/sixsentences-extension
+(cd apps/browser-extension && npm ci && npm test && \
+  APP_ORIGIN=https://research.example.org \
+  API_ORIGIN=https://research.example.org/api \
+  node scripts/build.mjs --out /tmp/sixsentences-extension)
+
+# macOS Companion (on macOS with Xcode 16)
+bash apps/companion-macos/Scripts/audit-community-source.sh
+swift test --package-path apps/companion-macos --disable-sandbox
 ```
 
 The CI workflow also validates the application contract, self-hosting boundary,
-container builds, DCO sign-offs, dependency changes, CodeQL results, and secret
-and configuration scans. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full
-local gate and pull-request expectations.
+container builds, macOS Companion source, DCO sign-offs, dependency changes,
+CodeQL results, and secret and configuration scans. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the full local gate and pull-request
+expectations.
 
 ## Contributing and security
 
 Focused issues and pull requests are welcome. Contributions require per-commit
-[Developer Certificate of Origin 1.1](DCO) sign-off and one public acceptance
-of the repository [CLA](CLA.md). The local workflow uses no external CLA service
-or separately stored secret. Decisions and maintainer responsibilities are
-described in [GOVERNANCE.md](GOVERNANCE.md).
+[Developer Certificate of Origin 1.1](DCO) sign-off and a fresh public
+acceptance of the repository [CLA](CLA.md) on each pull request. The local
+workflow uses no external CLA service or separately stored secret. Decisions
+and maintainer responsibilities are described in
+[GOVERNANCE.md](GOVERNANCE.md).
 
 Report vulnerabilities through the repository's
 [private advisory form](https://github.com/SixSentences/sixsentences/security/advisories/new),

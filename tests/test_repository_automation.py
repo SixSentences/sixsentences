@@ -263,8 +263,8 @@ def test_release_publication_requires_the_protected_environment() -> None:
 
     assert "\n    environment: community-release\n" in publish_job
     assert (
-        "\n    needs: [validate, build, attest, self-hosting, tag-security, preview]\n"
-        in publish_job
+        "\n    needs: [validate, build, attest, self-hosting, browser-extension-source, "
+        "companion-macos-source, tag-security, preview]\n" in publish_job
     )
     assert "ref: ${{ needs.validate.outputs.release-sha }}" in publish_job
 

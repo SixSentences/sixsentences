@@ -37,7 +37,8 @@ Not included:
 - the separate marketing/landing website;
 - the browser-extension runtime, which is built separately from
   `../browser-extension`;
-- the macOS companion; or
+- the macOS Companion source, which lives separately at
+  `../companion-macos`; or
 - production configuration, credentials, customer data, or historical binary
   downloads.
 

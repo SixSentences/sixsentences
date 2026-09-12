@@ -292,6 +292,70 @@ jobs:
       - name: Build the tagged web source for production
         run: npm run build
 
+  browser-extension-source:
+    name: Validate tagged browser-extension source (Node 22.9)
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: apps/browser-extension
+    steps:
+      - name: Check out the verified release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.release-sha }}
+          persist-credentials: false
+      - name: Set up pinned Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.9.0"
+          cache: npm
+          cache-dependency-path: apps/browser-extension/package-lock.json
+      - name: Install the locked extension environment
+        run: npm ci
+      - name: Test contracts and build an origin-bound unpacked runtime
+        env:
+          APP_ORIGIN: https://research.example.invalid
+          API_ORIGIN: https://research.example.invalid/api
+          SIX_EXTENSION_ALLOW_INSECURE_LOOPBACK: "false"
+        run: |
+          npm test
+          node scripts/build.mjs --out "$RUNNER_TEMP/sixsentences-browser-extension"
+
+  companion-macos-source:
+    name: Validate tagged macOS Companion source (Xcode 26.1.1)
+    needs: validate
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.1.1.app/Contents/Developer
+      SWIFTPM_MODULECACHE_OVERRIDE: /tmp/sixsentences-companion-release-swift-cache
+      CLANG_MODULE_CACHE_PATH: /tmp/sixsentences-companion-release-clang-cache
+    steps:
+      - name: Check out the verified release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.release-sha }}
+          persist-credentials: false
+      - name: Require the pinned Apple toolchain
+        run: |
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version | grep -Fx "Xcode 26.1.1"
+          swift --version
+      - name: Verify the source-only distribution boundary
+        run: bash apps/companion-macos/Scripts/audit-community-source.sh
+      - name: Resolve, test, and build the tagged source
+        run: |
+          swift package resolve --package-path apps/companion-macos
+          git diff --exit-code -- apps/companion-macos/Package.resolved
+          swift test --package-path apps/companion-macos --disable-sandbox
+          swift build --package-path apps/companion-macos --configuration release --disable-sandbox
+
   self-hosting:
     name: Validate tagged self-hosting and container builds
     needs: [validate, application-api, web-source]
@@ -437,7 +501,7 @@ jobs:
 
   publish:
     name: Publish community source prerelease with engine artifacts
-    needs: [validate, build, attest, self-hosting, tag-security, preview]
+    needs: [validate, build, attest, self-hosting, browser-extension-source, companion-macos-source, tag-security, preview]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: community-release
@@ -502,7 +566,7 @@ jobs:
           {
             printf '%s\n' \
               '> [!NOTE]' \
-              '> This release publishes the complete tagged community application source. The downloadable, attested build artifacts below cover the `sixsentences-engine` Python distribution. API and web containers are validated from the tag but remain deployment-built so configuration is explicit.' \
+              '> This release publishes the complete tagged community application source, including the tested macOS Companion source. The downloadable, attested build artifacts below cover the `sixsentences-engine` Python distribution. API, web, and Companion sources are validated from the tag; containers and the macOS app remain deployment-built so configuration and signing authority stay explicit.' \
               ''
             cat release/RELEASE_NOTES.md
           } > "$RUNNER_TEMP/release-notes.md"
