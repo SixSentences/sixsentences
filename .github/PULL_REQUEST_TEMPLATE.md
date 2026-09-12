@@ -4,42 +4,54 @@
 
 ## Behavior and compatibility
 
-<!-- Describe observable behavior, public API/schema changes, and migration needs. -->
+<!--
+List affected components, observable behavior, API/event/schema changes,
+migrations, rollback, and compatibility impact. Use "None" where appropriate.
+-->
 
 ## Validation
 
-<!-- List the exact checks run and any intentionally omitted checks. -->
+<!-- List exact commands and results. Explain any intentionally omitted gate. -->
 
-### Python engine (when affected)
+- [ ] Engine checks pass, or the engine is unaffected.
+- [ ] API, migration, worker, and web-contract checks pass, or they are unaffected.
+- [ ] Web type-check, tests, and production build pass, or the web app is unaffected.
+- [ ] Self-hosting tests and container builds pass, or deployment is unaffected.
+- [ ] User-facing behavior has a focused test or the omission is explained.
 
-- [ ] `uv run ruff check .`
-- [ ] `uv run ruff format --check .`
-- [ ] `uv run mypy src/sixsentences`
-- [ ] `uv run pytest -q`
-- [ ] `uv build`
+## Review boundaries
 
-### Web application (when affected)
+<!-- Describe concrete effects; do not check a box without reviewing it. -->
 
-- [ ] `cd apps/web && npm ci`
-- [ ] `cd apps/web && npm run typecheck`
-- [ ] `cd apps/web && node --test tests/*.test.mjs`
-- [ ] `cd apps/web && npm run build`
+- [ ] Security and privacy effects were reviewed, including authentication,
+      tenancy, capability URLs, uploads, retention, deletion, browser state, and
+      logs as applicable.
+- [ ] New network calls and processors are operator-configurable, fail closed,
+      and document data egress, cost, retention, and failure behavior—or none
+      were added.
+- [ ] Dependencies and bundled assets are justified, locked, and
+      redistribution-compatible—or none were added.
+- [ ] Research-method assumptions, limitations, and provenance remain visible—or
+      no research-facing behavior changed.
+- [ ] Accessibility and keyboard behavior were reviewed for UI changes—or no UI
+      changed.
 
-## Data, network, and security review
+## Source-release hygiene
 
-<!-- Note new dependencies, network calls, external data terms, or security/privacy effects. -->
-
-- [ ] No secrets, hosted-production artifacts, personal data, customer data, or non-redistributable research content are included.
-- [ ] New network behavior and data-license implications are documented, or this change adds none.
-- [ ] New dependencies and bundled assets are justified, locked, and license-compatible, or this change adds none.
-- [ ] Changes to authentication, tenancy, provider access, uploads, or browser storage include a threat-boundary review, or this change affects none of them.
-
-## Checklist
-
-- [ ] The change belongs in the community source tree; hosted billing, operations, customer configuration, and production evidence remain excluded.
-- [ ] Tests cover changed behavior, or the omission is explained above.
+- [ ] No secret, private key, production configuration, customer/participant
+      data, user upload, database dump, log, private prompt, or non-redistributable
+      research content is included.
+- [ ] The change belongs in the community stack; payment, subscription,
+      commercial-plan, hosted-administration, and marketing-site code remains
+      separate.
 - [ ] Public behavior and limitations are documented.
-- [ ] User-visible changes are recorded under `Unreleased` in `CHANGELOG.md`,
-      or the omission is explained above.
-- [ ] Every commit carries my DCO `Signed-off-by` trailer.
+- [ ] `CHANGELOG.md` is updated for user-visible changes, or the omission is
+      explained above.
+- [ ] Every commit carries my own matching DCO `Signed-off-by` trailer.
+- [ ] I have read `CLA.md` and posted its exact acceptance sentence as a
+      standalone pull-request comment.
 - [ ] I have read and will follow the Code of Conduct.
+
+## Visual evidence
+
+<!-- Add sanitized screenshots/recordings for material UI changes. No real data. -->
