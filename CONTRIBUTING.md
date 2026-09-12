@@ -131,10 +131,18 @@ git commit -s -m "fix: describe the change"
 The resulting `Signed-off-by` trailer certifies that you may submit the work
 under the project license. Every author and declared co-author must add their
 own matching sign-off; maintainers and automation must not invent one for
-someone else. GitHub's private `noreply` address is acceptable.
+someone else. GitHub's private `noreply` address is acceptable. A protected
+default-branch verifier reads contribution commits only as Git objects and
+publishes the result against the exact pull-request head commit.
 
-The pull-request author must also read `CLA.md` and post its exact acceptance
-sentence as a standalone PR comment. A repository-local workflow verifies the
-public record; no external CLA application or separately stored token is used.
+For every pull request, its author must also read `CLA.md` and post the exact
+acceptance sentence as a standalone PR comment. A repository-local workflow
+binds that public acceptance to the exact head commit; no external CLA
+application or separately stored token is used.
+
+The CLA is the PR author's individual statement and does not bind other commit
+authors or co-authors. Those contributors' own DCO sign-offs provide the
+Apache-2.0 inbound license; the project does not treat their work as separately
+relicensable merely because somebody else opened the pull request.
 
 Review and merge authority is described in [GOVERNANCE.md](GOVERNANCE.md).

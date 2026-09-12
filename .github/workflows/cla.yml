@@ -5,7 +5,6 @@ on:
     types: [opened, reopened, synchronize]
   issue_comment:
     types: [created, edited, deleted]
-  workflow_dispatch:
 
 concurrency:
   group: cla-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
@@ -13,12 +12,13 @@ concurrency:
 
 permissions:
   contents: read
-  issues: write
+  issues: read
   pull-requests: read
+  statuses: write
 
 jobs:
-  acceptance:
-    name: CLA acceptance
+  acceptance-status:
+    name: Publish CLA status
     if: >-
       github.event_name == 'pull_request_target' ||
       (github.event_name == 'issue_comment' && github.event.issue.pull_request)
@@ -32,12 +32,15 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
-      - name: Verify the pull-request author's public acceptance
+      - name: Publish the pull-request author's acceptance status
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
-        run: >-
-          python .github/scripts/check_cla.py
-          --repository "$GITHUB_REPOSITORY"
-          --number "$PR_NUMBER"
-          --api-url "$GITHUB_API_URL"
+        run: |
+          set -euo pipefail
+          cla_source_sha="$(git rev-parse HEAD)"
+          python .github/scripts/check_cla.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --number "$PR_NUMBER" \
+            --cla-sha "$cla_source_sha" \
+            --api-url "$GITHUB_API_URL"

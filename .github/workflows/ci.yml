@@ -115,6 +115,8 @@ jobs:
       - name: Build the web application for production
         run: npm run build
 
+  # Bootstrap compatibility: remove this contributor-controlled duplicate only
+  # after the protected DCO workflow has landed and `DCO / sign-off` is required.
   dco:
     name: DCO sign-off
     if: github.event_name == 'pull_request'
