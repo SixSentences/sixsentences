@@ -1,14 +1,14 @@
 const DEFAULT_PUBLIC_ERROR = "That didn't work. Please try again.";
 const DEFAULT_STORED_ERROR = "We couldn't process this item. Please try again.";
 
-export type EntitlementErrorKind = "feature" | "capacity" | "concurrency" | "limit" | "unavailable";
+export type AvailabilityErrorKind = "feature" | "resource" | "concurrency" | "limit" | "unavailable";
 
-const ENTITLEMENT_KIND_BY_CODE: Readonly<Record<string, EntitlementErrorKind>> = {
+const AVAILABILITY_KIND_BY_CODE: Readonly<Record<string, AvailabilityErrorKind>> = {
   feature_not_in_plan: "feature",
   upgrade_required: "feature",
-  capacity_exhausted: "capacity",
-  capacity_unavailable: "capacity",
-  voice_interview_capacity_unavailable: "capacity",
+  capacity_exhausted: "resource",
+  capacity_unavailable: "resource",
+  voice_interview_capacity_unavailable: "resource",
   concurrency_limit: "concurrency",
   resource_limit: "limit",
   resource_limit_reached: "limit",
@@ -38,16 +38,16 @@ const PUBLIC_ERROR_BY_CODE: Readonly<Record<string, string>> = {
   brainstorm_too_many_segments: "This brainstorm has too many separate thoughts to process at once.",
   browser_capture_rate_limited: "Too many saves at once. Please wait a moment and try again.",
   capacity_exhausted:
-    "There is not enough available capacity to start this action. Review current usage or choose a smaller request.",
+    "The requested resources are not available on this deployment. Choose a smaller request or contact the workspace operator.",
   capacity_unavailable:
-    "There is not enough available capacity to start this action. Review current usage or choose a smaller request.",
+    "The requested resources are not available on this deployment. Choose a smaller request or contact the workspace operator.",
   companion_upload_busy: "Paper upload is busy. Please try again shortly.",
   companion_upload_rate_limited: "Too many paper uploads at once. Please wait a moment and try again.",
   concurrency_limit:
     "The workspace already has the maximum number of actions running. Wait for one to finish or stop it before trying again.",
   conversation_complete_has_no_payload: "There is no completed conversation to save yet.",
   conversation_consent_required: "Confirm the participant information before starting the conversation.",
-  entitlement_limit: "This action is currently unavailable. Please try again or contact support.",
+  entitlement_limit: "This action is currently unavailable. Please try again or contact the workspace operator.",
   feature_not_in_plan: "This action is not enabled on the current deployment.",
   fulltext_access_gap: "Some full texts are unavailable. Review the available sources before continuing.",
   fulltext_review_pending: "Complete the pending full-text review before continuing.",
@@ -97,18 +97,18 @@ const PUBLIC_ERROR_BY_CODE: Readonly<Record<string, string>> = {
   repository_prose_candidate_compile_failed: "The proposed manuscript change could not be validated.",
   repository_request_id_conflict: "This repository request changed in the meantime. Start a new analysis.",
   resource_limit:
-    "This action exceeds a workspace limit. Review usage or reduce the size of the request.",
+    "This action exceeds a workspace resource limit. Reduce the size of the request or contact the workspace operator.",
   resource_limit_reached:
-    "This action exceeds a workspace limit. Review usage or reduce the size of the request.",
+    "This action exceeds a workspace resource limit. Reduce the size of the request or contact the workspace operator.",
   screening_recall_not_certified: "Review the screening results before continuing.",
   search_coverage_uncertain: "Search coverage could not be confirmed. Review the search before continuing.",
   search_coverage_undetermined: "Search coverage could not be determined. Review the search before continuing.",
   selection_not_on_page: "Select text that is visible on the current page.",
   upgrade_required: "This action is not enabled on the current deployment.",
   voice_interview_capacity_unavailable:
-    "This interview cannot start right now because the study does not have enough capacity for a full session. Please try again later or contact the research team.",
+    "This interview cannot start because the required resources are unavailable. Please try again later or contact the research team.",
   voice_study_budget_below_session_cap:
-    "Fieldwork budget must be at least the session cap. Raise the budget or lower the session cap.",
+    "The fieldwork limit must be at least the session cap. Raise the limit or lower the session cap.",
   web_search_public_scope_confirmation_required: "Confirm that this web search contains only public, non-sensitive information.",
   web_search_unavailable: "Web source search is temporarily unavailable. Please try again later.",
   writer_revision_conflict: "Another author changed this passage. Refresh and compare the latest version.",
@@ -135,10 +135,10 @@ const SAFE_PUBLIC_MESSAGES = new Set<string>([
   "Something went wrong on our side. Please try again in a moment.",
   "That didn't work with the current input. Review it and try again.",
   "This action is not enabled on the current deployment.",
-  "This action is currently unavailable. Please try again or contact support.",
-  "This action exceeds a workspace limit. Review usage or reduce the size of the request.",
+  "This action is currently unavailable. Please try again or contact the workspace operator.",
+  "This action exceeds a workspace resource limit. Reduce the size of the request or contact the workspace operator.",
   "This action is larger than the per-action limit. Choose a smaller request and try again.",
-  "There is not enough available capacity to start this action. Review current usage or choose a smaller request.",
+  "The requested resources are not available on this deployment. Choose a smaller request or contact the workspace operator.",
   "The workspace already has the maximum number of actions running. Wait for one to finish or stop it before trying again.",
   "This item changed in the meantime. Refresh and try again.",
   "This item could not be found.",
@@ -202,11 +202,11 @@ function approvedCodeMessage(candidate: unknown): string | null {
 }
 
 /** Only stable server codes classify a 402; messages and arbitrary hints do not. */
-export function entitlementErrorKind(status: number, candidate: unknown): EntitlementErrorKind | null {
+export function availabilityErrorKind(status: number, candidate: unknown): AvailabilityErrorKind | null {
   if (status !== 402) return null;
   const code = stableErrorCode(candidate);
-  return code && Object.prototype.hasOwnProperty.call(ENTITLEMENT_KIND_BY_CODE, code)
-    ? ENTITLEMENT_KIND_BY_CODE[code]
+  return code && Object.prototype.hasOwnProperty.call(AVAILABILITY_KIND_BY_CODE, code)
+    ? AVAILABILITY_KIND_BY_CODE[code]
     : "unavailable";
 }
 
@@ -217,7 +217,7 @@ function safeFallback(candidate: unknown, defaultMessage: string): string {
 
 function fallbackForStatus(status: number): string {
   if (status === 401) return "Your session is no longer valid. Please sign in again.";
-  if (status === 402) return "This action is currently unavailable. Please try again or contact support.";
+  if (status === 402) return "This action is currently unavailable. Please try again or contact the workspace operator.";
   if (status === 403) return "You don't have permission to do that.";
   if (status === 404) return "This item could not be found.";
   if (status === 408) return "This request took too long. Please try again.";
@@ -273,8 +273,8 @@ const PUBLIC_TALK_ERROR_BY_CODE: Readonly<
   Record<string, Readonly<Record<"de" | "en", string>>>
 > = {
   voice_interview_capacity_unavailable: {
-    de: "Das Interview kann gerade nicht gestartet werden, weil nicht genügend Kapazität für eine vollständige Sitzung verfügbar ist. Bitte versuchen Sie es später erneut oder wenden Sie sich an das Forschungsteam.",
-    en: "This interview cannot start right now because the study does not have enough capacity for a full session. Please try again later or contact the research team.",
+    de: "Das Interview kann gerade nicht gestartet werden, weil die erforderlichen Ressourcen nicht verfügbar sind. Bitte versuchen Sie es später erneut oder wenden Sie sich an das Forschungsteam.",
+    en: "This interview cannot start because the required resources are unavailable. Please try again later or contact the research team.",
   },
 };
 

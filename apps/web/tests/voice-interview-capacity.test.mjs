@@ -33,10 +33,10 @@ const textVoiceConfig = section(
   "export type VoiceSessionConfig",
 );
 
-test("a live admission limit does not claim that the entire reservation was spent", () => {
-  assert.match(liveSession, /Die Kapazitätsgrenze für dieses Interview ist erreicht/);
-  assert.match(liveSession, /This interview has reached its capacity limit/);
-  assert.doesNotMatch(liveSession, /available interview capacity has been used|Interview-Kapazität ist aufgebraucht/);
+test("a live admission limit uses deployment-neutral resource language", () => {
+  assert.match(liveSession, /Das Ressourcenlimit für dieses Interview ist erreicht/);
+  assert.match(liveSession, /This interview has reached its resource limit/);
+  assert.doesNotMatch(liveSession, /capacity limit|Kapazitätsgrenze|available interview capacity/);
 });
 
 test("spoken interviews use only the authenticated server-controlled relay", () => {
@@ -109,7 +109,7 @@ test("unavailable invitation links show an actionable error instead of an endles
 test("public consent is bound to the exact disclosed text", () => {
   assert.match(types, /export interface PublicTalkInfo[\s\S]*consent_fingerprint: string;/);
   assert.match(types, /minimum_age: 18;/);
-  assert.match(types, /live_provider: "Google Gemini";/);
+  assert.match(types, /live_provider: string;/);
   assert.match(types, /privacy_notice_url: string;/);
   assert.match(types, /terms_url: string;/);
   assert.match(
@@ -167,7 +167,7 @@ test("study and written-session duration respect the API-authoritative limit", (
   assert.match(types, /export interface VoiceConfig[\s\S]*public_spoken_available: boolean;/);
   assert.match(api, /voiceConfig: \(\) =>[\s\S]*request<VoiceConfig>/);
   assert.match(study, /SESSION_DURATION_OPTIONS = \[30, 45, 60\]/);
-  assert.match(study, /FIELDWORK_BUDGET_OPTIONS = \[30, 60, 120, 300, 600, 1200\]/);
+  assert.match(study, /FIELDWORK_LIMIT_OPTIONS = \[30, 60, 120, 300, 600, 1200\]/);
   assert.doesNotMatch(study, /cap sessions at 15 minutes/);
   assert.match(study, /cap sessions at 30 minutes/);
   assert.match(study, /minutes >= minLiveSessionMinutes/);
@@ -179,7 +179,8 @@ test("study and written-session duration respect the API-authoritative limit", (
   assert.match(study, /below session cap/);
   assert.match(study, /above current limit/);
   assert.match(study, /voiceConfig\?\.max_live_session_minutes/);
-  assert.match(study, /current spoken-interview allowance supports sessions up to/);
+  assert.match(study, /connected API currently allows spoken sessions up to/);
+  assert.doesNotMatch(study, /recorded model costs|capacity allocation|allowance supports/);
   assert.match(study, /Connection renewals happen automatically/);
   assert.match(study, /Public\s+participation links currently open the written AI interview/);
   assert.match(study, /Create written participation link/);

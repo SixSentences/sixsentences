@@ -10,6 +10,12 @@ import { publicLegalUrl } from "@/lib/public-links";
  * artwork collapses to a slim brand header.
  */
 export default function AuthShell({ children }: { children: React.ReactNode }) {
+  const legalLinks = [
+    { href: publicLegalUrl("imprint"), label: "IMPRINT" },
+    { href: publicLegalUrl("privacy"), label: "PRIVACY" },
+    { href: publicLegalUrl("terms"), label: "TERMS" },
+  ].filter((link): link is { href: string; label: string } => link.href !== null);
+
   return (
     <main className="fixed inset-2 grid overflow-hidden rounded-2xl bg-background shadow-[0_10px_60px_-15px_rgba(12,29,25,0.2)] ring-1 ring-border/70 sm:inset-3 sm:rounded-3xl lg:grid-cols-[1.1fr_1fr]">
       {/* Artwork panel */}
@@ -62,26 +68,15 @@ export default function AuthShell({ children }: { children: React.ReactNode }) {
         <div className="relative z-10 flex flex-1 items-center justify-center px-4 pb-8 pt-4 sm:px-6 sm:pb-10 lg:pt-16">
           <div className="w-full max-w-sm">{children}</div>
         </div>
-        <nav className="relative z-10 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 px-4 pb-6 font-mono text-[10px] tracking-[0.2em] text-foreground/45">
-          <a
-            href={publicLegalUrl("imprint")}
-            className="transition hover:text-foreground"
-          >
-            IMPRINT
-          </a>
-          <a
-            href={publicLegalUrl("privacy")}
-            className="transition hover:text-foreground"
-          >
-            PRIVACY
-          </a>
-          <a
-            href={publicLegalUrl("terms")}
-            className="transition hover:text-foreground"
-          >
-            TERMS
-          </a>
-        </nav>
+        {legalLinks.length > 0 ? (
+          <nav className="relative z-10 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 px-4 pb-6 font-mono text-[10px] tracking-[0.2em] text-foreground/45">
+            {legalLinks.map((link) => (
+              <a key={link.href} href={link.href} className="transition hover:text-foreground">
+                {link.label}
+              </a>
+            ))}
+          </nav>
+        ) : null}
       </section>
     </main>
   );

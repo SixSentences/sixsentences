@@ -80,7 +80,7 @@ export default function ChatReportDialog({ runId }: { runId: RunRef }) {
             <Checkbox checked={consent} onCheckedChange={(checked) => setConsent(checked === true)} className="mt-0.5" />
             <span className="text-[0.75rem] leading-relaxed text-muted-foreground">
               <span className="block font-medium text-foreground">I consent to a human review of this conversation.</span>
-              SixSentences_ employees may access the messages and recorded tool activity in this chat solely to investigate this report. Without this consent, the transcript is not submitted.
+              Reviewers authorized by this deployment&apos;s operator may access the messages and recorded tool activity solely to investigate this report. Without this consent, the transcript is not submitted.
             </span>
           </label>
         </div>

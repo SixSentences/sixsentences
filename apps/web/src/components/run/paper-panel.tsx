@@ -1549,8 +1549,8 @@ export default function PaperPanel({
                     page provenance stay visible. You can leave while it runs.
                   </p>
                   <div className="mt-5 rounded-2xl border border-border bg-secondary/40 p-4 text-[0.71875rem] leading-5 text-muted-foreground">
-                    The original publication remains unchanged. Capacity is used per translated
-                    page; completed pages are cached, so an interrupted job resumes in place.
+                    The original publication remains unchanged. Completed pages are cached,
+                    so an interrupted job resumes in place.
                   </div>
                   <Button
                     className="mt-5 w-full rounded-full"

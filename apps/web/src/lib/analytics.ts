@@ -2,9 +2,6 @@
  * Optional product analytics are disabled for the public release.
  * The closed schemas below remain available for regression tests, but neither
  * loading this module nor calling track reads storage or sends an event.
- *
- * Dormant normalizers are retained as regression-tested constraints for any
- * future opt-in implementation. They are not connected to a browser tracker.
  */
 
 /** Event names, closed on purpose: a typo should not create a new metric. */
@@ -85,105 +82,7 @@ export function sanitizeAnalyticsData(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
-type TrackerPayload = {
-  url?: string;
-  referrer?: string;
-  title?: string;
-  [key: string]: unknown;
-};
-
-type UmamiTracker = {
-  track: (name: string, data?: EventData) => void;
-};
-
-declare global {
-  interface Window {
-    umami?: UmamiTracker;
-    sixBeforeSend?: (
-      type: string,
-      payload: TrackerPayload,
-    ) => TrackerPayload | false;
-  }
-}
-
-/**
- * Route patterns whose id segment is masked. Ordered: the studies route has
- * to win over the plain interview route it is nested under.
- */
-const ID_ROUTES: ReadonlyArray<readonly [RegExp, string]> = [
-  [/^\/interviews\/studies\/[^/]+/, "/interviews/studies/:id"],
-  [/^\/interviews\/[^/]+/, "/interviews/:id"],
-  [/^\/projects\/[^/]+/, "/projects/:id"],
-  [/^\/writer\/[^/]+/, "/writer/:id"],
-  [/^\/surveys\/[^/]+/, "/surveys/:id"],
-  [/^\/data\/[^/]+/, "/data/:id"],
-  [/^\/r\/[^/]+/, "/r/:id"],
-];
-
-/** Readable names for the dashboard, keyed by normalized path. */
-const ROUTE_LABELS: Record<string, string> = {
-  "/": "New search",
-  "/library": "Library",
-  "/brainstorming": "Brainstorming",
-  "/writer": "Writer",
-  "/writer/:id": "Writer document",
-  "/figures": "Figures",
-  "/data": "Data",
-  "/data/:id": "Dataset",
-  "/interviews": "Interviews",
-  "/interviews/:id": "Interview",
-  "/interviews/studies/:id": "Voice study",
-  "/surveys": "Surveys",
-  "/surveys/:id": "Survey",
-  "/projects/:id": "Project",
-  "/r/:id": "Run",
-  "/docs": "Docs",
-  "/ideas": "Ideas",
-};
-
-/** Replaces the id segment of a workspace route with `:id`. */
-export function normalizePath(path: string): string {
-  for (const [pattern, replacement] of ID_ROUTES) {
-    if (pattern.test(path)) return path.replace(pattern, replacement);
-  }
-  return path;
-}
-
-export function routeLabel(path: string): string {
-  return ROUTE_LABELS[path] ?? "SixSentences_";
-}
-
-/** Same-origin referrers are app routes, so they need the same masking. */
-function normalizeReferrer(value: string): string {
-  if (!value) return value;
-  try {
-    const parsed = new URL(value, window.location.origin);
-    if (parsed.origin !== window.location.origin) return parsed.origin;
-    return normalizePath(parsed.pathname);
-  } catch {
-    return "";
-  }
-}
-
-function beforeSend(
-  _type: string,
-  payload: TrackerPayload,
-): TrackerPayload | false {
-  const [path] = (payload.url ?? "").split(/[?#]/);
-  const normalized = normalizePath(path);
-  return {
-    ...payload,
-    url: normalized,
-    referrer: normalizeReferrer(payload.referrer ?? ""),
-    // titles are static today, but pinning them to the route keeps a future
-    // `document.title = doc.title` from leaking a document name in here
-    title: routeLabel(normalized),
-  };
-}
-
-// No browser hook is installed while optional measurement is disabled.
-
-/** Deliberate no-op, including when a legacy tracker is present in the browser. */
+/** Deliberate no-op while optional measurement is disabled. */
 export function track<E extends AnalyticsEvent>(
   event: E,
   data?: AnalyticsPayloads[E],

@@ -147,8 +147,8 @@ export default function SurveysPage() {
             }
             description={
               german
-                ? "Erstelle einen gehosteten Fragebogen, sammle Antworten und analysiere das Ergebnis mit einem beleggebundenen Forschungsassistenten."
-                : "Build a hosted questionnaire, collect responses and analyse the result with a grounded research assistant."
+                ? "Erstelle einen Fragebogen, sammle Antworten und analysiere das Ergebnis mit einem beleggebundenen Forschungsassistenten."
+                : "Build a questionnaire, collect responses and analyse the result with a grounded research assistant."
             }
           >
             <Button

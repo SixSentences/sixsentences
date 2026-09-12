@@ -36,10 +36,10 @@ test("the Library upload is reachable without drag and drop", () => {
   assert.match(source, /uploadInputRef\.current\?\.click\(\)/);
 });
 
-test("the Library describes Browser Capture as an explicit one-click action", () => {
-  assert.match(source, /Nothing is captured passively/);
-  assert.match(source, /Capture saves the active source in one step/);
-  assert.doesNotMatch(source, /Nothing is captured until you confirm it/);
+test("the Library describes optional connected import tools without a dead install CTA", () => {
+  assert.match(source, /Connected import tools save sources only after an explicit action/);
+  assert.match(source, /Add one through a compatible connected source/);
+  assert.doesNotMatch(source, /click Browser Capture|Saved in one click/);
 });
 
 test("the file picker and drop target share the validated upload path", () => {

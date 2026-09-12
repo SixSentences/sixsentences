@@ -68,8 +68,14 @@ export default function UserMenu({
         >
           <MapIcon className="size-4" /> {isGerman ? "Produkttour" : "Product tour"}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => window.location.assign("/ideas")}>
-          <Lightbulb className="size-4" /> {isGerman ? "Ideen & Feature-Votes" : "Ideas & feature votes"}
+        <DropdownMenuItem asChild>
+          <a
+            href="https://github.com/SixSentences/sixsentences/issues"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Lightbulb className="size-4" /> {isGerman ? "Ideen auf GitHub" : "Ideas on GitHub"}
+          </a>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={signOut}>

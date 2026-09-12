@@ -1119,8 +1119,8 @@ export default function LibraryPage() {
                   ? "Accountgebundener Lesezugriff auf Libraries und Projekt-Collections, die andere Personen mit dir geteilt haben."
                   : "Account-bound, read-only access to Libraries and project collections other people shared with you."
                 : isGerman
-                  ? "Paper und bewusst gespeicherte Webquellen samt Herkunft. Browser Capture speichert die aktive Quelle mit einem Klick."
-                  : "Papers and explicitly saved web sources, together with their provenance. Nothing is captured passively; clicking Browser Capture saves the active source in one step."}
+                  ? "Paper und bewusst gespeicherte Webquellen samt Herkunft. Verbundene Importwerkzeuge speichern Quellen nur nach einer ausdrücklichen Aktion."
+                  : "Papers and explicitly saved web sources, together with their provenance. Connected import tools save sources only after an explicit action."}
             </p>
             </div>
             {libraryView !== "shared" ? (
@@ -1506,7 +1506,7 @@ export default function LibraryPage() {
                 {query.trim()
                   ? `${filteredWebSources.length} of ${(webSources ?? []).length} web sources`
                   : `${(webSources ?? []).length} ${(webSources ?? []).length === 1 ? "web source" : "web sources"}`}
-                <span className="ml-auto">Saved in one click with Browser Capture</span>
+                <span className="ml-auto">Capture provenance retained</span>
               </div>
             ) : null}
 
@@ -1570,7 +1570,7 @@ export default function LibraryPage() {
               <div className="mt-10 rounded-2xl border border-dashed border-border p-8 text-center">
                 <Globe2 className="mx-auto size-5 text-moss" />
                 <p className="mt-2 text-[0.875rem] text-muted-foreground">
-                  {query ? "No web sources match that search." : "No web sources saved yet. Open a page and click Browser Capture once."}
+                  {query ? "No web sources match that search." : "No web sources saved yet. Add one through a compatible connected source."}
                 </p>
               </div>
             ) : (

@@ -1664,7 +1664,7 @@ function SearchProposalCard({
             Start the search
           </Button>
           <span className="text-[0.6875rem] text-muted-foreground">
-            Runs the full pipeline with screening. Usage adapts to scope and volume.
+            Runs the full pipeline with screening across the selected scope.
           </span>
         </div>
       </div>

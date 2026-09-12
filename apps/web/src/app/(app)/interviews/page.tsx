@@ -709,15 +709,6 @@ export default function InterviewsPage() {
                 <Laptop className="size-4" />
                 {german ? "Verbundene Geräte" : "Connected devices"}
               </Button>
-              <Button
-                className="rounded-full"
-                onClick={() =>
-                  window.dispatchEvent(new CustomEvent("six:open-companion-setup"))
-                }
-              >
-                <Headphones className="size-4" />
-                {german ? "Companion einrichten" : "Set up Companion"}
-              </Button>
             </div>
           )}
         </header>
@@ -1099,7 +1090,6 @@ export default function InterviewsPage() {
           >
             <LiveSessionsPanel
               projectFilter={projectFilter}
-              activeProjectId={activeProjectId}
               focusedSessionId={focusedLiveSessionId}
               sessionPurpose="conversation"
               onFocusedSessionOutsideScope={routeFocusedCompanionSession}

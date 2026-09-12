@@ -26,11 +26,11 @@ function load(source, dependencies = {}) {
 const selection = load(read("src/lib/private-model-selection.ts"));
 const { privateModelOptions, resolvePrivateModelId } = selection;
 
-const flash = { id: "gemini-3.5-flash", provider: "gemini", default: true, locked: false };
-const pro = { id: "gemini-3.1-pro-preview", provider: "gemini", default: false, locked: false };
+const flash = { id: "deployment-fast", provider: "provider-a", default: true, locked: false };
+const pro = { id: "deployment-deep", provider: "provider-b", default: false, locked: false };
 const catalog = {
   scope: "full",
-  routing_mode: "gemini_private",
+  routing_mode: "operator-private-route",
   content_scope: "private",
   default_id: flash.id,
   models: [flash, pro],
@@ -44,13 +44,13 @@ test("private options require explicit server routing and content scope", () => 
   assert.deepEqual(privateModelOptions(undefined), []);
 });
 
-test("a Gemini label or model ID never substitutes for the actual provider", () => {
-  const mixed = { ...catalog, models: [flash, { ...pro, provider: "openrouter" }] };
-  assert.deepEqual(privateModelOptions(mixed), [flash]);
-  assert.equal(resolvePrivateModelId(pro.id, mixed), flash.id);
+test("the API-declared private catalog may contain models from different providers", () => {
+  const mixed = { ...catalog, models: [flash, pro] };
+  assert.deepEqual(privateModelOptions(mixed), [flash, pro]);
+  assert.equal(resolvePrivateModelId(pro.id, mixed), pro.id);
   assert.equal(resolvePrivateModelId(flash.id, {
     ...catalog, models: [{ ...flash, provider: undefined }],
-  }), "auto");
+  }), flash.id);
 });
 
 test("old, missing and removed choices resolve to the declared server default", () => {
@@ -138,7 +138,7 @@ function preferenceHarness({ initialCatalog = catalog, stored = "", storageThrow
   };
 }
 
-test("stored OpenRouter preferences are migrated before a request and persist safely", () => {
+test("stored preferences for unavailable legacy routes are migrated safely", () => {
   const harness = preferenceHarness({ stored: "openai/gpt-5" });
   assert.equal(harness.render()[0], flash.id);
   assert.equal(harness.storage.get("six:test-model"), flash.id);
@@ -202,10 +202,10 @@ test("chat history, queued turns and retries are normalized at the send boundary
   assert.match(picker, /resolvePrivateModelId\(value, catalog\)/);
 });
 
-test("figure rendering identifies the configured Gemini provider without a pricing or ZDR claim", () => {
+test("figure rendering describes the deployment-configured provider without provider claims", () => {
   const figures = read("src/app/(app)/figures/page.tsx");
-  assert.match(figures, /Rendered through the configured Google Gemini provider/);
-  assert.doesNotMatch(figures, /paid Google Gemini API/);
-  assert.match(figures, /href=\{publicLegalUrl\("privacy"\)\}[^>]*>Data processing and retention/);
+  assert.match(figures, /Rendered through the model provider configured by this deployment/);
+  assert.doesNotMatch(figures, /Google Gemini provider|paid Google Gemini API/);
+  assert.match(figures, /publicLegalUrl\("privacy"\)[\s\S]*>Data processing and retention/);
   assert.doesNotMatch(figures, /Zero Data Retention routes only|endpoint may\s+be selected dynamically/);
 });

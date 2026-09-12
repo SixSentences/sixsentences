@@ -261,7 +261,7 @@ export default function EvidencePanel({ runId }: { runId: number }) {
           {start.isPending ? (
             <Loader2 className="size-3.5 animate-spin" />
           ) : (
-            "Extract evidence · adaptive usage"
+            "Extract evidence"
           )}
         </Button>
       </div>
@@ -379,8 +379,8 @@ export default function EvidencePanel({ runId }: { runId: number }) {
             <AlertDialogDescription>
               This starts a new extraction for every included study using the current
               fields, including studies already completed. Each completed new result
-              uses capacity again and replaces its current table values, including
-              reviewed edits. Export the current table from Extraction Studio first
+              replaces its current table values, including reviewed edits. Export the
+              current table from Extraction Studio first
               if you want to keep it. To keep completed results, cancel and use the
               primary extraction button instead.
             </AlertDialogDescription>

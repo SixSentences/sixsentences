@@ -291,9 +291,8 @@ export default function InterviewWorkspacePage() {
   const interviewAnalyzing = interview?.analyzing;
   useEffect(() => {
     if (!interviewStatus || interviewStatus === "pending" || interviewAnalyzing) return;
-    // Terminal analysis status is an additional capacity refresh signal.
-    // Update the shared sidebar/settings meter on success or failure, including
-    // opening a participant interview that completed in another browser.
+    // Terminal analysis status is an additional shared-state refresh signal,
+    // including when a participant interview completed in another browser.
   }, [interviewId, interviewStatus, interviewAnalyzing, queryClient]);
   useEffect(() => {
     if (interview?.project_id) setActiveProjectId(interview.project_id);

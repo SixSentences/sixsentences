@@ -1203,7 +1203,7 @@ export default function BrainstormingPage() {
       if (code === "brainstorm_too_large") {
         toast.error(german ? "Dieser Gedankenstrom ist für eine vollständige KI-Struktur zu groß. Die Rohgedanken bleiben erhalten." : "This thought stream is too large for a complete AI structure. Its raw thoughts remain stored.");
       } else if (code === "capacity_unavailable") {
-        toast.error(german ? "Für die Strukturierung ist gerade keine Kapazität verfügbar. Versuche es später erneut." : "No structuring capacity is available right now. Try again later.");
+        toast.error(german ? "Die Strukturierung ist gerade nicht verfügbar. Versuche es später erneut." : "Structuring is unavailable right now. Try again later.");
       } else if (code === "brainstorm_in_progress") {
         toast.info(german ? "Dieser Stand wird bereits in einem anderen Client strukturiert. Die Ergebnisliste wird aktualisiert." : "This snapshot is already being structured in another client. The result list is refreshing.");
       } else if (confirmedRejection) {
@@ -1735,18 +1735,13 @@ export default function BrainstormingPage() {
             eyebrow={german ? "Privater Arbeitsbereich" : "Private workspace"}
             title={german ? "Raum für unfertige Gedanken" : "Space for unfinished thoughts"}
             description={german ? "Sammle mehrere Gedanken wie in einem Chat. Wenn du fertig bist, ordnet die KI ausschließlich diesen eingefrorenen Gedankenstrom in Themen, Ideen, Fragen, Entscheidungen und nächste Schritte." : "Collect several thoughts like a chat. When you are ready, AI organises only that frozen thought stream into themes, ideas, questions, decisions and next steps."}
-            note={german ? "Bei Browser-Spracheingabe verarbeitet dein Browser das Mikrofon. SixSentences erhält und speichert nur den final erkannten Text, kein Roh-Audio." : "For browser speech input, your browser handles the microphone. SixSentences receives and stores only the final recognised text, never raw audio."}
+            note={german ? "Bei Browser-Spracheingabe verarbeitet dein Browser das Mikrofon. Dieser Client sendet nur den final erkannten Text an die konfigurierte API, kein Roh-Audio." : "For browser speech input, your browser handles the microphone. This client sends only the final recognised text to the configured API, never raw audio."}
             titleClassName="font-display text-3xl"
           >
             <Button type="button" className="rounded-full" disabled={starting || !config.data?.enabled} onClick={() => void startNew()}>
               {starting ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
               {german ? "Im Browser starten" : "Start in browser"}
             </Button>
-            {config.data?.desktop.download_url && (
-              <Button asChild variant="outline" className="rounded-full">
-                <a href={config.data.desktop.download_url}>{german ? "Companion Preview" : "Companion preview"}</a>
-              </Button>
-            )}
           </EditorialEmptyState>
         </div>
       ) : selected.isLoading ? (
@@ -2063,7 +2058,7 @@ export default function BrainstormingPage() {
                   <button type="button" className="shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss" onClick={() => setSpeechNotice(null)} aria-label={german ? "Hinweis schließen" : "Dismiss notice"}><X className="size-3.5" /></button>
                 </div>
               )}
-              {inputMode === "microphone" && !speechNotice && <p className="mx-auto mt-2 max-w-3xl text-[0.625rem] leading-relaxed text-muted-foreground">{german ? "Dein Browser übernimmt die Spracherkennung. An SixSentences wird nur finaler Text gesendet; je nach Browser kann dessen Anbieter die Erkennung verarbeiten." : "Your browser provides speech recognition. Only final text is sent to SixSentences; depending on the browser, its provider may process recognition."}</p>}
+              {inputMode === "microphone" && !speechNotice && <p className="mx-auto mt-2 max-w-3xl text-[0.625rem] leading-relaxed text-muted-foreground">{german ? "Dein Browser übernimmt die Spracherkennung. Nur finaler Text wird an die konfigurierte API gesendet; je nach Browser kann dessen Anbieter die Erkennung verarbeiten." : "Your browser provides speech recognition. Only final text is sent to the configured API; depending on the browser, its provider may process recognition."}</p>}
             </form>
           )}
         </>

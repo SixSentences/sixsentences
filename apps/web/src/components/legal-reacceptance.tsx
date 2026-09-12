@@ -9,10 +9,15 @@ import { AccountRightsControls } from "@/components/settings/settings-dialog";
 const legalLinkClass = "font-medium underline underline-offset-4 hover:text-foreground";
 
 function LegalInformationLinks({ german }: { german: boolean }) {
+  const links = [
+    { href: publicLegalUrl("privacy"), label: german ? "Datenschutzrechte" : "Privacy rights" },
+    { href: publicLegalUrl("imprint"), label: german ? "Betreiber und Kontakt" : "Operator and contact" },
+  ].filter((link): link is { href: string; label: string } => link.href !== null);
+  if (links.length === 0) return null;
+
   return (
     <nav aria-label={german ? "Rechtliche Informationen" : "Legal information"} className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
-      <a className={legalLinkClass} href={publicLegalUrl("privacy")}>{german ? "Datenschutzrechte" : "Privacy rights"}</a>
-      <a className={legalLinkClass} href={publicLegalUrl("imprint")}>{german ? "Betreiber und Kontakt" : "Operator and contact"}</a>
+      {links.map((link) => <a key={link.href} className={legalLinkClass} href={link.href}>{link.label}</a>)}
     </nav>
   );
 }
@@ -36,7 +41,14 @@ export function LegalReacceptance({
   const needDpa = Boolean(required?.dpa && required.dpa_can_accept);
   const waitingForOwner = Boolean(required?.dpa && !required.dpa_can_accept);
   const hasOwnDecision = Boolean(required?.age || required?.terms || needDpa);
+  const termsUrl = publicLegalUrl("terms");
+  const dpaUrl = publicLegalUrl("dpa");
+  const privacyUrl = publicLegalUrl("privacy");
+  const requiredDocumentMissing = Boolean(
+    (required?.terms && !termsUrl) || (needDpa && !dpaUrl),
+  );
   const ready = Boolean(required && hasOwnDecision)
+    && !requiredDocumentMissing
     && (!required?.age || ageConfirmed)
     && (!required?.terms || termsAccepted)
     && (!needDpa || (dpaAccepted && controllerName.trim().length >= 2));
@@ -89,16 +101,18 @@ export function LegalReacceptance({
             <div className="space-y-3">
               <p className="text-xs leading-5 text-muted-foreground">
                 {german
-                  ? "Die öffentliche Quellenbeschaffung ist jetzt als getrennte Verarbeitung in eigener Verantwortung von SixSentences_ beschrieben. OpenRouter und Perplexity erhalten keine privaten Workspace-Inhalte; gefundene Quellenmetadaten können aber gewöhnliche personenbezogene Angaben wie Autorennamen enthalten. AVV 1.11 lässt private Workspace-Verarbeitung auf dem direkten Gemini-Pfad und legt die Governance sowie das verbleibende Rollenrisiko der verschlüsselten Backups offen."
-                  : "Public-source discovery is now described as separate processing controlled by SixSentences_. OpenRouter and Perplexity receive no private workspace content, although source metadata may contain ordinary personal data such as author names. DPA 1.11 keeps private workspace processing on the direct Gemini route and discloses the governance and remaining role risk for encrypted backups."}
+                  ? "Die verbundene API verlangt die Bestätigung aktualisierter Nutzungsbedingungen. Prüfe das vom Betreiber veröffentlichte Dokument, bevor du bestätigst."
+                  : "The connected API requires acceptance of updated terms. Review the document published by the deployment operator before confirming."}
               </p>
-              <label className="flex cursor-pointer gap-3 text-sm leading-6">
-                <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} className="mt-1 size-4 shrink-0 accent-foreground" />
-                <span>{german ? "Ich akzeptiere die " : "I accept the "}<a className={legalLinkClass} href={publicLegalUrl("terms")} target="_blank" rel="noreferrer">{german ? "AGB" : "Terms"}</a>{german ? " in der Fassung " : " version "}{me.current_terms_version}.</span>
-              </label>
+              {termsUrl ? (
+                <label className="flex cursor-pointer gap-3 text-sm leading-6">
+                  <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} className="mt-1 size-4 shrink-0 accent-foreground" />
+                  <span>{german ? "Ich akzeptiere die " : "I accept the "}<a className={legalLinkClass} href={termsUrl} target="_blank" rel="noreferrer">{german ? "Nutzungsbedingungen" : "Terms"}</a>{german ? " in der Fassung " : " version "}{me.current_terms_version}.</span>
+                </label>
+              ) : null}
             </div>
           )}
-          {needDpa && (
+          {needDpa && dpaUrl && (
             <div className="space-y-3 rounded-2xl border border-border p-4">
               <p className="text-sm font-medium">{german ? "Wer ist für die Daten im Workspace verantwortlich?" : "Who controls the data in this workspace?"}</p>
               <p className="text-xs leading-5 text-muted-foreground">{german ? "Nenne dich bei eigener Verantwortlichkeit vollständig, sonst die Hochschule, Organisation oder das Unternehmen, für das du befugt handelst. Die Vereinbarung gilt für den Workspace, nicht für jedes Teammitglied einzeln." : "Use your full name if acting on your own behalf, otherwise the university, organization or company you are authorized to represent. This agreement covers the workspace, not each team member separately."}</p>
@@ -109,17 +123,26 @@ export function LegalReacceptance({
               {me.legal_controller_name && <p className="text-xs leading-5 text-muted-foreground">{german ? "Deine zuletzt ausdrücklich bestätigte Angabe ist vorausgefüllt. Prüfe sie und ändere sie bei Bedarf; die neue Fassung bestätigst du weiterhin selbst." : "Your last explicitly confirmed identity is prefilled. Check it and edit it if needed; you still confirm the new version yourself."}</p>}
               <label className="flex cursor-pointer gap-3 text-sm leading-6">
                 <input type="checkbox" checked={dpaAccepted} onChange={(event) => setDpaAccepted(event.target.checked)} className="mt-1 size-4 shrink-0 accent-foreground" />
-                <span>{german ? "Ich bin zur Vertretung des genannten Verantwortlichen befugt und akzeptiere die " : "I am authorized to represent the named controller and accept "}<a className={legalLinkClass} href={publicLegalUrl("dpa")} target="_blank" rel="noreferrer">{german ? "AVV" : "DPA"} {me.current_dpa_version}</a>{german ? " für diesen Workspace." : " for this workspace."}</span>
+                <span>{german ? "Ich bin zur Vertretung des genannten Verantwortlichen befugt und akzeptiere die " : "I am authorized to represent the named controller and accept "}<a className={legalLinkClass} href={dpaUrl} target="_blank" rel="noreferrer">{german ? "Auftragsverarbeitungsvereinbarung" : "Data Processing Agreement"} {me.current_dpa_version}</a>{german ? " für diesen Workspace." : " for this workspace."}</span>
               </label>
             </div>
           )}
+          {requiredDocumentMissing && (
+            <p role="alert" className="rounded-2xl border border-amber-500/35 bg-amber-500/8 p-4 text-sm leading-6">
+              {german
+                ? "Der Betreiber muss die erforderlichen rechtlichen Dokumente konfigurieren, bevor diese Bestätigung abgeschlossen werden kann."
+                : "The deployment operator must configure the required legal documents before this confirmation can be completed."}
+            </p>
+          )}
           {waitingForOwner && <p className="rounded-2xl bg-muted/40 p-4 text-sm leading-6">{german ? "Die AVV für diesen Workspace muss noch von einer befugten Person mit Owner-Zugang abgeschlossen werden. Du musst sie nicht im Namen deiner Organisation selbst akzeptieren." : "An authorized workspace owner still needs to conclude its DPA. You do not need to accept it on your organization's behalf."}</p>}
         </div>
-        <p className="mt-5 text-xs leading-5 text-muted-foreground">
-          {german ? "Wie wir Daten verarbeiten, erklärt die " : "Read how data is handled in the "}
-          <a href={publicLegalUrl("privacy")} target="_blank" rel="noreferrer" className={legalLinkClass}>{german ? "Datenschutzerklärung" : "Privacy Notice"}</a>
-          {german ? ". Das ist eine Information, keine zusätzliche Einwilligung." : ". This is information, not an additional consent."}
-        </p>
+        {privacyUrl ? (
+          <p className="mt-5 text-xs leading-5 text-muted-foreground">
+            {german ? "Wie diese Instanz Daten verarbeitet, erklärt die " : "Read how this deployment handles data in its "}
+            <a href={privacyUrl} target="_blank" rel="noreferrer" className={legalLinkClass}>{german ? "Datenschutzerklärung" : "Privacy Notice"}</a>
+            {german ? ". Das ist eine Information, keine zusätzliche Einwilligung." : ". This is information, not an additional consent."}
+          </p>
+        ) : null}
         {error && <p role="alert" className="mt-4 text-sm text-amber-700 dark:text-amber-300">{error}</p>}
         <div className="mt-7 flex flex-wrap gap-3">
           {hasOwnDecision && <button type="button" disabled={!ready || submitting} onClick={() => void submit()} className="min-h-11 rounded-full bg-foreground px-6 text-sm font-medium text-background disabled:opacity-40">{submitting ? (german ? "Wird gespeichert …" : "Saving…") : (german ? "Bestätigen" : "Confirm")}</button>}
@@ -137,6 +160,7 @@ export function PrivacyUpdateNotice({ me, onPresented }: { me: Me; onPresented: 
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
   const german = me.language === "de";
+  const privacyUrl = publicLegalUrl("privacy");
   if (!me.privacy_notice_update_available) return null;
   async function close() {
     setPending(true);
@@ -152,8 +176,8 @@ export function PrivacyUpdateNotice({ me, onPresented }: { me: Me; onPresented: 
   return (
     <aside aria-label={german ? "Datenschutzhinweis" : "Privacy update"} className="fixed bottom-5 right-5 z-50 max-w-sm rounded-2xl border border-border bg-card p-5 shadow-lg max-sm:left-5">
       <p className="text-sm font-medium">{german ? "Aktualisierte Datenschutzhinweise" : "Updated privacy information"}</p>
-      <p className="mt-2 text-xs leading-5 text-muted-foreground">{german ? "Wir haben die Verantwortlichkeit, Empfänger, Cache- und Aufbewahrungsgrenzen der öffentlichen Quellenbeschaffung sowie die Governance verschlüsselter Backups präzisiert. Deine Nutzung bleibt verfügbar." : "We clarified the roles, recipients, cache and retention boundaries for public-source discovery and the governance of encrypted backups. Your workspace remains available."}</p>
-      <a href={publicLegalUrl("privacy")} target="_blank" rel="noreferrer" className="mt-3 inline-block text-xs underline underline-offset-4">{german ? "Datenschutzhinweise ansehen" : "View privacy information"}</a>
+      <p className="mt-2 text-xs leading-5 text-muted-foreground">{german ? "Der Betreiber dieser Instanz hat seine Datenschutzhinweise aktualisiert. Deine Nutzung bleibt verfügbar." : "The operator of this deployment updated its privacy information. Your workspace remains available."}</p>
+      {privacyUrl ? <a href={privacyUrl} target="_blank" rel="noreferrer" className="mt-3 inline-block text-xs underline underline-offset-4">{german ? "Datenschutzhinweise ansehen" : "View privacy information"}</a> : null}
       <button type="button" disabled={pending} onClick={() => void close()} className="ml-5 min-h-10 text-xs font-medium">{german ? "Schließen" : "Close"}</button>
       {error && <p role="status" className="text-xs">{german ? "Bitte versuche es noch einmal." : "Please try again."}</p>}
     </aside>

@@ -61,7 +61,7 @@ export default function RunControls({ run }: { run: RunDetail }) {
             }
           : current,
       );
-      toast.success("Run cancelled. Completed work is saved; unused capacity is released.");
+      toast.success("Run cancelled. Completed work is saved.");
       refresh();
     },
     onError: (error) => {
@@ -149,7 +149,7 @@ export default function RunControls({ run }: { run: RunDetail }) {
             <AlertDialogTitle>Cancel this run?</AlertDialogTitle>
             <AlertDialogDescription>
               We request the worker to stop. An in-flight step may take a moment
-              to finish before cancellation is confirmed and unused capacity is released.
+              to finish before cancellation is confirmed.
               Work done so far (retrieved works, screening decisions and the
               audit log) is kept, but the run cannot be resumed.
             </AlertDialogDescription>

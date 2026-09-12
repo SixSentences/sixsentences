@@ -17,7 +17,6 @@ const tour = read("src/components/tour/product-tour.tsx");
 const api = read("src/lib/api.ts");
 const types = read("src/lib/types.ts");
 const auth = read("src/lib/auth.tsx");
-const analytics = read("src/lib/analytics.ts");
 const livePanel = read("src/components/interviews/live-sessions-panel.tsx");
 
 function executableBrainstormingHelper() {
@@ -111,7 +110,8 @@ test("speech recognition is transparent and never uploads raw audio", () => {
   assert.match(page, /interimResults = true/);
   assert.match(page, /result\.isFinal/);
   assert.match(page, /setComposerText/);
-  assert.match(page, /An SixSentences wird nur finaler Text gesendet/);
+  assert.match(page, /Nur finaler Text wird an die konfigurierte API gesendet/);
+  assert.doesNotMatch(page, /An SixSentences wird nur finaler Text gesendet/);
   assert.match(page, /depending on the browser, its provider may process recognition/);
   assert.match(page, /recognition\.onresult = null;[\s\S]*?recognition\.abort\(\)/);
   assert.match(page, /window\.setTimeout\(\(\) => \{\s*preserveInterimText\(\);\s*abortSpeech\(\);\s*\}, 1_500\)/);
@@ -207,7 +207,6 @@ test("legacy Conversation handoffs route brainstorms to the new workspace", () =
   assert.match(tour, /Personal thought streams are collected and structured/);
   assert.match(livePanel, /queryKey: \["live-sessions", sessionPurpose \?\? "all"\]/);
   assert.match(livePanel, /api\.liveSessions\(100, sessionPurpose\)/);
-  assert.match(analytics, /"\/brainstorming": "Brainstorming"/);
 });
 
 test("project workspace combines only completed sessions from one creator-visible project", () => {

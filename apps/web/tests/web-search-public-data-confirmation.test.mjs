@@ -55,9 +55,8 @@ test("web-search confirmation is explicit, public-data-only and bilingual", () =
     "Do not use personal data, confidential or sensitive information",
     "Gesprächsverlauf, Transkripte, Manuskripte und Uploads nicht automatisch beigefügt",
     "does not automatically include conversation history, transcripts, manuscripts or uploads",
-    "OpenRouter",
-    "Perplexity",
-    "USA",
+    "public-search service configured by this deployment",
+    "disclose recipients, processing locations and retention",
   ]) {
     assert.ok(approval.includes(copy), `Missing public-search disclosure: ${copy}`);
   }

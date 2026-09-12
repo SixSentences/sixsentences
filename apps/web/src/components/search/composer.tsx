@@ -1165,7 +1165,7 @@ export default function Composer({ autoFocus = true, seed = null }: ComposerProp
                         />
                       </div>
                       <p className="mt-2 text-[0.65625rem] leading-relaxed text-muted-foreground">
-                        {isGerman ? "Diese Grenze gilt erst nach Screening und Auswahl. Die Suche kann wesentlich mehr Treffer prüfen; sie ist kein Zeit- oder Kostenlimit." : "This limit applies after screening and selection. Search may inspect many more records; it is not a time or cost limit."}
+                        {isGerman ? "Diese Grenze gilt erst nach Screening und Auswahl. Die Suche kann wesentlich mehr Treffer prüfen; sie begrenzt nicht die Arbeit vor der Auswahl." : "This limit applies after screening and selection. Search may inspect many more records; it does not limit the work required before selection."}
                       </p>
                     </div>
                   </div>

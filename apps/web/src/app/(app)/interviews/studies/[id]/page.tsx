@@ -129,7 +129,7 @@ const STARTERS = [
 ] as const;
 
 const SESSION_DURATION_OPTIONS = [30, 45, 60] as const;
-const FIELDWORK_BUDGET_OPTIONS = [30, 60, 120, 300, 600, 1200] as const;
+const FIELDWORK_LIMIT_OPTIONS = [30, 60, 120, 300, 600, 1200] as const;
 function participantInformationIsReady(study: VoiceStudy): boolean {
   return study.participant_information_ready === true;
 }
@@ -139,11 +139,6 @@ function voiceStudyLimitsAreValid(study: VoiceStudy, minimumMinutes = 30): boole
     study.max_session_minutes >= minimumMinutes &&
     study.budget_minutes >= study.max_session_minutes
   );
-}
-
-function formatCapacityPercent(value: number): string {
-  const digits = value < 0.1 ? 2 : value < 10 ? 1 : 0;
-  return `${value.toFixed(digits)}% capacity`;
 }
 
 type GuideSectionDeleteTarget = {
@@ -406,7 +401,7 @@ export default function VoiceStudyBuilderPage() {
   const createInvite = useMutation({
     mutationFn: () => {
       if (!study || !voiceStudyLimitsAreValid(study, minLiveSessionMinutes)) {
-        throw new Error("Raise the fieldwork budget to at least the session cap first.");
+        throw new Error("Raise the fieldwork limit to at least the session cap first.");
       }
       return api.voiceInviteCreate(studyId, {
         label: inviteLabel.trim(),
@@ -429,7 +424,7 @@ export default function VoiceStudyBuilderPage() {
         input.active &&
         (!study || !voiceStudyLimitsAreValid(study, minLiveSessionMinutes))
       ) {
-        throw new Error("Raise the fieldwork budget to at least the session cap first.");
+        throw new Error("Raise the fieldwork limit to at least the session cap first.");
       }
       return api.voiceInviteUpdate(input.id, input.active);
     },
@@ -455,7 +450,7 @@ export default function VoiceStudyBuilderPage() {
     // Block repeated activation before React commits the disabled button.
     if (pilotStartInFlight.current || session || settlingSession || pendingPilotFinalize) return;
     if (!study || !voiceStudyLimitsAreValid(study, minLiveSessionMinutes)) {
-      toast.error("Raise the fieldwork budget to at least the session cap first.");
+      toast.error("Raise the fieldwork limit to at least the session cap first.");
       return;
     }
     pilotStartInFlight.current = true;
@@ -648,13 +643,13 @@ export default function VoiceStudyBuilderPage() {
   const currentSessionCapExceedsLimit =
     typeof maxLiveSessionMinutes === "number" &&
     study.max_session_minutes > maxLiveSessionMinutes;
-  const currentSessionCapExceedsBudget =
+  const currentSessionCapExceedsFieldworkLimit =
     study.max_session_minutes > study.budget_minutes;
   const currentSessionCapBelowMinimum =
     study.max_session_minutes < minLiveSessionMinutes;
   const currentSessionCapIsUnavailable =
     currentSessionCapExceedsLimit ||
-    currentSessionCapExceedsBudget ||
+    currentSessionCapExceedsFieldworkLimit ||
     currentSessionCapBelowMinimum;
   const studyLimitsAreValid = voiceStudyLimitsAreValid(study, minLiveSessionMinutes);
   const sessionDurationOptions = Array.from(
@@ -668,14 +663,14 @@ export default function VoiceStudyBuilderPage() {
       ...(currentSessionCapIsUnavailable ? [] : [study.max_session_minutes]),
     ]),
   ).sort((left, right) => left - right);
-  const currentBudgetIsBelowSessionCap =
+  const currentFieldworkLimitIsBelowSessionCap =
     study.budget_minutes < study.max_session_minutes;
-  const fieldworkBudgetOptions = Array.from(
+  const fieldworkLimitOptions = Array.from(
     new Set([
-      ...FIELDWORK_BUDGET_OPTIONS.filter(
+      ...FIELDWORK_LIMIT_OPTIONS.filter(
         (minutes) => minutes >= study.max_session_minutes,
       ),
-      ...(currentBudgetIsBelowSessionCap ? [] : [study.budget_minutes]),
+      ...(currentFieldworkLimitIsBelowSessionCap ? [] : [study.budget_minutes]),
     ]),
   ).sort((left, right) => left - right);
   const sessions = study.sessions ?? [];
@@ -810,7 +805,7 @@ export default function VoiceStudyBuilderPage() {
               currentSessionCapExceedsLimit
                 ? `Choose a session cap of ${maxLiveSessionMinutes} minutes or less first.`
                 : !studyLimitsAreValid
-                  ? "Raise the fieldwork budget to at least the session cap first."
+                  ? "Raise the fieldwork limit to at least the session cap first."
                 : undefined
             }
           >
@@ -1317,7 +1312,7 @@ export default function VoiceStudyBuilderPage() {
                 {!configured && (
                   <div className="rounded-2xl border border-amber-500/30 bg-amber-50 p-4 text-[0.75rem] leading-relaxed text-amber-800 dark:bg-amber-300/10 dark:text-amber-200">
                     Live interviews are not configured on this workspace yet.
-                    The operator needs to add a Google AI Studio key.
+                    The deployment operator must configure a compatible live-interview provider.
                   </div>
                 )}
                 <div className="grid min-w-0 items-start gap-4 @min-[56rem]/study:grid-cols-2 [&>*]:min-w-0">
@@ -1327,7 +1322,7 @@ export default function VoiceStudyBuilderPage() {
                       <SlidersHorizontal className="size-4 text-moss" /> Interviewer
                     </p>
                     <p className="mb-3 text-[0.6875rem] leading-relaxed text-muted-foreground">
-                      How she sounds, paces and budgets the conversations.
+                      How she sounds, paces and structures the conversations.
                     </p>
                     {!publicSpokenAvailable && (
                       <p className="mb-3 rounded-xl border border-border bg-secondary/45 px-3 py-2 text-[0.6875rem] leading-relaxed text-muted-foreground">
@@ -1429,8 +1424,8 @@ export default function VoiceStudyBuilderPage() {
                                 >
                                   {study.max_session_minutes} min · {currentSessionCapExceedsLimit
                                     ? "above current limit"
-                                    : currentSessionCapExceedsBudget
-                                      ? "above fieldwork budget"
+                                    : currentSessionCapExceedsFieldworkLimit
+                                      ? "above fieldwork limit"
                                       : "below current minimum"}
                                 </SelectItem>
                               )}
@@ -1450,7 +1445,7 @@ export default function VoiceStudyBuilderPage() {
                             >
                               {currentSessionCapExceedsLimit
                                 ? `This study still has ${study.max_session_minutes} minutes saved. The current live-session limit is ${maxLiveSessionMinutes}; choose a lower cap before the next session.`
-                                : `The current spoken-interview allowance supports sessions up to ${maxLiveSessionMinutes} minutes. Connection renewals happen automatically.`}
+                                : `The connected API currently allows spoken sessions up to ${maxLiveSessionMinutes} minutes. Connection renewals happen automatically.`}
                             </p>
                           )}
                         </div>
@@ -1473,8 +1468,7 @@ export default function VoiceStudyBuilderPage() {
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-[0.6875rem]">
-                          Fieldwork budget · {study.used_minutes ?? 0} of {study.budget_minutes}{" "}
-                          conversation minutes used or reserved
+                          Fieldwork limit
                         </Label>
                         <div className="flex items-center gap-3">
                           <Select
@@ -1485,42 +1479,28 @@ export default function VoiceStudyBuilderPage() {
                           >
                             <SelectTrigger className="h-9 w-28"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              {currentBudgetIsBelowSessionCap && (
+                              {currentFieldworkLimitIsBelowSessionCap && (
                                 <SelectItem value={String(study.budget_minutes)} disabled>
                                   {study.budget_minutes} min · below session cap
                                 </SelectItem>
                               )}
-                              {fieldworkBudgetOptions.map((minutes) => (
+                              {fieldworkLimitOptions.map((minutes) => (
                                 <SelectItem key={minutes} value={String(minutes)}>
                                   {minutes} min
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
-                          <div className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
-                            <div
-                              className="h-full rounded-full bg-moss-surface transition-all"
-                              style={{
-                                width: `${Math.min(
-                                  100,
-                                  ((study.used_minutes ?? 0) / study.budget_minutes) * 100,
-                                )}%`,
-                              }}
-                            />
-                          </div>
                         </div>
                         <p className="text-[0.65625rem] leading-relaxed text-muted-foreground">
-                          Spoken sessions temporarily reserve capacity at the start.
-                          After a confirmed end, recorded model costs determine capacity use
-                          and the unused reservation is released. Duration controls the
-                          fieldwork limit, not a fee per started minute. Automatic analysis
-                          uses capacity separately. An unconfirmed session may retain a
-                          provisional allocation. Written interviews use their recorded exchanges.
+                          This study-level limit bounds the interview minutes that may be
+                          authorized. The connected API remains authoritative about whether a
+                          new session can start. Written interviews use their recorded exchanges.
                         </p>
                         {!studyLimitsAreValid && (
                           <p className="text-[0.65625rem] leading-relaxed text-amber-700 dark:text-amber-300">
-                            The fieldwork budget must cover at least one complete session.
-                            Raise the budget or lower the session cap.
+                            The fieldwork limit must cover at least one complete session.
+                            Raise the limit or lower the session cap.
                           </p>
                         )}
                       </div>
@@ -1645,7 +1625,7 @@ export default function VoiceStudyBuilderPage() {
                   )}
                   {!studyLimitsAreValid && (
                     <p className="mt-2 text-[0.65625rem] leading-relaxed text-amber-700 dark:text-amber-300">
-                      Raise the fieldwork budget to at least the session cap before opening
+                      Raise the fieldwork limit to at least the session cap before opening
                       participation links.
                     </p>
                   )}
@@ -1686,9 +1666,8 @@ export default function VoiceStudyBuilderPage() {
                     <AudioLines className="size-4 text-moss" /> Sessions
                   </p>
                   <p className="mb-3 text-[0.6875rem] leading-relaxed text-muted-foreground">
-                    Duration and capacity use are shown separately. New spoken sessions settle
-                    against recorded model costs; automatic analysis uses capacity separately.
-                    Older sessions may show their original authorized allocation instead.
+                    Each session shows its recorded duration and guide version. Whether a new
+                    session can start is decided by the connected API.
                   </p>
                   {sessions.length === 0 ? (
                     <p className="text-[0.71875rem] leading-relaxed text-muted-foreground">
@@ -1712,12 +1691,6 @@ export default function VoiceStudyBuilderPage() {
                           <span className="text-foreground">{item.participant_label}</span>
                           <span className="font-mono text-[0.625rem] text-muted-foreground">
                             {formatClock(item.duration_ms)} · v{item.guide_version}
-                            {typeof item.capacity_authorization_percent === "number"
-                              ? ` · ${formatCapacityPercent(item.capacity_authorization_percent)} original allocation`
-                              : typeof item.capacity_percent === "number" &&
-                            item.capacity_percent > 0
-                              ? ` · ${formatCapacityPercent(item.capacity_percent)} conversation use`
-                              : ""}
                           </span>
                           {item.interview_id && (
                             <Link

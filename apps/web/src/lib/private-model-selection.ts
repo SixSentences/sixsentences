@@ -1,15 +1,13 @@
 import type { ChatModelCatalog, ChatModelOption } from "./types";
 
-/** Only the server's explicitly private catalog may populate workspace choices. */
+/** Only an explicitly routed, private server catalog may populate choices. */
 export function privateModelOptions(
   catalog: ChatModelCatalog | null | undefined,
 ): ChatModelOption[] {
-  if (catalog?.routing_mode !== "gemini_private" || catalog.content_scope !== "private") {
+  if (!catalog?.routing_mode?.trim() || catalog.content_scope !== "private") {
     return [];
   }
-  return catalog.models.filter(
-    (model) => model.provider === "gemini" && !model.locked,
-  );
+  return catalog.models.filter((model) => !model.locked);
 }
 
 /** Resolve removed or unavailable preferences to the current server default. */
