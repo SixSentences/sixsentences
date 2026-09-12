@@ -17,7 +17,7 @@
   &nbsp;·&nbsp;
   <a href="#quick-start">Get started</a>
   &nbsp;·&nbsp;
-  <a href="apps/web/README.md">Web client</a>
+  <a href="https://github.com/SixSentences/sixsentences/blob/main/apps/web/README.md">Web client</a>
   &nbsp;·&nbsp;
   <a href="ROADMAP.md">Roadmap</a>
   &nbsp;·&nbsp;
@@ -34,7 +34,7 @@
 </p>
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/03663048-70df-4666-bcb0-4c91785225a1" width="800" alt="Animated overview of the SixSentences research workspace">
+  <img src="https://github.com/SixSentences/sixsentences/releases/download/v0.1.0-alpha.1/sixsentences-overview.gif" width="800" alt="Animated overview of the SixSentences research workspace">
 </p>
 
 <p align="center"><sub>The repository includes the sanitized workspace client in <code>apps/web</code>; hosted infrastructure and commercial services remain separate.</sub></p>
@@ -190,7 +190,8 @@ npm run dev
 
 The development UI is then available at `http://localhost:3000`. A successful
 page render does not imply that API-backed actions are available. See
-[`apps/web/README.md`](apps/web/README.md) for the configuration and integration
+[`apps/web/README.md`](https://github.com/SixSentences/sixsentences/blob/main/apps/web/README.md)
+for the configuration and integration
 contract.
 
 ## Command-line map

@@ -189,6 +189,9 @@ jobs:
       NEXT_PUBLIC_BROWSER_CAPTURE_STORE_URL: ""
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: ""
       NEXT_PUBLIC_LEGAL_BASE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_TERMS_VERSION: test-v1
+      NEXT_PUBLIC_PRIVACY_VERSION: test-v1
+      NEXT_PUBLIC_DPA_VERSION: test-v1
       NEXT_PUBLIC_SIX_API_URL: http://127.0.0.1:8000
     steps:
       - name: Check out the tagged source
@@ -226,7 +229,7 @@ jobs:
       - name: Recheck artifact checksums
         working-directory: release
         run: sha256sum --check SHA256SUMS
-      - name: Create the immutable GitHub prerelease
+      - name: Publish the immutable GitHub prerelease
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
@@ -238,13 +241,39 @@ jobs:
               ''
             cat release/RELEASE_NOTES.md
           } > "$RUNNER_TEMP/release-notes.md"
-          gh release create "$RELEASE_TAG" \
-            release/*.whl \
-            release/*.tar.gz \
-            release/*.cdx.json \
-            release/SHA256SUMS \
+
+          if gh release view "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --verify-tag \
-            --prerelease \
-            --title "SixSentences ${RELEASE_TAG} · source + Python engine artifacts" \
-            --notes-file "$RUNNER_TEMP/release-notes.md"
+            --json isDraft \
+            --jq '.isDraft' > "$RUNNER_TEMP/release-is-draft" 2>/dev/null; then
+            if [[ "$(<"$RUNNER_TEMP/release-is-draft")" != "true" ]]; then
+              echo "Refusing to replace an already-published release." >&2
+              exit 1
+            fi
+
+            gh release upload "$RELEASE_TAG" \
+              release/*.whl \
+              release/*.tar.gz \
+              release/*.cdx.json \
+              release/SHA256SUMS \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --draft=false \
+              --prerelease \
+              --title "SixSentences ${RELEASE_TAG} · source + Python engine artifacts" \
+              --notes-file "$RUNNER_TEMP/release-notes.md"
+          else
+            gh release create "$RELEASE_TAG" \
+              release/*.whl \
+              release/*.tar.gz \
+              release/*.cdx.json \
+              release/SHA256SUMS \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --prerelease \
+              --title "SixSentences ${RELEASE_TAG} · source + Python engine artifacts" \
+              --notes-file "$RUNNER_TEMP/release-notes.md"
+          fi
