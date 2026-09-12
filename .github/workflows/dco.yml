@@ -1,0 +1,78 @@
+name: DCO
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+concurrency:
+  group: dco-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+jobs:
+  signoff:
+    name: DCO sign-off
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # Only the protected default-branch tree is checked out. Contribution
+      # commits are fetched as Git objects and are never checked out or run.
+      - name: Check out the protected DCO verifier
+        id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch the exact base and contribution commits as data
+        id: fetch
+        env:
+          BASE_REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git -c protocol.file.allow=never fetch \
+            --no-tags \
+            --filter=blob:none \
+            -- "https://github.com/${BASE_REPOSITORY}.git" "$BASE_SHA"
+          test "$(git rev-parse FETCH_HEAD)" = "$BASE_SHA"
+          git -c protocol.file.allow=never fetch \
+            --no-tags \
+            --filter=blob:none \
+            -- "https://github.com/${HEAD_REPOSITORY}.git" "$HEAD_SHA"
+          test "$(git rev-parse FETCH_HEAD)" = "$HEAD_SHA"
+      - name: Validate author and co-author DCO sign-offs
+        id: validate
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: >-
+          python .github/scripts/check_dco.py
+          --base "$BASE_SHA"
+          --head "$HEAD_SHA"
+          --pull-request-author "$PR_AUTHOR"
+      - name: Publish the exact pull-request head status
+        if: always() && steps.checkout.outcome == 'success'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          STATUS_STATE: >-
+            ${{ steps.fetch.outcome == 'success' &&
+                steps.validate.outcome == 'success' &&
+                'success' || 'failure' }}
+        run: >-
+          python .github/scripts/publish_status.py
+          --repository "$GITHUB_REPOSITORY"
+          --sha "$HEAD_SHA"
+          --context "DCO / sign-off"
+          --state "$STATUS_STATE"
+          --success-description "Every contribution commit has a valid DCO sign-off."
+          --failure-description "One or more contribution commits lack a valid DCO sign-off."
+          --target-url "https://github.com/$GITHUB_REPOSITORY/blob/main/DCO"

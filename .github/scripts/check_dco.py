@@ -136,8 +136,12 @@ def validate_identities(
 
     errors: list[str] = []
     available = set(trailers.signoffs)
-    if pull_request_author == _DEPENDABOT_PR_AUTHOR and author in _DEPENDABOT_AUTHORS:
-        if _DEPENDABOT_SIGNOFF not in available:
+    if pull_request_author == _DEPENDABOT_PR_AUTHOR:
+        if author not in _DEPENDABOT_AUTHORS:
+            errors.append(
+                "Dependabot-owned pull requests may contain only Dependabot-authored commits"
+            )
+        elif _DEPENDABOT_SIGNOFF not in available:
             errors.append("trusted Dependabot commit is missing its GitHub bot sign-off")
     elif author not in available:
         errors.append(f"commit author is not signed off: {author.label()}")
