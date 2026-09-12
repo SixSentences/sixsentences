@@ -37,7 +37,7 @@ class _UnknownGoogleSigningKey(GoogleTokenError):
 
 @dataclass(frozen=True)
 class GoogleIdentity:
-    """Verified identity claims needed by SixSentences."""
+    """Verified identity claims needed by SixSentences_."""
 
     subject: str
     email: str

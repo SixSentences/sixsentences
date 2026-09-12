@@ -97,9 +97,9 @@ option, local HTTP exception, permission boundary, and deterministic build.
 ## Updates and scaling
 
 Create and verify a backup before changing images. Re-run the preflight, build
-the new images and use `docker compose up --detach --wait`. The API image owns
-schema migration on startup, so restore with the same source revision before
-attempting a version upgrade.
+the new images and use `docker compose up --detach --wait`. The dedicated
+one-shot `migrate` service owns schema migration; restore with the same source
+revision before attempting a version upgrade.
 
 The reference worker uses the `all` lane at low concurrency. Larger deployments
 should split worker lanes only after measuring PostgreSQL connections, memory,

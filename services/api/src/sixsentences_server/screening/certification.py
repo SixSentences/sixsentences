@@ -10,7 +10,7 @@ screening recall with a confidence interval.
 These estimates depend on reviewer independence. Distinct model or provider
 names, agreement, and sample size do not establish that assumption. Certification
 therefore additionally requires an independently verified basis supplied by a
-trusted caller; a model-only pipeline has no such basis. Neither its
+trusted caller; the hosted model-only pipeline has no such basis. Neither its
 point estimate nor its interval is an independently measured recall guarantee.
 The statistical lower-bound and minimum-sample checks remain necessary even
 when that separate prerequisite is met. Human seed calibration is separate.
@@ -19,22 +19,23 @@ when that separate prerequisite is met. Human seed calibration is separate.
 from typing import Any
 
 from pydantic import BaseModel
-from sixsentences.coverage.estimator import estimate_completeness
+
+from sixsentences_server.coverage.estimator import estimate_completeness
 
 MIN_SCREENED_TO_CERTIFY = 100  # small samples cannot certify (published SR practice)
 
 
 class RecallCertification(BaseModel):
     method: str  # "chao2" | "undetermined"
-    estimated_recall: float | None
-    ci_low: float | None
-    ci_high: float | None
+    estimated_recall: float
+    ci_low: float
+    ci_high: float
     target_recall: float
     certified: bool
     reviewers: int  # ensemble size = capture occasions
     included_observed: int
-    estimated_true_includes: float | None
-    estimated_missed: int | None  # includes no reviewer caught; unknown if undetermined
+    estimated_true_includes: float
+    estimated_missed: int  # includes no reviewer caught
     screened: int
     min_sample: int
     note: str
@@ -55,16 +56,8 @@ def certify_screening_recall(
     The independence prerequisite is server-owned, defaults closed, and must
     never be inferred from the number or names of models or providers.
     """
-    report = estimate_completeness(
-        include_votes,
-        reviewers,
-        occasion_independence_verified=reviewer_independence_verified,
-    )  # completeness == recall here
-    missed = (
-        int(round(report.estimated_total - report.observed))
-        if report.estimated_total is not None
-        else None
-    )
+    report = estimate_completeness(include_votes, reviewers)  # completeness == recall here
+    missed = int(round(report.estimated_total - report.observed))
 
     base: dict[str, Any] = dict(
         estimated_recall=report.completeness,
@@ -87,8 +80,6 @@ def certify_screening_recall(
             **base,
         )
 
-    if report.ci_low is None:
-        raise RuntimeError("chao2 report is missing its confidence interval")
     sample_met = screened >= min_sample
     certified = reviewer_independence_verified and report.ci_low >= target_recall and sample_met
     if certified:

@@ -60,11 +60,11 @@ uv build
 ### Application API and worker
 
 ```console
-uv sync --project services/api --frozen --all-groups
+uv sync --project services/api --frozen --extra dev
 uv run --project services/api ruff check services/api/src services/api/scripts services/api/tests
 uv run --project services/api mypy services/api/src
 uv run --project services/api pytest services/api/tests
-uv run --project services/api python services/api/scripts/audit_boundary.py
+uv run --project services/api python services/api/scripts/audit_community_export.py services/api
 uv run --project services/api python services/api/scripts/check_web_contracts.py --require-complete
 ```
 

@@ -1,9 +1,9 @@
-"""Shared hard resource limits for future community server input paths."""
+"""Shared hard resource limits used by product and operations paths."""
 
 MIB = 1024**2
 
-# A single user-supplied research document. A deployment may enforce a lower
-# storage allowance separately.
+# A single user-supplied research document. Workspace plan storage is enforced
+# separately and can be lower than this remaining allowance.
 MAX_DOCUMENT_UPLOAD_BYTES = 100 * MIB
 
 # Browser Capture keeps a tighter in-browser transfer bound than the regular

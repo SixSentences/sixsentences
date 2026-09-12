@@ -5,7 +5,7 @@ expensive stages:
 
 - **Hit-count calibration**: a query that returns nothing is over-constrained
   (or out of the corpus's scope); one that matches a large fraction of the
-  corpus is too broad to be a search. The verdict is surfaced so the caller
+  corpus is too broad to be a search. The verdict is surfaced so the operator
   (or a future auto-refinement loop) can react.
 - **Canary set**: known must-hit works supplied by the user (seed papers). If a
   canary is not retrieved, the query provably missed a relevant work — a direct
@@ -49,7 +49,11 @@ def calibrate_hit_count(unique: int, corpus_size: int) -> HitCountCalibration:
         verdict = "healthy"
         note = f"{unique} hits ({ratio:.1%} of the corpus)"
     return HitCountCalibration(
-        unique=unique, corpus_size=corpus_size, ratio=round(ratio, 4), verdict=verdict, note=note
+        unique=unique,
+        corpus_size=corpus_size,
+        ratio=round(ratio, 4),
+        verdict=verdict,
+        note=note,
     )
 
 

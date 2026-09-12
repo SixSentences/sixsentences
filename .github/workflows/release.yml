@@ -242,13 +242,13 @@ jobs:
           version: "0.10.12"
           enable-cache: false
       - name: Install the frozen API environment
-        run: uv sync --frozen --group dev
+        run: uv sync --frozen --extra dev
       - name: Run API quality, test, and boundary gates
         run: |
           uv run --frozen --no-sync ruff check src scripts tests
           uv run --frozen --no-sync mypy src
           uv run --frozen --no-sync pytest -q
-          uv run --frozen --no-sync python scripts/audit_boundary.py
+          uv run --frozen --no-sync python scripts/audit_community_export.py .
           uv run --frozen --no-sync python scripts/check_web_contracts.py --require-complete
 
   web-source:
@@ -378,7 +378,7 @@ jobs:
       - name: Build the tagged API image
         env:
           IMAGE_TAG: ${{ needs.validate.outputs.public-version }}
-        run: docker build --tag "sixsentences-community-api:${IMAGE_TAG}" --file Dockerfile .
+        run: docker build --tag "sixsentences-community-api:${IMAGE_TAG}" --file services/api/Dockerfile .
       - name: Build the tagged origin-specific web image
         env:
           IMAGE_TAG: ${{ needs.validate.outputs.public-version }}

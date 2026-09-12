@@ -14,6 +14,9 @@ x-runtime-environment: &runtime-environment
   SIX_CONNECTOR_ENCRYPTION_KEY: ${SIX_CONNECTOR_ENCRYPTION_KEY:?run deploy/community/init-env.sh first}
   SIX_APP_URL: ${SIX_PUBLIC_ORIGIN:?set SIX_PUBLIC_ORIGIN}
   SIX_SITE_URL: ${SIX_PUBLIC_ORIGIN:?set SIX_PUBLIC_ORIGIN}
+  SIX_PRIVACY_NOTICE_URL: ${SIX_LEGAL_BASE_URL:?set SIX_LEGAL_BASE_URL}/privacy
+  SIX_TERMS_URL: ${SIX_LEGAL_BASE_URL:?set SIX_LEGAL_BASE_URL}/terms
+  SIX_DOCS_URL: ${SIX_PUBLIC_ORIGIN:?set SIX_PUBLIC_ORIGIN}/docs
   SIX_SMTP_HOST: ${SIX_SMTP_HOST:-}
   SIX_SMTP_PORT: ${SIX_SMTP_PORT:-587}
   SIX_SMTP_USERNAME: ${SIX_SMTP_USERNAME:-}
@@ -28,7 +31,7 @@ x-runtime-environment: &runtime-environment
   SIX_WEBSEARCH_API_KEY: ${SIX_WEBSEARCH_API_KEY:-}
   SIX_WEBSEARCH_DATA_PROCESSING_CONFIRMED: ${SIX_WEBSEARCH_DATA_PROCESSING_CONFIRMED:-false}
   SIX_GEMINI_API_KEY: ${SIX_GEMINI_API_KEY:-}
-  SIX_GEMINI_PAID_SERVICE_CONFIRMED: ${SIX_GEMINI_PAID_SERVICE_CONFIRMED:-false}
+  SIX_GEMINI_DATA_PROCESSING_CONFIRMED: ${SIX_GEMINI_DATA_PROCESSING_CONFIRMED:-false}
   SIX_PUBLIC_SPOKEN_INTERVIEWS_ENABLED: ${SIX_PUBLIC_SPOKEN_INTERVIEWS_ENABLED:-false}
   SIX_LLM_ROUTING: ${SIX_LLM_ROUTING:-}
   SIX_LLM_BUDGET_USD: ${SIX_LLM_BUDGET_USD:-10}
@@ -61,7 +64,7 @@ services:
     image: ${SIX_API_IMAGE:-sixsentences-community-api:local}
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: services/api/Dockerfile
     restart: unless-stopped
     init: true
     read_only: true
@@ -78,7 +81,6 @@ services:
       SIX_ENFORCE_LEGAL_ACCEPTANCE: ${SIX_ENFORCE_LEGAL_ACCEPTANCE:-true}
       SIX_GOOGLE_OAUTH_CLIENT_ID: ${SIX_GOOGLE_OAUTH_CLIENT_ID:-}
       SIX_BROWSER_CAPTURE_REDIRECT_URIS: ${SIX_BROWSER_CAPTURE_REDIRECT_URIS:-}
-      SIX_BROWSER_CAPTURE_STORE_URL: ${SIX_BROWSER_CAPTURE_STORE_URL:-}
       SIX_ERASURE_LEDGER_PATH: /privacy/erasure-ledger.jsonl
       SIX_ERASURE_LEDGER_HMAC_KEY: ${SIX_ERASURE_LEDGER_HMAC_KEY:?run deploy/community/init-env.sh first}
     volumes:
@@ -89,12 +91,12 @@ services:
     expose:
       - "8000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD
-        - /app/.venv/bin/python
+        - python
         - -c
         - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5).read()"
       interval: 15s
@@ -110,8 +112,8 @@ services:
     image: ${SIX_API_IMAGE:-sixsentences-community-api:local}
     build:
       context: .
-      dockerfile: Dockerfile
-    command: ["uv", "run", "--no-sync", "six-worker"]
+      dockerfile: services/api/Dockerfile
+    command: ["six-community-worker"]
     restart: unless-stopped
     init: true
     stop_grace_period: 310s
@@ -123,11 +125,14 @@ services:
     logging: *default-logging
     environment:
       <<: *runtime-environment
+      SIX_ERASURE_LEDGER_PATH: /privacy/erasure-ledger.jsonl
+      SIX_ERASURE_LEDGER_HMAC_KEY: ${SIX_ERASURE_LEDGER_HMAC_KEY:?run deploy/community/init-env.sh first}
       SIX_JOBS_WORKER_LANE: all
       SIX_JOBS_WORKER_CONCURRENCY: ${SIX_WORKER_CONCURRENCY:-2}
       SIX_JOBS_HEARTBEAT_DIR: /tmp
     volumes:
       - app_data:/data
+      - privacy_data:/privacy
     tmpfs:
       - /tmp:size=512m,mode=1777
     depends_on:
@@ -147,6 +152,34 @@ services:
       backend:
       egress:
         gw_priority: 1
+
+  migrate:
+    image: ${SIX_API_IMAGE:-sixsentences-community-api:local}
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
+    environment:
+      <<: *runtime-environment
+      SIX_ERASURE_LEDGER_PATH: /privacy/erasure-ledger.jsonl
+      SIX_ERASURE_LEDGER_HMAC_KEY: ${SIX_ERASURE_LEDGER_HMAC_KEY:?run deploy/community/init-env.sh first}
+    volumes:
+      - app_data:/data
+      - privacy_data:/privacy
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
 
   web:
     image: ${SIX_WEB_IMAGE:-sixsentences-community-web:local}

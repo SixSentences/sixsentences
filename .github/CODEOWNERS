@@ -23,6 +23,7 @@
 /apps/companion-macos/ @L4XB
 /deploy/community/ @L4XB
 /compose.yaml @L4XB
-/Dockerfile @L4XB
+/services/api/Dockerfile @L4XB
+/services/api/Dockerfile.dockerignore @L4XB
 /pyproject.toml @L4XB
 /uv.lock @L4XB

@@ -106,9 +106,7 @@ def _locked_package_version(path: Path, *, package_name: str) -> str:
     if not isinstance(packages, list):
         raise ReleaseValidationError(f"{path} has no package list")
     matches = [
-        item
-        for item in packages
-        if isinstance(item, dict) and item.get("name") == package_name
+        item for item in packages if isinstance(item, dict) and item.get("name") == package_name
     ]
     if len(matches) != 1:
         raise ReleaseValidationError(f"{path} must contain exactly one {package_name} package")
@@ -149,9 +147,7 @@ def _validate_python_projects(root: Path, version: ReleaseVersion) -> None:
     ]
     expected_dependency = f"{_DISTRIBUTION_NAME}=={version.package}"
     if engine_dependencies != [expected_dependency]:
-        raise ReleaseValidationError(
-            f"{api_path} must contain exactly {expected_dependency!r}"
-        )
+        raise ReleaseValidationError(f"{api_path} must contain exactly {expected_dependency!r}")
 
     api_lock = root / "services" / "api" / "uv.lock"
     for package_name in (_API_DISTRIBUTION_NAME, _DISTRIBUTION_NAME):
@@ -177,8 +173,7 @@ def _validate_npm_project(
         raise ReleaseValidationError(f"{package_path} name does not match {package_name!r}")
     if package.get("version") != expected_version:
         raise ReleaseValidationError(
-            f"{package_path} version {package.get('version')!r} "
-            f"does not match {expected_version!r}"
+            f"{package_path} version {package.get('version')!r} does not match {expected_version!r}"
         )
 
     lock_path = project_root / "package-lock.json"
@@ -195,9 +190,7 @@ def _validate_npm_project(
     ):
         expected = package_name if "name" in name else expected_version
         if value != expected:
-            raise ReleaseValidationError(
-                f"{source} {name} {value!r} does not match {expected!r}"
-            )
+            raise ReleaseValidationError(f"{source} {name} {value!r} does not match {expected!r}")
 
 
 def _read_swift_static_string(path: Path, *, name: str) -> str:

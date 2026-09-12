@@ -64,7 +64,9 @@ def best_match(
             continue  # a preprint precedes publication by at most ~a year
         if best is None or score > best.score:
             best = ArxivMatch(
-                arxiv_id=entry.arxiv_id, score=round(score, 3), matched_title=entry.title
+                arxiv_id=entry.arxiv_id,
+                score=round(score, 3),
+                matched_title=entry.title,
             )
     return best
 
@@ -124,7 +126,10 @@ class ArxivClient:
         try:
             response = self.http.get(
                 ARXIV_API,
-                params={"search_query": f'ti:"{query}"', "max_results": self.max_results},
+                params={
+                    "search_query": f'ti:"{query}"',
+                    "max_results": self.max_results,
+                },
             )
         except httpx.HTTPError:
             return []  # best-effort: a failed arXiv query just means no fallback

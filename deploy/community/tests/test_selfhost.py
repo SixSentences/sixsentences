@@ -30,7 +30,7 @@ def read_env(path: Path) -> dict[str, str]:
 class SelfHostDeploymentTests(unittest.TestCase):
     def test_compose_has_isolated_stateful_stack_and_fail_closed_inputs(self) -> None:
         source = COMPOSE.read_text(encoding="utf-8")
-        for service in ("postgres", "api", "worker", "web", "proxy"):
+        for service in ("postgres", "api", "worker", "migrate", "web", "proxy"):
             self.assertRegex(source, rf"(?m)^  {re.escape(service)}:$")
         for volume in ("postgres_data", "app_data", "privacy_data", "caddy_data"):
             self.assertIn(f"{volume}:", source)
@@ -167,13 +167,13 @@ class SelfHostDeploymentTests(unittest.TestCase):
 
     def test_restore_replays_the_newest_authenticated_erasure_journal(self) -> None:
         source = (COMMUNITY / "restore.sh").read_text(encoding="utf-8")
-        self.assertGreaterEqual(source.count("sixsentences.ops.erasure verify"), 2)
-        self.assertIn("sixsentences.ops.erasure replay", source)
+        self.assertGreaterEqual(source.count("six-community-erasure api verify"), 2)
+        self.assertIn("six-community-erasure api replay", source)
         self.assertIn("current.startswith(candidate)", source)
         self.assertIn("candidate.startswith(current)", source)
         self.assertIn('LEDGER_SOURCE" == "backup"', source)
-        self.assertIn("/app/.venv/bin/alembic api upgrade head", source)
-        replay_at = source.index("sixsentences.ops.erasure replay")
+        self.assertIn("run --rm --no-deps -T migrate", source)
+        replay_at = source.index("six-community-erasure api replay")
         proxy_start_at = source.index(
             'up --detach --wait --wait-timeout 180 worker web proxy'
         )

@@ -186,8 +186,7 @@ tar -xzf "$CANONICAL_BACKUP/privacy-data.tar.gz" \
 "${COMPOSE[@]}" run --rm --no-deps -T --user 0:0 \
   --volume "$RESTORE_STAGE/candidate:/candidate:ro" \
   --env SIX_ERASURE_LEDGER_PATH=/candidate/erasure-ledger.jsonl \
-  --entrypoint /app/.venv/bin/python api \
-  -m sixsentences.ops.erasure verify >/dev/null
+  --entrypoint six-community-erasure api verify >/dev/null
 
 "${COMPOSE[@]}" stop --timeout 30 proxy web >/dev/null || true
 "${COMPOSE[@]}" stop --timeout 310 worker >/dev/null || true
@@ -207,12 +206,11 @@ tar -xzf "$CANONICAL_BACKUP/privacy-data.tar.gz" \
     fi
   '
 "${COMPOSE[@]}" run --rm --no-deps -T --user 0:0 \
-  --entrypoint /app/.venv/bin/python api \
-  -m sixsentences.ops.erasure verify >/dev/null
+  --entrypoint six-community-erasure api verify >/dev/null
 LEDGER_SOURCE="$(
   "${COMPOSE[@]}" run --rm --no-deps -T --user 0:0 \
     --volume "$RESTORE_STAGE/candidate:/candidate:ro" \
-    --entrypoint /app/.venv/bin/python api -c '
+    --entrypoint python api -c '
 import os
 import stat
 
@@ -282,11 +280,9 @@ fi
 # Reapply every authenticated deletion to the restored database and files while
 # the public proxy and write processes are still stopped. Any verification,
 # identity-guard or cleanup failure leaves the deployment closed.
+"${COMPOSE[@]}" run --rm --no-deps -T migrate
 "${COMPOSE[@]}" run --rm --no-deps -T \
-  --entrypoint /app/.venv/bin/alembic api upgrade head
-"${COMPOSE[@]}" run --rm --no-deps -T \
-  --entrypoint /app/.venv/bin/python api \
-  -m sixsentences.ops.erasure replay
+  --entrypoint six-community-erasure api replay
 
 "${COMPOSE[@]}" up --detach --wait --wait-timeout 180 postgres api
 "${COMPOSE[@]}" up --detach --wait --wait-timeout 180 worker web proxy

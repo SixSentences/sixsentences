@@ -107,7 +107,7 @@ jobs:
             services/api/pyproject.toml
             services/api/uv.lock
       - name: Install the locked API environment
-        run: uv sync --frozen --group dev
+        run: uv sync --frozen --extra dev
       - name: Lint the API, worker, and tests
         run: uv run --frozen --no-sync ruff check src scripts tests
       - name: Type-check the API and worker
@@ -115,7 +115,7 @@ jobs:
       - name: Test the API, worker, and migrations
         run: uv run --frozen --no-sync pytest -q
       - name: Verify the public source boundary
-        run: uv run --frozen --no-sync python scripts/audit_boundary.py
+        run: uv run --frozen --no-sync python scripts/audit_community_export.py .
       - name: Require the complete web contract
         run: uv run --frozen --no-sync python scripts/check_web_contracts.py --require-complete
 
@@ -245,7 +245,7 @@ jobs:
       - name: Validate the resolved Compose model
         run: bash deploy/community/preflight.sh "$RUNNER_TEMP/selfhost.env"
       - name: Build the API image
-        run: docker build --tag sixsentences-community-api:ci --file Dockerfile .
+        run: docker build --tag sixsentences-community-api:ci --file services/api/Dockerfile .
       - name: Build the web image
         run: |
           docker build \

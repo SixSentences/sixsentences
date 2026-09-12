@@ -26,7 +26,7 @@ def generate_totp_secret() -> str:
     return base64.b32encode(secrets.token_bytes(20)).decode().rstrip("=")
 
 
-def totp_uri(secret: str, email: str, *, issuer: str = "SixSentences") -> str:
+def totp_uri(secret: str, email: str, *, issuer: str = "SixSentences_") -> str:
     """Build an ``otpauth://`` URI without exposing the secret to a third party."""
 
     label = quote(f"{issuer}:{email}", safe="")

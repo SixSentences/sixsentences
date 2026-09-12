@@ -48,7 +48,7 @@ def _run(command: list[str], *, timeout: float) -> subprocess.CompletedProcess[b
         )
     except FileNotFoundError as exc:
         raise AudioProcessingError(
-            "Audio processing is not configured yet: the deployment administrator "
+            "Audio processing is not configured yet: the workspace operator "
             "needs to install ffmpeg on the server."
         ) from exc
     except subprocess.TimeoutExpired as exc:

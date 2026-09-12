@@ -106,7 +106,7 @@ fi
 
 SPOKEN_ENABLED="$(required_value SIX_PUBLIC_SPOKEN_INTERVIEWS_ENABLED)"
 if [[ "$SPOKEN_ENABLED" == "true" ]]; then
-  [[ "$(required_value SIX_GEMINI_PAID_SERVICE_CONFIRMED)" == "true" ]] \
+  [[ "$(required_value SIX_GEMINI_DATA_PROCESSING_CONFIRMED)" == "true" ]] \
     || fail "spoken interviews require the provider-processing confirmation"
   [[ -n "$(env_value SIX_GEMINI_API_KEY)" ]] \
     || fail "spoken interviews require a server-side voice provider key"

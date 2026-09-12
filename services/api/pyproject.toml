@@ -1,35 +1,44 @@
 [project]
 name = "sixsentences-community-api"
 version = "0.2.0a1"
-description = "Self-hosted community API for auditable research workspaces"
+description = "Self-hosted SixSentences research workspace API and workers"
 readme = "README.md"
 requires-python = ">=3.12,<3.15"
-license = "Apache-2.0"
+license = { text = "Apache-2.0" }
 dependencies = [
     "alembic==1.18.5",
+    "anthropic==0.116.0",
+    "duckdb==1.5.4",
     "fastapi==0.139.0",
     "httpx==0.28.1",
     "pillow==12.3.0",
     "psycopg[binary]==3.3.4",
-    "pydantic==2.13.4",
+    "pyarrow==25.0.0",
+    "pycryptodomex==3.23.0",
     "pydantic-settings==2.14.2",
+    "pydantic==2.13.4",
     "pypdf==6.16.2",
+    "python-docx==1.2.0",
     "sixsentences-engine==0.2.0a1",
     "sqlalchemy==2.0.51",
+    "typer==0.26.8",
     "uvicorn==0.51.0",
     "websockets==16.1.1",
 ]
 
-[project.scripts]
-six-community = "sixsentences_server.cli:main"
-six-community-worker = "sixsentences_server.worker:main"
+[project.optional-dependencies]
+dev = ["mypy==2.3.0", "pytest==9.1.1", "ruff==0.15.21"]
 
-[dependency-groups]
-dev = [
-    "mypy==2.3.0",
-    "pytest==9.1.1",
-    "ruff==0.15.21",
-]
+[project.scripts]
+six-community = "sixsentences_server.cli:app"
+six-community-worker = "sixsentences_server.jobs:main"
+six-community-backup = "sixsentences_server.ops.backup:main"
+six-community-erasure = "sixsentences_server.ops.erasure:main"
+six-community-recovery = "sixsentences_server.ops.recovery:main"
+six-community-retention = "sixsentences_server.ops.retention:main"
+
+[tool.uv.sources]
+sixsentences-engine = { path = "../..", editable = false }
 
 [build-system]
 requires = ["hatchling==1.27.0"]
@@ -38,13 +47,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/sixsentences_server"]
 
-[tool.hatch.build.targets.wheel.force-include]
-"alembic" = "sixsentences_server/_alembic"
-"alembic.ini" = "sixsentences_server/_alembic.ini"
-
-[tool.uv.sources]
-sixsentences-engine = { path = "../..", editable = true }
-
 [tool.ruff]
 line-length = 100
 target-version = "py312"
@@ -52,17 +54,20 @@ extend-exclude = ["alembic"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
 
 [tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = ["fastapi.Depends"]
+extend-immutable-calls = ["typer.Option", "typer.Argument", "fastapi.Depends"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["sixsentences_server"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
 ignore_missing_imports = true
-packages = ["sixsentences_server"]
 exclude = ["alembic/"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-ra"

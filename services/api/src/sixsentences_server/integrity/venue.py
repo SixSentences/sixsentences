@@ -20,7 +20,14 @@ from pydantic import BaseModel
 
 _WS = re.compile(r"\s+")
 _NONWORD = re.compile(r"[^\w\s]")
-_PREPRINT_MARKERS = ("arxiv", "preprint", "biorxiv", "medrxiv", "ssrn", "research square")
+_PREPRINT_MARKERS = (
+    "arxiv",
+    "preprint",
+    "biorxiv",
+    "medrxiv",
+    "ssrn",
+    "research square",
+)
 
 
 def normalize_venue(venue: str) -> str:
@@ -76,7 +83,9 @@ def assess_venue(
             venue=venue, status="indexed", note="on the configured indexed (DOAJ) list"
         )
     return VenueAssessment(
-        venue=venue, status="unlisted", note="not on any configured venue list (grey zone)"
+        venue=venue,
+        status="unlisted",
+        note="not on any configured venue list (grey zone)",
     )
 
 

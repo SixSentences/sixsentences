@@ -492,7 +492,12 @@ def render_dataset_chart(
             y0, y1 = sorted((py(float(value)), py(0)))
             draw.rounded_rectangle((x0, y0, x1, y1), radius=5, fill="#527d6d")
             if len(points) <= 16:
-                draw.text((x0, height - bottom + 18), str(label)[:12], fill="#63736e", font=small)
+                draw.text(
+                    (x0, height - bottom + 18),
+                    str(label)[:12],
+                    fill="#63736e",
+                    font=small,
+                )
     else:
         numeric_x = [_as_number(x) for x, _ in points]
         use_numeric = all(value is not None for value in numeric_x)
