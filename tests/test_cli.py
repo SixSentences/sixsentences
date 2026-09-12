@@ -39,3 +39,52 @@ def test_coverage_command_does_not_coerce_invalid_counts(tmp_path: Path, capsys:
         captures.write_text(json.dumps({"W1": invalid}), encoding="utf-8")
         assert main(["coverage", str(captures), "--occasions", "2"]) == 2
         assert "capture count" in capsys.readouterr().err  # type: ignore[attr-defined]
+
+
+def test_data_profile_command_emits_reproducible_metadata(tmp_path: Path, capsys: object) -> None:
+    dataset = tmp_path / "observations.csv"
+    dataset.write_text("group,score\nA,2\nB,4\n", encoding="utf-8")
+
+    assert main(["data-profile", str(dataset)]) == 0
+    output = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert output["filename"] == "observations.csv"
+    assert output["format"] == "csv"
+    assert len(output["sha256"]) == 64
+    assert output["profile"]["row_count"] == 2
+    assert output["profile"]["columns"][1]["statistics"]["mean"] == 3
+
+
+def test_data_analyze_command_runs_typed_recipe(tmp_path: Path, capsys: object) -> None:
+    dataset = tmp_path / "observations.json"
+    dataset.write_text(
+        json.dumps([{"x": 1, "y": 2}, {"x": 2, "y": 4}, {"x": 3, "y": None}]),
+        encoding="utf-8",
+    )
+
+    assert (
+        main(
+            [
+                "data-analyze",
+                str(dataset),
+                "correlation",
+                "--x-column",
+                "x",
+                "--y-column",
+                "y",
+            ]
+        )
+        == 0
+    )
+    output = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert output["kind"] == "pearson_correlation"
+    assert output["n"] == 2
+    assert output["incomplete_pairs"] == 1
+    assert output["pearson_r"] == 1
+
+
+def test_data_analyze_command_reports_invalid_numeric_cells(tmp_path: Path, capsys: object) -> None:
+    dataset = tmp_path / "observations.csv"
+    dataset.write_text("score\nunknown\n", encoding="utf-8")
+
+    assert main(["data-analyze", str(dataset), "descriptive", "--column", "score"]) == 2
+    assert "non-missing non-numeric" in capsys.readouterr().err  # type: ignore[attr-defined]

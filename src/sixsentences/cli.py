@@ -1,4 +1,4 @@
-"""Minimal command-line interface for the portable engine."""
+"""Command-line interface for the portable SixSentences toolkit."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import json
 import os
 import sys
 from collections.abc import Sequence
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, cast
 
@@ -16,6 +17,16 @@ from sixsentences.connectors.openalex import OpenAlexClient, OpenAlexError
 from sixsentences.core.models import PrismaCounts, ReviewProtocol, WorkRecord
 from sixsentences.corpus.local import CorpusError, LocalCorpus, build_local_corpus
 from sixsentences.coverage.estimator import estimate_completeness
+from sixsentences.data import (
+    AnalysisRecipe,
+    DescriptiveRecipe,
+    GroupSummaryRecipe,
+    MissingnessRecipe,
+    PearsonCorrelationRecipe,
+    RandomEffectsMetaAnalysisRecipe,
+    analyze,
+    parse_dataset_file,
+)
 from sixsentences.pipeline.expansion import validate_variants
 from sixsentences.querylang.ast import to_display
 from sixsentences.querylang.compile_duckdb import compile_duckdb
@@ -148,10 +159,50 @@ def _command_expansion_validate(args: argparse.Namespace) -> None:
     _print_json(validate_variants(args.existing, payload, limit=args.limit))
 
 
+def _command_data_profile(args: argparse.Namespace) -> None:
+    dataset = parse_dataset_file(args.input)
+    _print_json(
+        {
+            "filename": dataset.filename,
+            "format": dataset.format,
+            "byte_count": dataset.byte_count,
+            "sha256": dataset.sha256,
+            "profile": asdict(dataset.profile),
+            "import_notes": dataset.import_notes,
+        }
+    )
+
+
+def _command_data_analyze(args: argparse.Namespace) -> None:
+    dataset = parse_dataset_file(args.input)
+    recipe: AnalysisRecipe
+    if args.analysis_kind == "missingness":
+        recipe = MissingnessRecipe()
+    elif args.analysis_kind == "descriptive":
+        recipe = DescriptiveRecipe(column=args.column)
+    elif args.analysis_kind == "group-summary":
+        recipe = GroupSummaryRecipe(
+            group_by=args.group_by,
+            value_column=args.value_column,
+            metric=args.metric,
+        )
+    elif args.analysis_kind == "correlation":
+        recipe = PearsonCorrelationRecipe(x_column=args.x_column, y_column=args.y_column)
+    elif args.analysis_kind == "meta-analysis":
+        recipe = RandomEffectsMetaAnalysisRecipe(
+            effect_column=args.effect_column,
+            se_column=args.se_column,
+            label_column=args.label_column,
+        )
+    else:
+        raise ValueError(f"unknown analysis recipe {args.analysis_kind!r}")
+    _print_json(asdict(analyze(dataset, recipe)))
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="sixsentences",
-        description="Portable building blocks for systematic literature search.",
+        description="Open building blocks for auditable research workflows.",
     )
     subcommands = parser.add_subparsers(dest="command", required=True)
 
@@ -219,6 +270,48 @@ def _parser() -> argparse.ArgumentParser:
     expansion.add_argument("--existing", action="append", default=[])
     expansion.add_argument("--limit", type=int, default=5)
     expansion.set_defaults(handler=_command_expansion_validate)
+
+    data_profile = subcommands.add_parser(
+        "data-profile", help="profile a bounded CSV, TSV, JSON or XLSX dataset"
+    )
+    data_profile.add_argument("input", type=Path)
+    data_profile.set_defaults(handler=_command_data_profile)
+
+    data_analyze = subcommands.add_parser(
+        "data-analyze", help="run a deterministic analysis recipe over a bounded dataset"
+    )
+    data_analyze.add_argument("input", type=Path)
+    analysis_recipes = data_analyze.add_subparsers(dest="analysis_kind", required=True)
+
+    analysis_recipes.add_parser("missingness", help="count null and blank cells")
+
+    descriptive = analysis_recipes.add_parser(
+        "descriptive", help="describe one complete numeric column"
+    )
+    descriptive.add_argument("--column", required=True)
+
+    group_summary = analysis_recipes.add_parser(
+        "group-summary", help="aggregate complete numeric values by group"
+    )
+    group_summary.add_argument("--group-by", required=True)
+    group_summary.add_argument("--value-column", required=True)
+    group_summary.add_argument(
+        "--metric", choices=("mean", "median", "sum", "count"), default="mean"
+    )
+
+    correlation = analysis_recipes.add_parser(
+        "correlation", help="compute complete-case Pearson correlation"
+    )
+    correlation.add_argument("--x-column", required=True)
+    correlation.add_argument("--y-column", required=True)
+
+    meta_analysis = analysis_recipes.add_parser(
+        "meta-analysis", help="run DerSimonian-Laird random-effects pooling"
+    )
+    meta_analysis.add_argument("--effect-column", required=True)
+    meta_analysis.add_argument("--se-column", required=True)
+    meta_analysis.add_argument("--label-column")
+    data_analyze.set_defaults(handler=_command_data_analyze)
     return parser
 
 

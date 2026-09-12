@@ -1,6 +1,7 @@
 """Freeze the deny-by-default public source boundary."""
 
 import ast
+import sys
 from pathlib import Path
 
 PACKAGE = Path(__file__).parents[1] / "src" / "sixsentences"
@@ -9,6 +10,7 @@ ALLOWED_PACKAGES = {
     "core",
     "corpus",
     "coverage",
+    "data",
     "pipeline",
     "querylang",
     "ranking",
@@ -45,5 +47,23 @@ def test_export_has_no_forbidden_import_edges() -> None:
                 names = [node.module]
             for name in names:
                 if name.startswith(FORBIDDEN_IMPORTS):
+                    violations.append(f"{path.relative_to(PACKAGE)}: {name}")
+    assert violations == []
+
+
+def test_data_package_has_only_standard_library_and_internal_data_imports() -> None:
+    violations: list[str] = []
+    for path in (PACKAGE / "data").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            else:
+                continue
+            for name in names:
+                root = name.split(".", maxsplit=1)[0]
+                if root not in sys.stdlib_module_names and not name.startswith("sixsentences.data"):
                     violations.append(f"{path.relative_to(PACKAGE)}: {name}")
     assert violations == []
