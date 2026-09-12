@@ -1,8 +1,8 @@
 # Contributing
 
-Thank you for helping improve SixSentences Engine. This project welcomes bug
-fixes, tests, documentation, and focused proposals that fit the portable
-community-engine scope.
+Thank you for helping improve SixSentences. This project welcomes bug fixes,
+tests, documentation, and focused proposals that fit the portable open-source
+toolkit's scope.
 
 ## Before you start
 
@@ -62,15 +62,22 @@ text, credentials, `.env` files, production logs, or personal data. Fixtures
 must be synthetic or clearly redistributable and should be as small as possible.
 
 Maintainers may ask that a large pull request be split or that a proposal be
-narrowed to preserve the engine's portable boundary.
+narrowed to preserve the toolkit's portable boundary.
 
 ## Developer Certificate of Origin
 
-The project uses the
-[Developer Certificate of Origin 1.1](https://developercertificate.org/)
-(DCO), not a separate contributor license agreement. By signing off a commit,
-you certify that you have the right to submit the contribution under the
-project's license and agree that it is public.
+The project uses the [Developer Certificate of Origin 1.1](DCO), not a separate
+contributor license agreement. The root file is an unchanged copy of
+the text published at
+[developercertificate.org](https://developercertificate.org/). By signing off
+a commit, you certify that you have the right to submit the contribution under
+the project's license and agree that it is public.
+
+This choice is deliberate: Apache-2.0 plus per-commit DCO certification is the
+project's inbound contribution mechanism. A CLA would add a separate legal and
+personal-data process that the project does not currently need. Adopting one in
+the future would require a public governance proposal and appropriate legal
+review; it will not be imposed retroactively without that process.
 
 Sign every commit with Git's `-s` flag:
 
@@ -85,8 +92,9 @@ Signed-off-by: Your Name <your-email@example.com>
 ```
 
 Use your own identity and an email address you are comfortable making public in
-Git history. GitHub's private `noreply` address is acceptable. Do not sign off
-for another contributor unless you are authorized to do so.
+Git history. GitHub's private `noreply` address is acceptable. Each human
+contributor must add their own sign-off. Automation and other people must not
+invent or append that personal certification on a contributor's behalf.
 
 ## Review expectations
 

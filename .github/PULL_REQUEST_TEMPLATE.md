@@ -11,6 +11,7 @@
 <!-- List the exact checks run and any intentionally omitted checks. -->
 
 - [ ] `uv run ruff check .`
+- [ ] `uv run ruff format --check .`
 - [ ] `uv run mypy src/sixsentences`
 - [ ] `uv run pytest -q`
 - [ ] `uv build`
@@ -25,8 +26,10 @@
 
 ## Checklist
 
-- [ ] The change stays within the portable community-engine scope.
+- [ ] The change stays within the portable open-source toolkit scope.
 - [ ] Tests cover changed behavior, or the omission is explained above.
 - [ ] Public behavior and limitations are documented.
+- [ ] User-visible changes are recorded under `Unreleased` in `CHANGELOG.md`,
+      or the omission is explained above.
 - [ ] Every commit carries my DCO `Signed-off-by` trailer.
 - [ ] I have read and will follow the Code of Conduct.

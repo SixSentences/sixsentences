@@ -1,5 +1,5 @@
 name: Feature proposal
-description: Propose a focused addition to the portable community engine.
+description: Propose a focused addition to the portable open-source toolkit.
 title: "proposal: "
 labels:
   - enhancement
@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Proposals should solve a concrete engine problem and stay outside the hosted UI, accounts, billing, and deployment layers.
+        Proposals should solve a concrete portable-workflow problem and stay outside the hosted UI, accounts, billing, and deployment layers.
   - type: textarea
     id: problem
     attributes:
@@ -44,7 +44,7 @@ body:
     attributes:
       label: Submission checks
       options:
-        - label: This proposal fits the community engine rather than the hosted product.
+        - label: This proposal fits the portable toolkit rather than the hosted product.
           required: true
         - label: I searched existing issues and discussions for the same proposal.
           required: true

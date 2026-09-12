@@ -1,5 +1,5 @@
 name: Bug report
-description: Report reproducible incorrect behavior in the community engine.
+description: Report reproducible incorrect behavior in the open-source toolkit.
 title: "bug: "
 labels:
   - bug
@@ -11,7 +11,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Engine version
+      label: Toolkit version
       description: Provide the release version or full commit hash.
       placeholder: 0.1.0a1 or 0123456789abcdef...
     validations:

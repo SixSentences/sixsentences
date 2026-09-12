@@ -1,3 +1,10 @@
-"""SixSentences community literature-search engine."""
+"""Open building blocks for auditable research workflows."""
 
-__version__ = "0.1.0a1"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("sixsentences-engine")
+except PackageNotFoundError:  # A source tree imported without installation.
+    __version__ = "0+unknown"
+
+__all__ = ["__version__"]

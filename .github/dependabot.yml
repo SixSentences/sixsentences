@@ -11,9 +11,31 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     groups:
-      python-dependencies:
+      runtime-dependencies:
+        applies-to: version-updates
         patterns:
-          - "*"
+          - duckdb
+          - httpx
+          - pydantic
+        update-types:
+          - minor
+          - patch
+      development-dependencies:
+        applies-to: version-updates
+        patterns:
+          - mypy
+          - pytest
+          - ruff
+        update-types:
+          - minor
+          - patch
+      build-dependencies:
+        applies-to: version-updates
+        patterns:
+          - hatchling
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: github-actions
     directory: /
@@ -26,6 +48,10 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     groups:
-      github-actions:
+      github-actions-minor-patch:
+        applies-to: version-updates
         patterns:
           - "*"
+        update-types:
+          - minor
+          - patch

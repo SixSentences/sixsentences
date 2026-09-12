@@ -1,0 +1,14 @@
+# The founding maintainer reviews all changes until a maintainer team exists.
+* @L4XB
+
+# Keep policy, automation, and release authority explicitly owned.
+/.github/ @L4XB
+/CODE_OF_CONDUCT.md @L4XB
+/CONTRIBUTING.md @L4XB
+/DCO @L4XB
+/GOVERNANCE.md @L4XB
+/LICENSE @L4XB
+/SECURITY.md @L4XB
+/TRADEMARKS.md @L4XB
+/pyproject.toml @L4XB
+/uv.lock @L4XB

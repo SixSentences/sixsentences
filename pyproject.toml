@@ -1,17 +1,22 @@
 [project]
 name = "sixsentences-engine"
 version = "0.1.0a1"
-description = "Audit-friendly building blocks for systematic literature search"
+description = "Open building blocks for auditable research workflows"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]
 authors = [{ name = "SixSentences contributors" }]
 keywords = [
+    "data-analysis",
     "evidence-synthesis",
     "information-retrieval",
+    "open-science",
     "openalex",
     "prisma",
+    "reproducible-research",
+    "research-data",
+    "research-software",
     "systematic-review",
 ]
 classifiers = [
@@ -35,9 +40,11 @@ dependencies = [
 sixsentences = "sixsentences.cli:main"
 
 [project.urls]
+Homepage = "https://sixsentences.com"
 Documentation = "https://github.com/SixSentences/sixsentences#readme"
 Issues = "https://github.com/SixSentences/sixsentences/issues"
 Repository = "https://github.com/SixSentences/sixsentences"
+Changelog = "https://github.com/SixSentences/sixsentences/blob/main/CHANGELOG.md"
 
 [dependency-groups]
 dev = [
@@ -55,10 +62,13 @@ packages = ["src/sixsentences"]
 
 [tool.hatch.build.targets.sdist]
 include = [
+    "/.github/scripts/*.py",
     "/src",
     "/tests",
+    "/docs/assets/sixsentences-mark.svg",
     "/*.md",
     "/CITATION.cff",
+    "/DCO",
     "/LICENSE",
     "/pyproject.toml",
 ]
