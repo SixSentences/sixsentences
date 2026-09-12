@@ -304,6 +304,7 @@ def test_trusted_dco_workflow_treats_contribution_commits_only_as_git_data() -> 
     assert workflow.count("uses: actions/checkout@") == 1
     assert 'context "DCO / sign-off"' in workflow
     assert "--filter=blob:none" in workflow
+    assert 'dco_source_sha="$(git rev-parse HEAD)"' in workflow
     assert "DCO sign-off" not in ci_workflow
 
 
