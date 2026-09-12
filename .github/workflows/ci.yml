@@ -114,3 +114,28 @@ jobs:
         run: node --test tests/*.test.mjs
       - name: Build the web application for production
         run: npm run build
+
+  # Bootstrap compatibility: remove this contributor-controlled duplicate only
+  # after the protected DCO workflow has landed and `DCO / sign-off` is required.
+  dco:
+    name: DCO sign-off
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate author and co-author DCO sign-offs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          set -euo pipefail
+          python .github/scripts/check_dco.py \
+            --base "$BASE_SHA" \
+            --head "$HEAD_SHA" \
+            --pull-request-author "$PR_AUTHOR"
