@@ -42,7 +42,7 @@ themselves. Forks and independently operated deployments should replace those
 marks and any confusingly similar product metadata.
 
 The product-preview animation embedded in `README.md` is hosted as a GitHub
-user attachment. It is not part of the repository's Apache-licensed source
+Release asset. It is not part of the repository's Apache-licensed source
 distribution and must not be reused as branding for another product.
 
 This trademark policy governs use of the marks; it does not change the
