@@ -21,6 +21,23 @@ _SYNTHETIC_USERNAMES: Final = frozenset({"example", "test", "user", "username"})
 _SYNTHETIC_PASSWORDS: Final = frozenset({"example", "password", "placeholder", "secret", "test"})
 _RESERVED_HOSTS: Final = frozenset({"example.com", "example.net", "example.org"})
 _RESERVED_SUFFIXES: Final = (".example", ".invalid", ".localhost", ".test")
+# These two literals were introduced by this scanner's own synthetic unit tests
+# before the location-scoped baseline existed. They are reserved-domain examples,
+# not credentials. Keep exceptions bound to the immutable commit, path, and line.
+_REVIEWED_HISTORY_FIXTURES: Final = frozenset(
+    {
+        (
+            "1cdbf0f27c764379c81aeb7b3297f7bef9e7213d",
+            "tests/test_repository_automation.py",
+            304,
+        ),
+        (
+            "1cdbf0f27c764379c81aeb7b3297f7bef9e7213d",
+            "tests/test_repository_automation.py",
+            317,
+        ),
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -91,6 +108,16 @@ def find_violations(patch: str) -> list[Violation]:
     return violations
 
 
+def unreviewed_violations(violations: list[Violation]) -> list[Violation]:
+    """Remove only immutable, location-bound synthetic history fixtures."""
+
+    return [
+        violation
+        for violation in violations
+        if (violation.commit, violation.path, violation.line) not in _REVIEWED_HISTORY_FIXTURES
+    ]
+
+
 def _history_patch() -> str:
     """Return every added source line in the complete history reachable from ``HEAD``."""
 
@@ -128,7 +155,7 @@ def main() -> int:
     """Scan reachable history and emit only redacted locations for violations."""
 
     try:
-        violations = find_violations(_history_patch())
+        violations = unreviewed_violations(find_violations(_history_patch()))
     except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:
         print(f"Credential URI history scan failed safely: {exc}", file=sys.stderr)
         return 2

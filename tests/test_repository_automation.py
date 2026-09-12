@@ -296,12 +296,15 @@ def test_security_workflow_scans_complete_history_without_provider_calls() -> No
 
 
 def test_history_uri_scan_allows_only_explicit_reserved_domain_placeholders() -> None:
-    patch = """__SIX_COMMIT__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    unsafe_uri = (
+        "https://" + "service-account:live-looking-value" + "@research.example.com/resource"
+    )
+    patch = f"""__SIX_COMMIT__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 diff --git a/tests/example.py b/tests/example.py
 +++ b/tests/example.py
 @@ -0,0 +1,2 @@
 +safe = "https://user:password@example.org/resource"
-+unsafe = "https://service-account:live-looking-value@research.example.com/resource"
++unsafe = "{unsafe_uri}"
 """
 
     violations = URI_HISTORY.find_violations(patch)
@@ -310,17 +313,33 @@ diff --git a/tests/example.py b/tests/example.py
 
 
 def test_history_uri_scan_never_includes_the_detected_value_in_diagnostics() -> None:
-    patch = """__SIX_COMMIT__bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    unsafe_uri = "https://" + "operator:do-not-print-this" + "@internal.example.com/api"
+    patch = f"""__SIX_COMMIT__bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 diff --git a/config.txt b/config.txt
 +++ b/config.txt
 @@ -0,0 +1 @@
-+endpoint=https://operator:do-not-print-this@internal.example.com/api
++endpoint={unsafe_uri}
 """
 
     [violation] = URI_HISTORY.find_violations(patch)
 
     assert violation.label() == "bbbbbbbbbbbb:config.txt:1"
     assert "do-not-print-this" not in violation.label()
+
+
+def test_history_uri_scan_baseline_is_bound_to_an_immutable_location() -> None:
+    reviewed = URI_HISTORY.Violation(
+        commit="1cdbf0f27c764379c81aeb7b3297f7bef9e7213d",
+        path="tests/test_repository_automation.py",
+        line=304,
+    )
+    adjacent = URI_HISTORY.Violation(
+        commit=reviewed.commit,
+        path=reviewed.path,
+        line=305,
+    )
+
+    assert URI_HISTORY.unreviewed_violations([reviewed, adjacent]) == [adjacent]
 
 
 def test_cla_status_is_bound_to_the_exact_pull_request_head(
