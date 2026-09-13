@@ -531,7 +531,12 @@ from sixsentences_server.mail import (
     signup_verification_email,
     voice_session_email,
 )
-from sixsentences_server.mcp.server import McpToolError, handle_rpc
+from sixsentences_server.mcp.server import (
+    McpToolError,
+    handle_rpc,
+    invalid_query_text,
+    unknown_tool_text,
+)
 from sixsentences_server.ops.erasure_ledger import ErasureLedgerError, append_event
 from sixsentences_server.ops.health import collect_operator_health
 from sixsentences_server.ops.status import StorageCapacityError
@@ -31549,7 +31554,7 @@ def create_app() -> FastAPI:
             try:
                 ast = parse_query(query_text)
             except QueryParseError as exc:
-                raise McpToolError(f"invalid boolean query: {exc}") from exc
+                raise McpToolError(invalid_query_text(query_text)) from exc
             corpus = DuckDBCorpus(get_settings().corpus_dir)
             try:
                 works = corpus.search(ast, limit=200)
@@ -31635,7 +31640,7 @@ def create_app() -> FastAPI:
             if not works:
                 raise McpToolError("the run has no included works yet")
             return render(works, fmt)
-        raise McpToolError(f"unknown tool: {name}")
+        raise McpToolError(unknown_tool_text(name))
 
     @app.get("/public-api/openapi.json", include_in_schema=False)
     def public_api_openapi() -> JSONResponse:

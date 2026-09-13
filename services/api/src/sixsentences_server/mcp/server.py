@@ -7,7 +7,7 @@ by the API app, which owns tenancy, the corpus and the audit helpers.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 import sixsentences_server
@@ -100,6 +100,50 @@ class McpToolError(Exception):
     """A tool-level failure the caller sees as isError content."""
 
 
+# Every sentence a failed tool call may show an MCP client. The two texts that
+# quote the caller's own arguments have their own builders, so the handler can
+# rebuild them from those arguments instead of reading them back out of the
+# exception: a message that was never written for disclosure then cannot reach
+# a response merely by travelling inside an McpToolError.
+_TOOL_FAILURES: frozenset[str] = frozenset(
+    {
+        "format must be bibtex or ris",
+        "the literature corpus is not synced on this workspace",
+        "the run has no included works yet",
+        "the run is not completed yet",
+    }
+)
+_GENERIC_TOOL_FAILURE = "the tool could not complete this request"
+
+
+def unknown_tool_text(name: str) -> str:
+    """The failure text for a tool this server does not implement."""
+    return f"unknown tool: {name}"
+
+
+def invalid_query_text(query: str) -> str:
+    """The failure text for a boolean query the parser rejected."""
+    return (
+        "invalid boolean query (use AND, OR, NOT, quoted phrases and balanced "
+        f"parentheses): {query}"
+    )
+
+
+def tool_failure_text(error: McpToolError, *, tool_name: str, arguments: Mapping[str, Any]) -> str:
+    """Return the caller-facing text for one failed tool call."""
+    reported = str(error)
+    for disclosable in _TOOL_FAILURES:
+        if disclosable == reported:
+            return disclosable
+    for rebuilt in (
+        unknown_tool_text(tool_name),
+        invalid_query_text(str(arguments.get("query") or "").strip()),
+    ):
+        if rebuilt == reported:
+            return rebuilt
+    return _GENERIC_TOOL_FAILURE
+
+
 def _error(rpc_id: Any, code: int, message: str) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": rpc_id, "error": {"code": code, "message": message}}
 
@@ -146,7 +190,7 @@ def handle_rpc(
         if not isinstance(arguments, dict):
             return 200, _error(rpc_id, -32602, "arguments must be an object")
         if name not in {tool["name"] for tool in TOOL_SCHEMAS}:
-            return 200, _error(rpc_id, -32602, f"unknown tool: {name}")
+            return 200, _error(rpc_id, -32602, unknown_tool_text(name))
         try:
             result = call_tool(name, arguments)
         except McpToolError as exc:
@@ -154,7 +198,12 @@ def handle_rpc(
                 "jsonrpc": "2.0",
                 "id": rpc_id,
                 "result": {
-                    "content": [{"type": "text", "text": str(exc)}],
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": tool_failure_text(exc, tool_name=name, arguments=arguments),
+                        }
+                    ],
                     "isError": True,
                 },
             }

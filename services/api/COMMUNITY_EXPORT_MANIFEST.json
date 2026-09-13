@@ -277,10 +277,10 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
-      "bytes": 1507877,
+      "bytes": 1507936,
       "mode": "0644",
       "path": "src/sixsentences_server/api/app.py",
-      "sha256": "0034d1f8697b8d0c38e039075645e7b8e4c2b3c0d83af7797aab6b2ed28701ef"
+      "sha256": "6f0fef299cbd309737c24bc1ec94c90dfcfe8b4bead9dfc77ec5a88e1b0cb29e"
     },
     {
       "bytes": 18781,
@@ -883,10 +883,10 @@
       "sha256": "d290f5ba6702a8aa5d752e6d116f7e8661cda3f8b53df71939192f9a5320a3f0"
     },
     {
-      "bytes": 5938,
+      "bytes": 7737,
       "mode": "0644",
       "path": "src/sixsentences_server/mcp/server.py",
-      "sha256": "1f34f6d0ff03be7d59a7a6f7eb24a0f202b72e03a999f8a0dd840312fe9b88ad"
+      "sha256": "b6a881f0f281aa6992a812655218931eb25c8e25b98bacea1213a164419a0448"
     },
     {
       "bytes": 61,
@@ -1111,10 +1111,10 @@
       "sha256": "3283195d48674f5b621669d043a6f35bbef0ddcd4000e9b01054e70e60341aa6"
     },
     {
-      "bytes": 8584,
+      "bytes": 8568,
       "mode": "0644",
       "path": "src/sixsentences_server/reporting/zotero.py",
-      "sha256": "93b4f2b20171be70995e5415e31b3c6db1dd0fa458dcf4750de38d2d5db4e802"
+      "sha256": "69cb5a28a7430c144a1fd2b23f8bc75ee2cf573bb3e96979ac074e89bb45ad63"
     },
     {
       "bytes": 344,
@@ -1369,10 +1369,10 @@
       "sha256": "8955d434471519a9c5211e1a5f023681698f893c174e24285a6162c135a534d8"
     },
     {
-      "bytes": 16761,
+      "bytes": 16858,
       "mode": "0644",
       "path": "src/sixsentences_server/writer/template_import.py",
-      "sha256": "fa040babaa1007a9ba707fb8470e0405dd0c25eb949aa1afad99b0a58e38f8a5"
+      "sha256": "44680de970e69c62f30a77ac9c1d51f87b3fc315d1bf1385367980d0590302a5"
     },
     {
       "bytes": 3410,
