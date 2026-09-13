@@ -8,6 +8,7 @@ license = { text = "Apache-2.0" }
 dependencies = [
     "alembic==1.18.5",
     "anthropic==0.116.0",
+    "defusedxml==0.7.1",
     "duckdb==1.5.4",
     "fastapi==0.139.0",
     "httpx==0.28.1",
