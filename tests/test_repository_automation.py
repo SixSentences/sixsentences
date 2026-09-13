@@ -70,6 +70,46 @@ Signed-off-by: Someone Else <else@example.com>
     ]
 
 
+def test_dco_accepts_two_official_noreply_forms_for_the_same_github_login() -> None:
+    author = _identity("Lukas Buck <103962359+L4XB@users.noreply.github.com>")
+    trailers = DCO.interpret_identity_trailers(
+        """fix: synthetic contribution
+
+Signed-off-by: L4XB <L4XB@users.noreply.github.com>
+"""
+    )
+
+    assert DCO.validate_identities(author, trailers) == []
+
+
+def test_dco_noreply_alias_never_matches_a_different_github_login() -> None:
+    author = _identity("Alice Example <123+alice@users.noreply.github.com>")
+    trailers = DCO.interpret_identity_trailers(
+        """fix: synthetic contribution
+
+Signed-off-by: Mallory Example <mallory@users.noreply.github.com>
+"""
+    )
+
+    assert DCO.validate_identities(author, trailers) == [
+        "commit author is not signed off: alice example <123+alice@users.noreply.github.com>"
+    ]
+
+
+def test_dco_does_not_relax_matching_for_non_github_email_addresses() -> None:
+    author = _identity("Alice Example <alice@example.com>")
+    trailers = DCO.interpret_identity_trailers(
+        """fix: synthetic contribution
+
+Signed-off-by: Alice Alias <alice@another.example>
+"""
+    )
+
+    assert DCO.validate_identities(author, trailers) == [
+        "commit author is not signed off: alice example <alice@example.com>"
+    ]
+
+
 def test_dco_does_not_accept_a_trailer_like_line_from_the_message_body() -> None:
     trailers = DCO.interpret_identity_trailers(
         """docs: synthetic contribution
@@ -294,6 +334,7 @@ def test_trusted_cla_workflow_cannot_be_manually_dispatched() -> None:
 
 def test_trusted_dco_workflow_treats_contribution_commits_only_as_git_data() -> None:
     workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "dco.yml").read_text(encoding="utf-8")
+    ci_workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
     assert "pull_request_target:" in workflow
     assert "workflow_dispatch:" not in workflow
@@ -303,6 +344,8 @@ def test_trusted_dco_workflow_treats_contribution_commits_only_as_git_data() -> 
     assert workflow.count("uses: actions/checkout@") == 1
     assert 'context "DCO / sign-off"' in workflow
     assert "--filter=blob:none" in workflow
+    assert 'dco_source_sha="$(git rev-parse HEAD)"' in workflow
+    assert "DCO sign-off" not in ci_workflow
 
 
 def test_status_publisher_posts_only_the_validated_payload(
