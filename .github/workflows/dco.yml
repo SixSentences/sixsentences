@@ -67,12 +67,14 @@ jobs:
             ${{ steps.fetch.outcome == 'success' &&
                 steps.validate.outcome == 'success' &&
                 'success' || 'failure' }}
-        run: >-
-          python .github/scripts/publish_status.py
-          --repository "$GITHUB_REPOSITORY"
-          --sha "$HEAD_SHA"
-          --context "DCO / sign-off"
-          --state "$STATUS_STATE"
-          --success-description "Every contribution commit has a valid DCO sign-off."
-          --failure-description "One or more contribution commits lack a valid DCO sign-off."
-          --target-url "https://github.com/$GITHUB_REPOSITORY/blob/main/DCO"
+        run: |
+          set -euo pipefail
+          dco_source_sha="$(git rev-parse HEAD)"
+          python .github/scripts/publish_status.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$HEAD_SHA" \
+            --context "DCO / sign-off" \
+            --state "$STATUS_STATE" \
+            --success-description "Every contribution commit has a valid DCO sign-off." \
+            --failure-description "One or more contribution commits lack a valid DCO sign-off." \
+            --target-url "https://github.com/$GITHUB_REPOSITORY/blob/$dco_source_sha/DCO"
