@@ -2626,7 +2626,7 @@ export interface VoiceInvite {
 }
 
 export interface ParticipantInformation {
-  language?: "de" | "en";
+  language?: "" | "de" | "en";
   controller_name?: string;
   controller_address?: string;
   contact_email?: string;

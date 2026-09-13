@@ -1526,7 +1526,10 @@ export default function VoiceStudyBuilderPage() {
 
                   <ParticipantInformationEditor
                     key={`${study.id}:${study.updated_at}`}
-                    value={{ language: study.language, ...study.participant_information }}
+                    value={{
+                      ...study.participant_information,
+                      language: study.participant_information?.language || study.language,
+                    }}
                     gaps={study.participant_information_gaps ?? []}
                     requireDpia
                     onSave={(participant_information) => updateSetting.mutateAsync({ participant_information })}
