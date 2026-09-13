@@ -97,10 +97,10 @@
       "sha256": "6d9ad22d8824410fd425aa15f67b889f2b18b4ccc36392e2e0e71e332b991aed"
     },
     {
-      "bytes": 1916,
+      "bytes": 1941,
       "mode": "0644",
       "path": "pyproject.toml",
-      "sha256": "7417e3674c2ce7e78f1d249e6f484686d7f1de001c41c071b67752033227147d"
+      "sha256": "32312dc96fb07f41c231ea6dfdc3dea5f266e300d6902d91d1022938db0ff863"
     },
     {
       "bytes": 79,
@@ -151,16 +151,16 @@
       "sha256": "2baf389442723f5e2e8c54cf89e7239fa53a3e5af19d2446d471092af84f9465"
     },
     {
-      "bytes": 2714,
+      "bytes": 3318,
       "mode": "0644",
       "path": "src/sixsentences_server/acquisition/extract.py",
-      "sha256": "05f32ffd9affdcbb6908261af2664a6b91ec7c6261280aaa03dc456d1507442c"
+      "sha256": "967d7b8e5a14117785a848f79438a45a4726aa2d63472dd69076fdc048329011"
     },
     {
-      "bytes": 4629,
+      "bytes": 5224,
       "mode": "0644",
       "path": "src/sixsentences_server/acquisition/fetch.py",
-      "sha256": "c979518bccac85461417e55ba2ffa5b84ababf5cf0faa5f5a2611f8bb22f1b3b"
+      "sha256": "8d3c902383f660e5d06d37d6c2b52428dcf210733f3c0f83bf64d6a7d8bfca61"
     },
     {
       "bytes": 3350,
@@ -193,10 +193,10 @@
       "sha256": "9c415b1fc8c090f224f4df7ddc6b5800bb22401a9d52f09ef20c5f598301fc7a"
     },
     {
-      "bytes": 6530,
+      "bytes": 6938,
       "mode": "0644",
       "path": "src/sixsentences_server/acquisition/resolver.py",
-      "sha256": "18ec123628a7226355390f953d5c029a9f9b5c89e81867b034c5a64508e30004"
+      "sha256": "ddb23b86de4862110230a1bee67601847abb522927ce995cc6759ce3fbcb4ab4"
     },
     {
       "bytes": 15607,
@@ -229,10 +229,10 @@
       "sha256": "643a282fb67369274e411c0a13053f2c45bda3bf56d280f1c64427ea6b406db8"
     },
     {
-      "bytes": 112026,
+      "bytes": 112120,
       "mode": "0644",
       "path": "src/sixsentences_server/agent/actions.py",
-      "sha256": "f7137572807921932a8da639a7e056eb43b130ba71ed852f294e286d9cd6b52e"
+      "sha256": "aa62f2b0f2bab363a4213fb7da391cf4d4a4764126acda332aacb1873efc44ab"
     },
     {
       "bytes": 16032,
@@ -265,10 +265,10 @@
       "sha256": "8126ad8db59a679a0654c40ca9f5e72508f3c652f44f27ed3d1e94f7bbc562f2"
     },
     {
-      "bytes": 11283,
+      "bytes": 11293,
       "mode": "0644",
       "path": "src/sixsentences_server/agent/search_query.py",
-      "sha256": "c08e3c20a94668d350c8b6ae7bf8951fd7585f56544c201dc2676b026647f7c9"
+      "sha256": "a817e8feb960eb853e547d4203e1a7a48b48d0d891ba24c1402dda1e1c5937fd"
     },
     {
       "bytes": 0,
@@ -277,10 +277,10 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
-      "bytes": 1506533,
+      "bytes": 1507877,
       "mode": "0644",
       "path": "src/sixsentences_server/api/app.py",
-      "sha256": "b607653c0bd9f16572584e8ac77687bb95f1fd25c6c742dd5689cc8c15ebfdbb"
+      "sha256": "0034d1f8697b8d0c38e039075645e7b8e4c2b3c0d83af7797aab6b2ed28701ef"
     },
     {
       "bytes": 18781,
@@ -307,10 +307,10 @@
       "sha256": "3e642b2e340697f087a6d6c58edb63eec523e2bc5871e714a6dc1f6c6bff7400"
     },
     {
-      "bytes": 414552,
+      "bytes": 414599,
       "mode": "0644",
       "path": "src/sixsentences_server/chat/service.py",
-      "sha256": "3884367cb9108d35ce988e8c3bdbca48451cfb8f8dd1efb046a25decabe570c8"
+      "sha256": "b2cdd8778b5e9ed4db6ed8aba1a883194acc64758a31678d7754ea632aa7557b"
     },
     {
       "bytes": 31309,
@@ -337,10 +337,10 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
-      "bytes": 16240,
+      "bytes": 17072,
       "mode": "0644",
       "path": "src/sixsentences_server/connectors/openalex.py",
-      "sha256": "8d4663d04b7be2eccd44aa8946ff5c73c012e456816de65cabd2cf834b386b9e"
+      "sha256": "d9c2ea2063409c004457609d5ccc6819515820506c30c0a868381ae195399eda"
     },
     {
       "bytes": 6683,
@@ -349,10 +349,10 @@
       "sha256": "6b9957c4a7c8a23630626fdfe68ccf9040a23352144766855d1368208459c29c"
     },
     {
-      "bytes": 9240,
+      "bytes": 9250,
       "mode": "0644",
       "path": "src/sixsentences_server/connectors/refimport.py",
-      "sha256": "eea523b832c0e71c4e6672070e8ab36271f486a7b1afbb68be994262e2b184d4"
+      "sha256": "b9fb3da235e1fe8205aedb233f7a85d4c04f22a32138941e0787c2d88bae747d"
     },
     {
       "bytes": 1489,
@@ -367,10 +367,10 @@
       "sha256": "ef83bc493b5380f19ad3fa7a0a4b836d6cce979b469cee196bb974449ec6a04d"
     },
     {
-      "bytes": 31489,
+      "bytes": 31552,
       "mode": "0644",
       "path": "src/sixsentences_server/connectors/websearch.py",
-      "sha256": "21a431d793f71c032bcf23b355a2e45a2dce429bf59012b65ce782c1328cad4e"
+      "sha256": "756f4220625f9fa161cf27bf0636586ec555272a05684e8065c1fa0275ce5259"
     },
     {
       "bytes": 0,
@@ -1111,10 +1111,10 @@
       "sha256": "3283195d48674f5b621669d043a6f35bbef0ddcd4000e9b01054e70e60341aa6"
     },
     {
-      "bytes": 7710,
+      "bytes": 8584,
       "mode": "0644",
       "path": "src/sixsentences_server/reporting/zotero.py",
-      "sha256": "b8dd3fa2d594541e06b6500bc2a2872182ec222340e46c59d5c434f871bae4c8"
+      "sha256": "93b4f2b20171be70995e5415e31b3c6db1dd0fa458dcf4750de38d2d5db4e802"
     },
     {
       "bytes": 344,
@@ -1147,10 +1147,10 @@
       "sha256": "a0ed20c5f783c84fea72604337c567fea638bb3691b26380c3c31b7d028ee25c"
     },
     {
-      "bytes": 27452,
+      "bytes": 29628,
       "mode": "0644",
       "path": "src/sixsentences_server/research_data.py",
-      "sha256": "7729b881b6ae58dbc25135ad3d75147e764685b214c607cb7a37394291e11192"
+      "sha256": "bd550592b0fb37c3933313ffb2bc0d842d51a4cf10edac7edb7092388fbb2ebc"
     },
     {
       "bytes": 0,
@@ -1213,10 +1213,10 @@
       "sha256": "60376da7e4495498c8453e5e55df97371bb8882fc034f2d50eab0da1e0be37e3"
     },
     {
-      "bytes": 64726,
+      "bytes": 64776,
       "mode": "0644",
       "path": "src/sixsentences_server/surveys/service.py",
-      "sha256": "953ab8e58800d87d122c923606e9e653e19354815ded258b08d133f9ee30dfb6"
+      "sha256": "87573023640d1dc3c1379e61ee651bd907d87ad7e709fc40cb9069a7407557ec"
     },
     {
       "bytes": 646,
@@ -1285,10 +1285,10 @@
       "sha256": "55a8f0be648373598bdbfcb586392dcf3192493b01a391055a5ebf6cd3428df7"
     },
     {
-      "bytes": 223156,
+      "bytes": 223240,
       "mode": "0644",
       "path": "src/sixsentences_server/writer/assistant.py",
-      "sha256": "233c164e0d25f3e252ad3453f7e8076061ed11adf6238cdc219218abd19c8bcd"
+      "sha256": "30a25361cced62444b0a6a58e6ec0ea944f20d30e870ffd550c29f7494cc85a3"
     },
     {
       "bytes": 3160,
@@ -1297,10 +1297,10 @@
       "sha256": "b29829cc37ed5f53fed56c06155685dbf0b22f5487ce294d261ee48d4280a413"
     },
     {
-      "bytes": 12280,
+      "bytes": 12290,
       "mode": "0644",
       "path": "src/sixsentences_server/writer/context_scope.py",
-      "sha256": "1beedd2a55bb11660abbe7e7948605322d775f5338cc588a146b5f6b51630c3f"
+      "sha256": "38b356a528b2c4b4c469317982071dfd9bbc7ec0257a7b70d1dd739a9d9c7f1f"
     },
     {
       "bytes": 12741,
@@ -1345,10 +1345,10 @@
       "sha256": "ef12394b8fea94c4bb36872d1b5070fd496df00ba2a6c958b0163f1e6ce58532"
     },
     {
-      "bytes": 44771,
+      "bytes": 44791,
       "mode": "0644",
       "path": "src/sixsentences_server/writer/service.py",
-      "sha256": "9ed0e821f780f03fac3c8957e1f673f24b586f575950c25b676d4678679b14b6"
+      "sha256": "59b9fce6bb3183abab2a81175b0a3f7016e30e4a8f0cccc6202ced9520ca3afa"
     },
     {
       "bytes": 2532,
@@ -1369,10 +1369,10 @@
       "sha256": "8955d434471519a9c5211e1a5f023681698f893c174e24285a6162c135a534d8"
     },
     {
-      "bytes": 16517,
+      "bytes": 16761,
       "mode": "0644",
       "path": "src/sixsentences_server/writer/template_import.py",
-      "sha256": "63f5af3d642e687ce95adfdafd3c3cdb65f7de90623d7d0a5eca00a7ba6bb07f"
+      "sha256": "fa040babaa1007a9ba707fb8470e0405dd0c25eb949aa1afad99b0a58e38f8a5"
     },
     {
       "bytes": 3410,
@@ -2395,10 +2395,10 @@
       "sha256": "5e623acc688d729e25fcb6d8544dbd84dbc515161690b32a3dacb00ccb88df6c"
     },
     {
-      "bytes": 262846,
+      "bytes": 263629,
       "mode": "0644",
       "path": "uv.lock",
-      "sha256": "99138321507a81c7b5cc4fdcd6e0a5bf8a2c54d4a34e2788610d3dcc2c523f25"
+      "sha256": "6fc82bb8810ea74d76d0dcc30664d28d37a53c3da0941d503afc54c3ebb23fed"
     }
   ],
   "format": 1,
