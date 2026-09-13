@@ -1,0 +1,116 @@
+name: Publish images
+
+# Publishes the two container images a self-hosting operator would otherwise
+# build locally. The API image is origin-independent. The web client bakes its
+# public origin at build time, so only the local HTTP origin that
+# `init-env.sh --local` generates can be published as a reusable image; a public
+# TLS deployment still builds its own web image.
+#
+# No image is built from a branch: the workflow checks out the exact release tag
+# and refuses anything that is not a version tag.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish images for"
+        required: true
+        type: string
+
+concurrency:
+  group: publish-images-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  images:
+    name: Publish community images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      REGISTRY: ghcr.io
+      REGISTRY_OWNER: ${{ github.repository_owner }}
+      REGISTRY_USER: ${{ github.actor }}
+      # The local origin these images are published for. It must stay identical
+      # to the values `deploy/community/init-env.sh --local` writes, because the
+      # web client compares its build-time origin against the running API.
+      LOCAL_ORIGIN: http://localhost
+      LOCAL_DOCUMENT_VERSION: community-operator-v1
+    steps:
+      - name: Resolve and verify the release tag
+        id: release
+        run: |
+          set -euo pipefail
+          case "$RELEASE_TAG" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "refusing to publish images for '$RELEASE_TAG'" >&2; exit 1 ;;
+          esac
+          owner="$(printf '%s' "$REGISTRY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          {
+            echo "tag=$RELEASE_TAG"
+            echo "api=$REGISTRY/$owner/community-api:$RELEASE_TAG"
+            echo "web=$REGISTRY/$owner/community-web:$RELEASE_TAG-localhost"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check out the tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          persist-credentials: false
+
+      - name: Sign in to the container registry
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$REGISTRY_TOKEN" | docker login "$REGISTRY" --username "$REGISTRY_USER" --password-stdin
+
+      - name: Build and push the API image
+        env:
+          API_IMAGE: ${{ steps.release.outputs.api }}
+        run: |
+          set -euo pipefail
+          docker build --tag "$API_IMAGE" --file services/api/Dockerfile .
+          docker push "$API_IMAGE"
+
+      - name: Build and push the local-origin web image
+        env:
+          WEB_IMAGE: ${{ steps.release.outputs.web }}
+        run: |
+          set -euo pipefail
+          docker build \
+            --tag "$WEB_IMAGE" \
+            --file apps/web/Dockerfile \
+            --build-arg "NEXT_PUBLIC_SIX_API_URL=$LOCAL_ORIGIN/api" \
+            --build-arg "NEXT_PUBLIC_APP_URL=$LOCAL_ORIGIN" \
+            --build-arg "NEXT_PUBLIC_LEGAL_BASE_URL=$LOCAL_ORIGIN/legal" \
+            --build-arg SIX_ALLOW_INSECURE_LOCAL_HTTP=true \
+            --build-arg "NEXT_PUBLIC_TERMS_VERSION=$LOCAL_DOCUMENT_VERSION" \
+            --build-arg "NEXT_PUBLIC_PRIVACY_VERSION=$LOCAL_DOCUMENT_VERSION" \
+            --build-arg "NEXT_PUBLIC_DPA_VERSION=$LOCAL_DOCUMENT_VERSION" \
+            apps/web
+          docker push "$WEB_IMAGE"
+
+      - name: Report the published references
+        env:
+          API_IMAGE: ${{ steps.release.outputs.api }}
+          WEB_IMAGE: ${{ steps.release.outputs.web }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Published images"
+            echo
+            echo '```console'
+            echo "export SIX_API_IMAGE=$API_IMAGE"
+            echo "export SIX_WEB_IMAGE=$WEB_IMAGE"
+            echo "make up"
+            echo '```'
+            echo
+            echo "The web image serves $LOCAL_ORIGIN. A public TLS deployment builds its own."
+          } >> "$GITHUB_STEP_SUMMARY"
