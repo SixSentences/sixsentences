@@ -1,0 +1,66 @@
+{
+  "identity_cases": [
+    {
+      "id": "exact-doi",
+      "work": {
+        "id": "W100",
+        "doi": "10.1234/example.100",
+        "title": "Retrieval augmented screening for evidence synthesis",
+        "authors": ["Ada Researcher"]
+      },
+      "document": "Accepted manuscript. DOI: 10.1234/example.100. Retrieval augmented screening for evidence synthesis.",
+      "repeat": 30,
+      "expected": "verified"
+    },
+    {
+      "id": "matching-title",
+      "work": {
+        "id": "W101",
+        "title": "Human oversight in automated literature reviews",
+        "authors": ["Ben Reviewer"]
+      },
+      "document": "Human oversight in automated literature reviews. Ben Reviewer. This study evaluates reviewer oversight.",
+      "repeat": 30,
+      "expected": "verified"
+    },
+    {
+      "id": "wrong-long-document",
+      "work": {
+        "id": "W102",
+        "doi": "10.1234/target.102",
+        "title": "Clinical multimodal retrieval for diagnosis",
+        "authors": ["Casey Clinician"]
+      },
+      "document": "Distributed transaction processing and database recovery are evaluated across storage engines.",
+      "repeat": 40,
+      "expected": "mismatch"
+    }
+  ],
+  "evidence_state_cases": [
+    {
+      "reviewer": "screening:model-a",
+      "verdict": "include",
+      "expected": "provisional_include"
+    },
+    {
+      "reviewer": "fulltext:model-a",
+      "verdict": "include",
+      "expected": "confirmed_include"
+    },
+    {
+      "reviewer": "human:reviewer@example.org",
+      "verdict": "include",
+      "expected": "confirmed_include"
+    },
+    {
+      "reviewer": "fulltext:model-a",
+      "verdict": "unsure",
+      "expected": "unsure"
+    },
+    {
+      "reviewer": "human:reviewer@example.org",
+      "verdict": "exclude",
+      "expected": "exclude"
+    }
+  ]
+}

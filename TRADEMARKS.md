@@ -31,11 +31,17 @@ nominative fair use.
 
 The following source files contain or render official SixSentences marks:
 
-- `docs/assets/sixsentences-mark.svg`;
+- `docs/assets/sixsentences-mark.svg` and its README PNG rendering at
+  `docs/assets/sixsentences-mark.png`;
 - `apps/web/src/app/icon.svg`;
-- `apps/web/src/components/brand/six-mark.tsx`; and
+- `apps/web/src/components/brand/six-mark.tsx`;
+- `apps/browser-extension/src/icons/icon.svg` and the PNG sizes beside it; and
 - the SixSentences mark and wordmark rendered by
-  `apps/web/src/app/opengraph-image.tsx`.
+  `apps/web/src/app/opengraph-image.tsx`;
+- `apps/companion-macos/Sources/SixSentencesCompanion/SixSentencesBrand.swift`;
+  and
+- `apps/companion-macos/AppBundle/Info.plist` and the Companion bundle assembled
+  from the public mark by `apps/companion-macos/Scripts/build-app.sh`.
 
 They are included so the official project documentation and client can identify
 themselves. Forks and independently operated deployments should replace those

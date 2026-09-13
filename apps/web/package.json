@@ -1,7 +1,8 @@
 {
   "name": "@sixsentences/web",
-  "version": "0.1.0-alpha.1",
+  "version": "0.2.0-alpha.1",
   "private": true,
+  "license": "Apache-2.0",
   "engines": {
     "node": ">=22.9.0"
   },
@@ -10,7 +11,7 @@
     "build": "next build",
     "start": "next start",
     "test": "node --test tests/*.test.mjs",
-    "test:security": "node --test tests/agent-display-safety.test.mjs tests/ai-media-provenance.test.mjs tests/analytics-privacy.test.mjs tests/auth-cache-isolation.test.mjs tests/form-methods.test.mjs tests/security-headers.test.mjs tests/user-facing-errors.test.mjs tests/web-search-public-data-confirmation.test.mjs",
+    "test:security": "node --test tests/agent-display-safety.test.mjs tests/ai-media-provenance.test.mjs tests/analytics-privacy.test.mjs tests/auth-cache-isolation.test.mjs tests/form-methods.test.mjs tests/open-source-boundary.test.mjs tests/open-source-navigation.test.mjs tests/security-headers.test.mjs tests/user-facing-errors.test.mjs tests/web-search-public-data-confirmation.test.mjs",
     "test:ui": "npm test",
     "typecheck": "tsc --noEmit",
     "test:search-layout": "node --test tests/library-metadata-layout.test.mjs tests/public-web-search-approval.test.mjs tests/public-web-search-query.test.mjs tests/web-search-public-data-confirmation.test.mjs tests/chat-turn-controls.test.mjs"

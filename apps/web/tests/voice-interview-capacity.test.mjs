@@ -13,6 +13,7 @@ const liveSession = read("src/components/voice/live-session.tsx");
 const textSession = read("src/components/voice/text-session.tsx");
 const api = read("src/lib/api.ts");
 const types = read("src/lib/types.ts");
+const participantInformation = read("src/components/participant-information.tsx");
 
 function section(source, start, end) {
   const startIndex = source.indexOf(start);
@@ -136,6 +137,34 @@ test("public participation links require completed participant information", () 
   assert.match(study, /participantInformationIsReady\(study\)/);
   assert.match(study, /study\.participant_information_ready === true/);
   assert.match(study, /ParticipantInformationEditor/);
+  assert.match(study, /<ParticipantInformationEditor[\s\S]*?requireDpia/);
+  assert.match(participantInformation, /dpia_status/);
+  assert.match(participantInformation, /DPIA decision reference and reasoning/);
+  assert.match(participantInformation, /ai_interview_scope_attested/);
+  assert.match(participantInformation, /spoken_processing_approved/);
+  assert.match(participantInformation, /Leave this unchecked to approve written interviews only/);
+  assert.match(participantInformation, /biometric identification/);
+  assert.match(participantInformation, /material guide or setting change clears this approval/);
+  assert.match(study, /gaps=\{study\.participant_information_gaps \?\? \[\]\}/);
+  assert.match(study, /key=\{`\$\{study\.id\}:\$\{study\.updated_at\}`\}/);
+  assert.match(types, /dpia_status\?: "" \| "completed"/);
+  assert.doesNotMatch(types, /not_required/);
+  assert.match(
+    study,
+    /publicSpokenGloballyAvailable && studySpokenProcessingReady/,
+  );
+  assert.match(
+    study,
+    /!pendingPilotFinalize && \(!configured \|\| !studySpokenProcessingReady\)/,
+  );
+  assert.match(
+    study,
+    /Approve the exact spoken-processing scope in Participant information/,
+  );
+  assert.match(
+    study,
+    /spoken pilot stays disabled and participation links remain written-only/,
+  );
   assert.match(
     study,
     /disabled=\{[\s\S]*?createInvite\.isPending \|\|[\s\S]*?!participantInformationIsReady\(study\) \|\|[\s\S]*?!studyLimitsAreValid[\s\S]*?\}/,

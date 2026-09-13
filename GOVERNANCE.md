@@ -49,10 +49,10 @@ merged back into `develop`. Releases are tagged from reviewed `main` commits.
 Force pushes to either protected branch and movement or deletion of release
 tags are prohibited.
 
-Pull requests must pass the applicable engine, API, web, self-hosting,
-dependency, CodeQL, secret/configuration, and DCO checks. Required checks are a
-floor: a maintainer may request focused tests, threat analysis, migration
-evidence, or a release rehearsal proportional to risk.
+Pull requests must pass the applicable engine, API, web, browser-extension,
+macOS Companion, self-hosting, dependency, CodeQL, secret/configuration, and DCO
+checks. Required checks are a floor: a maintainer may request focused tests,
+threat analysis, migration evidence, or a release rehearsal proportional to risk.
 
 Once two active maintainers exist, a substantive change requires approval from
 at least one non-author maintainer. Authors do not approve their own work.
@@ -84,9 +84,13 @@ changes require migration notes and an explicit changelog entry.
 ## Community and hosted boundary
 
 The community repository contains the research engine, application API,
-background worker, web workspace, database migrations, self-hosting definition,
-and tests needed to run the research application. Provider connections use
-operator-supplied accounts and explicit processing controls.
+background worker, web workspace, browser-extension source, macOS Companion
+source, database migrations, self-hosting definition, and tests needed to run
+the research application.
+Provider connections use operator-supplied accounts and explicit processing
+controls. Official signed/notarized native binaries and update feeds require
+separate release authority and are not distributed by the source-release
+pipeline.
 
 Billing, checkout, subscriptions, commercial-plan enforcement, hosted-service
 administration, the production deployment, the marketing site, customer data,

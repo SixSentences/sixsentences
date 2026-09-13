@@ -1,22 +1,25 @@
-# SixSentences web client
+# SixSentences web application
 
-The open-source Next.js client for the SixSentences research workspace.
+The open-source Next.js application for the self-hosted SixSentences research
+workspace.
 
 It provides the browser interface for literature search and review, the
 research library, projects, research data, figures, surveys, interviews,
-knowledge, brainstorming, and manuscript/LaTeX workflows. The client is useful
-for inspecting, testing, and extending those interfaces, but it does not contain
-the services that execute them.
+knowledge, brainstorming, manuscript/LaTeX workflows, and the scoped developer
+API reference. It connects to the API shipped in this repository at
+[`services/api`](../../services/api).
 
 > [!IMPORTANT]
-> This directory is **not a complete self-hosted SixSentences deployment**. It
-> requires a separately supplied API that implements the HTTP, Server-Sent
-> Events, and WebSocket contracts consumed by the client. The Python package in
-> the repository root is not that API server.
+> Run this application as part of the repository's self-hosted stack. Browser
+> requests, Server-Sent Events, public written interviews, and spoken-interview
+> WebSockets must all target the same trusted API deployment. The web image never
+> falls back to the hosted SixSentences service.
 
-## Distribution boundary
+## Community boundary
 
-This snapshot is intentionally narrower than the hosted product.
+The community application contains the complete research workspace UI. Its
+boundary removes hosted commercial and operator-only surfaces, not research
+features.
 
 Included:
 
@@ -24,43 +27,45 @@ Included:
 - typed browser-side API contracts and query state;
 - interfaces for the multi-stage research workflow;
 - source, citation, review, and provenance presentation;
-- authentication and public-sharing client flows; and
+- authentication, public sharing, written and spoken interview flows;
+- the deployment-scoped developer API reference; and
 - focused UI, accessibility, privacy, and security tests.
 
 Not included:
 
-- the marketing and landing website;
-- the hosted SaaS backend, databases, workers, model providers, or prompts;
-- server-side identity, email, collaboration, and storage services;
 - billing, pricing, checkout, subscriptions, administration, or operator tools;
-- deployment, monitoring, analytics, backup, and recovery infrastructure;
-- the browser extension or macOS companion; or
+- the separate marketing/landing website;
+- the browser-extension runtime, which is built separately from
+  `../browser-extension`;
+- the macOS Companion source, which lives separately at
+  `../companion-macos`; or
 - production configuration, credentials, customer data, or historical binary
   downloads.
 
-Some screens describe API-backed capabilities that a compatible API may choose
-not to implement. The client must handle those capabilities as unavailable; it
-must not silently redirect a self-hosted build to the official production API.
+Optional provider-backed capabilities remain unavailable until the deployment
+operator configures them in the self-hosted API. The client handles unavailable
+capabilities explicitly and never redirects a community build to an official
+production API.
 
 ## Requirements
 
 - Node.js 22.9 or newer
 - npm with the committed `package-lock.json`
-- a compatible API for authenticated and research-workflow actions
+- the repository's self-hosted API for authenticated and research-workflow actions
 
 ## Configure
 
-Copy the public development defaults:
+Copy the local development defaults:
 
 ```bash
 cp .env.example .env.local
 ```
 
-The client recognizes these build-time variables:
+The application recognizes these build-time variables:
 
 | Variable | Purpose | Development default |
 | --- | --- | --- |
-| `NEXT_PUBLIC_SIX_API_URL` | Trusted compatible API origin | `http://127.0.0.1:8000` |
+| `NEXT_PUBLIC_SIX_API_URL` | Trusted self-hosted API origin | `http://127.0.0.1:8000` |
 | `NEXT_PUBLIC_APP_URL` | Canonical client origin used for metadata and links | `http://localhost:3000` |
 | `NEXT_PUBLIC_LEGAL_BASE_URL` | Origin serving the deployment's `/terms`, `/privacy`, `/dpa`, and `/imprint` documents | empty |
 | `NEXT_PUBLIC_TERMS_VERSION` | Operator-published Terms version accepted during registration | empty |
@@ -78,10 +83,10 @@ Every `NEXT_PUBLIC_*` value is embedded in browser-delivered JavaScript. Never
 put a secret, private API key, OAuth client secret, or privileged credential in
 one of these variables.
 
-The API must explicitly allow the client's origin and implement its own
-authentication, authorization, storage, retention, and provider policies.
-Review [`src/lib/api.ts`](src/lib/api.ts) and the focused contract tests before
-claiming compatibility.
+The self-hosted API must explicitly allow the client's origin. Authentication,
+authorization, storage, retention, provider policy, and migrations are owned by
+the server and deployment configuration. Review [`src/lib/api.ts`](src/lib/api.ts)
+and the focused contract tests when changing the browser/server contract.
 
 ## Run
 
@@ -90,9 +95,8 @@ npm ci
 npm run dev
 ```
 
-Open <http://localhost:3000>. Static and unauthenticated surfaces can render
-without an API; API-backed actions will fail or remain unavailable until a
-compatible service is running.
+Open <http://localhost:3000>. Start the repository's API first; authenticated
+and research-workflow actions deliberately fail closed when it is unavailable.
 
 For a production-oriented source build:
 
@@ -103,10 +107,10 @@ npm run test:ui
 npm run build
 ```
 
-The repository does not publish a preconfigured production web image. A
-distributor is responsible for pinning the client revision, selecting a trusted
-API origin, reviewing the resulting dependency closure, and testing the exact
-artifact it deploys.
+The included Dockerfile builds the production web service. Production builds
+require explicit HTTPS app, API, and legal-document origins plus operator-owned
+legal-document versions; this prevents an image from silently targeting local
+development or hosted infrastructure.
 
 ## Application map
 
@@ -117,6 +121,7 @@ artifact it deploys.
 | Library, source identity, citations, and sharing | `src/components/library` |
 | Research data and scientific figures | `src/app/(app)/data`, `src/app/(app)/figures` |
 | Surveys and interviews | `src/app/(app)/surveys`, `src/app/(app)/interviews` |
+| Developer API reference | `src/app/(app)/docs` |
 | Manuscript and LaTeX workspace | `src/app/(app)/writer`, `src/components/writer` |
 | Knowledge and brainstorming | `src/app/(app)/knowledge`, `src/app/(app)/brainstorming` |
 | API types, transport, and error contracts | `src/lib/api.ts`, `src/lib/types.ts` |
@@ -125,7 +130,7 @@ artifact it deploys.
 
 ## Security and privacy notes
 
-- Treat the configured API origin as a security boundary. The browser sends
+- Treat the self-hosted API origin as a security boundary. The browser sends
   authenticated requests and research content to that origin.
 - The current client keeps its opaque bearer token in browser local storage.
   A deployment must account for that model when reviewing XSS defenses, CSP,

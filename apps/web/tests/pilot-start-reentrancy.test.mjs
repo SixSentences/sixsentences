@@ -25,7 +25,7 @@ function harness(overrides = {}) {
     useCallback: (fn) => fn,
     pilotStartInFlight: { current: false },
     session: null, settlingSession: false, pendingPilotFinalize: null,
-    study: {}, studyId: "synthetic",
+    study: { spoken_processing_ready: true }, studyId: "synthetic",
     minLiveSessionMinutes: 30, voiceStudyLimitsAreValid: () => true,
     setStarting: (value) => calls.push(["starting", value]),
     setSession: (value) => calls.push(["session", value]),
@@ -56,6 +56,13 @@ test("an active pilot or unfinished settlement cannot allocate another pilot", a
     await run.context.startPilot();
     assert.equal(run.calls.length, 0);
   }
+});
+
+test("an unapproved spoken scope cannot allocate a pilot", async () => {
+  const run = harness({ study: { spoken_processing_ready: false } });
+  await run.context.startPilot();
+  assert.equal(run.calls.filter((call) => call === "request").length, 0);
+  assert.ok(run.calls.includes("error"));
 });
 
 test("failed starts release only the local activation lock", async () => {

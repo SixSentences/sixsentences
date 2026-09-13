@@ -4,6 +4,7 @@
 
 # Security, policy, contribution, and release authority.
 /.github/ @L4XB
+/.github/release-maintainers.allowed_signers @L4XB
 /CODE_OF_CONDUCT.md @L4XB
 /CLA.md @L4XB
 /CONTRIBUTING.md @L4XB
@@ -18,8 +19,11 @@
 # Persistent state, trust boundaries, and distributable artifacts.
 /services/api/ @L4XB
 /apps/web/ @L4XB
+/apps/browser-extension/ @L4XB
+/apps/companion-macos/ @L4XB
 /deploy/community/ @L4XB
 /compose.yaml @L4XB
-/Dockerfile @L4XB
+/services/api/Dockerfile @L4XB
+/services/api/Dockerfile.dockerignore @L4XB
 /pyproject.toml @L4XB
 /uv.lock @L4XB

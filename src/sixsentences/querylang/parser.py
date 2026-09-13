@@ -10,7 +10,6 @@ Grammar (recursive descent):
 Operators are case-insensitive keywords (AND/OR/NOT). Fields: title, abstract.
 """
 
-import re
 from dataclasses import dataclass
 
 from sixsentences.querylang.ast import And, Field_, Node, Not, Or, Term
@@ -20,19 +19,6 @@ class QueryParseError(ValueError):
     """Raised when a boolean query is malformed."""
 
 
-_TOKEN_RE = re.compile(
-    r"""
-    \s*(
-        (?P<lparen>\()
-      | (?P<rparen>\))
-      | (?P<phrase>"[^"]*")
-      | (?P<word>[^\s()"]+)
-    )
-    """,
-    re.VERBOSE,
-)
-
-
 @dataclass
 class _Tok:
     kind: str
@@ -40,28 +26,40 @@ class _Tok:
 
 
 def _tokenize(text: str) -> list[_Tok]:
+    """Tokenize in one pass without input-dependent regular expressions."""
+
     tokens: list[_Tok] = []
     pos = 0
     while pos < len(text):
-        m = _TOKEN_RE.match(text, pos)
-        if m is None:
-            if text[pos:].strip() == "":
-                break
-            raise QueryParseError(f"cannot tokenize at position {pos}: {text[pos : pos + 20]!r}")
-        pos = m.end()
-        if m.group("lparen"):
+        while pos < len(text) and text[pos].isspace():
+            pos += 1
+        if pos == len(text):
+            break
+
+        character = text[pos]
+        if character == "(":
             tokens.append(_Tok("lparen", "("))
-        elif m.group("rparen"):
+            pos += 1
+        elif character == ")":
             tokens.append(_Tok("rparen", ")"))
-        elif m.group("phrase"):
-            tokens.append(_Tok("phrase", m.group("phrase")[1:-1]))
+            pos += 1
+        elif character == '"':
+            closing = text.find('"', pos + 1)
+            if closing == -1:
+                raise QueryParseError(f"unterminated phrase at position {pos}")
+            tokens.append(_Tok("phrase", text[pos + 1 : closing]))
+            pos = closing + 1
         else:
-            word = m.group("word")
+            end = pos + 1
+            while end < len(text) and not text[end].isspace() and text[end] not in '()"':
+                end += 1
+            word = text[pos:end]
             upper = word.upper()
             if upper in ("AND", "OR", "NOT"):
                 tokens.append(_Tok(upper, word))
             else:
                 tokens.append(_Tok("word", word))
+            pos = end
     return tokens
 
 

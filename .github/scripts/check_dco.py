@@ -13,6 +13,10 @@ from typing import Final
 
 _IDENTITY_RE: Final = re.compile(r"^(?P<name>[^<>\r\n]+?)\s+<(?P<email>[^<>\s@]+@[^<>\s@]+)>$")
 _OBJECT_ID_RE: Final = re.compile(r"^[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?$")
+_GITHUB_NOREPLY_RE: Final = re.compile(
+    r"^(?:[0-9]+\+)?(?P<login>[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?)"
+    r"@users\.noreply\.github\.com$"
+)
 _DEPENDABOT_PR_AUTHOR: Final = "dependabot[bot]"
 _DEPENDABOT_FOOTER: Final = "Signed-off-by: dependabot[bot] <support@github.com>"
 
@@ -40,6 +44,15 @@ class Identity:
 
         return f"{self.name} <{self.email}>"
 
+    def matches(self, other: Identity) -> bool:
+        """Match an exact identity or two official no-reply aliases of one GitHub login."""
+
+        if self == other:
+            return True
+        own_login = _github_noreply_login(self.email)
+        other_login = _github_noreply_login(other.email)
+        return own_login is not None and own_login == other_login
+
 
 @dataclass(frozen=True)
 class IdentityTrailers:
@@ -56,6 +69,19 @@ _DEPENDABOT_AUTHORS: Final = frozenset(
     }
 )
 _DEPENDABOT_SIGNOFF: Final = Identity.parse("dependabot[bot] <support@github.com>")
+
+
+def _github_noreply_login(email: str) -> str | None:
+    """Return the login encoded in an official GitHub no-reply address."""
+
+    match = _GITHUB_NOREPLY_RE.fullmatch(email)
+    return match.group("login") if match is not None else None
+
+
+def _contains_identity(identities: set[Identity], expected: Identity) -> bool:
+    """Return whether a sign-off represents the expected public identity."""
+
+    return any(expected.matches(candidate) for candidate in identities)
 
 
 def parse_trailer_output(output: str) -> IdentityTrailers:
@@ -136,14 +162,18 @@ def validate_identities(
 
     errors: list[str] = []
     available = set(trailers.signoffs)
-    if pull_request_author == _DEPENDABOT_PR_AUTHOR and author in _DEPENDABOT_AUTHORS:
-        if _DEPENDABOT_SIGNOFF not in available:
+    if pull_request_author == _DEPENDABOT_PR_AUTHOR:
+        if author not in _DEPENDABOT_AUTHORS:
+            errors.append(
+                "Dependabot-owned pull requests may contain only Dependabot-authored commits"
+            )
+        elif _DEPENDABOT_SIGNOFF not in available:
             errors.append("trusted Dependabot commit is missing its GitHub bot sign-off")
-    elif author not in available:
+    elif not _contains_identity(available, author):
         errors.append(f"commit author is not signed off: {author.label()}")
 
     for coauthor in dict.fromkeys(trailers.coauthors):
-        if coauthor not in available:
+        if not _contains_identity(available, coauthor):
             errors.append(f"co-author is not signed off: {coauthor.label()}")
     return errors
 

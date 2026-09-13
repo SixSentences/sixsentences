@@ -59,8 +59,8 @@ export function BrowserCaptureDevices() {
           <DialogTitle>{german ? "Verbundene Browser" : "Connected browsers"}</DialogTitle>
           <DialogDescription>
             {german
-              ? "Verwalte die widerrufbaren Zugänge kompatibler Capture-Clients. Diese Open-Source-Distribution enthält keine Browser-Erweiterung."
-              : "Manage revocable access for compatible capture clients. This open-source distribution does not include a browser extension."}
+              ? "Verwalte die widerrufbaren Zugänge von Browser Capture. Baue die Erweiterung deployment-spezifisch aus apps/browser-extension."
+              : "Manage revocable Browser Capture access. Build the deployment-specific extension from apps/browser-extension."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
