@@ -81,15 +81,48 @@ before accepting real users or research data.
 ```console
 git clone --branch v0.2.0-alpha.1 --depth 1 https://github.com/SixSentences/sixsentences.git
 cd sixsentences
-bash deploy/community/init-env.sh --local
-docker compose --env-file .env.selfhost up --build --detach --wait
+make up
 ```
 
-Open <http://localhost>. Read the
-[self-hosting guide](deploy/community/README.md) before enabling registration,
-mail, external models, web search, or spoken interviews, and read the
-[backup and restore runbook](deploy/community/BACKUP-RESTORE.md) before storing
-user data.
+Open <http://localhost> and sign in.
+
+`make up` runs [`deploy/community/quickstart.sh`](deploy/community/quickstart.sh):
+it writes a private local configuration, runs the fail-closed preflight, builds
+the images, starts the stack health-gated, and prompts once for the first owner
+account. That last step matters — self-signup is off until you configure mail,
+so without an owner account nobody can sign in. The script never overwrites an
+existing configuration and prints no secret value.
+
+A tagged release also publishes the two images, so a deployment can skip the
+build entirely:
+
+```console
+export SIX_API_IMAGE=ghcr.io/sixsentences/community-api:v0.2.0-alpha.1
+export SIX_WEB_IMAGE=ghcr.io/sixsentences/community-web:v0.2.0-alpha.1-localhost
+make up
+```
+
+The web client bakes its public origin at build time, so the published web image
+serves `http://localhost` only; a public TLS deployment builds its own with
+`make build-up`.
+
+<details>
+<summary>The same start as individual commands</summary>
+
+```console
+bash deploy/community/init-env.sh --local
+bash deploy/community/preflight.sh .env.selfhost
+docker compose --env-file .env.selfhost up --build --detach --wait
+docker compose --env-file .env.selfhost run --rm api \
+  six-community auth create-owner --email you@example.org --org "My Lab"
+```
+
+</details>
+
+Read the [self-hosting guide](deploy/community/README.md) before enabling
+registration, mail, external models, web search, or spoken interviews, and read
+the [backup and restore runbook](deploy/community/BACKUP-RESTORE.md) before
+storing user data. `make help` lists the other deployment shortcuts.
 
 macOS users can also build the source-only
 [Companion](apps/companion-macos/README.md) against the same deployment. It adds
@@ -120,8 +153,9 @@ services/api/           Application API, migrations, worker, and tests
 apps/web/               Next.js research workspace
 apps/browser-extension/ Self-hostable Chromium capture client
 apps/companion-macos/   Native Companion source, tests, and local bundle script
-deploy/community/       Self-hosting, preflight, backup, and restore tooling
+deploy/community/       Self-hosting, quick start, preflight, backup, and restore
 compose.yaml            PostgreSQL + API + worker + web + Caddy
+Makefile                Deployment shortcuts (make help)
 ```
 
 Outbound services are optional and use only credentials supplied by the

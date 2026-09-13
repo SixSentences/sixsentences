@@ -211,6 +211,51 @@ class SelfHostDeploymentTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, f"{script.name}: {result.stderr}")
 
+    def test_quickstart_rejects_bad_arguments_before_creating_anything(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "deployment.env"
+            environment = dict(os.environ)
+            environment.pop("SIX_API_IMAGE", None)
+            environment.pop("SIX_WEB_IMAGE", None)
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(COMMUNITY / "quickstart.sh"),
+                    "--pull",
+                    "--env-file",
+                    str(target),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=environment,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("SIX_API_IMAGE", result.stderr)
+            self.assertFalse(target.exists())
+
+    def test_quickstart_preflights_waits_for_health_and_bootstraps_one_owner(self) -> None:
+        source = (COMMUNITY / "quickstart.sh").read_text(encoding="utf-8")
+        preflight_at = source.index("preflight.sh")
+        start_at = source.index("compose up --detach --wait")
+        self.assertLess(preflight_at, start_at, "the preflight must run before the stack starts")
+        self.assertIn("/health/ready", source)
+        self.assertIn("auth create-owner", source)
+        self.assertNotIn("--password", source)
+
+    def test_quickstart_never_overwrites_an_existing_environment_file(self) -> None:
+        source = (COMMUNITY / "quickstart.sh").read_text(encoding="utf-8")
+        self.assertIn("Reusing the existing environment file", source)
+        self.assertIn("init-env.sh", source)
+
+    def test_makefile_shortcuts_use_the_selected_environment_file(self) -> None:
+        makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+        self.assertIn("ENV_FILE ?= .env.selfhost", makefile)
+        self.assertIn("docker compose --env-file $(ENV_FILE)", makefile)
+        for target in ("up:", "down:", "owner:", "preflight:", "backup:"):
+            self.assertIn(f"\n{target}", makefile)
+        self.assertNotIn("--password", makefile)
+
     def test_preflight_enforces_compose_version_for_gateway_selection(self) -> None:
         source = (COMMUNITY / "preflight.sh").read_text(encoding="utf-8")
         self.assertIn("Docker Compose 2.33.1 or newer", source)
