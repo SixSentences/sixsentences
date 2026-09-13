@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BookOpen,
   ChevronsUpDown,
   Map as MapIcon,
   KeyRound,
@@ -9,6 +10,7 @@ import {
   Settings,
   Users,
 } from "lucide-react";
+import Link from "next/link";
 
 import type { SettingsTab } from "@/components/settings/settings-dialog";
 import {
@@ -67,6 +69,11 @@ export default function UserMenu({
           onSelect={() => window.dispatchEvent(new CustomEvent("six:start-tour"))}
         >
           <MapIcon className="size-4" /> {isGerman ? "Produkttour" : "Product tour"}
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/docs">
+            <BookOpen className="size-4" /> {isGerman ? "API-Dokumentation" : "API documentation"}
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <a

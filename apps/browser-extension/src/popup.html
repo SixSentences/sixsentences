@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" href="popup.css">
+    <title>SixSentences Capture</title>
+  </head>
+  <body>
+    <header>
+      <img class="mark" src="icons/icon-32.png" alt="">
+      <div><strong>SIXSENTENCES_</strong><small>Browser Capture <span class="version" aria-hidden="true">·</span> <span id="extensionVersion">Version</span></small></div>
+      <button id="disconnectButton" class="disconnect" type="button" hidden>Disconnect</button>
+    </header>
+    <main>
+      <section id="loading" class="state" role="status" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <div class="eyebrow">One-click capture</div>
+        <h1 id="loadingTitle">Reading this tab…</h1>
+        <p id="loadingText">Collecting the available source details.</p>
+      </section>
+      <section id="connect" class="state" hidden>
+        <div class="connect-icon" aria-hidden="true">+</div>
+        <div class="eyebrow">Connect once</div>
+        <h1>Connect your Library</h1>
+        <p>Your password and browser session never enter this extension.</p>
+        <button id="connectButton">Connect account</button>
+      </section>
+      <section id="done" class="state" hidden aria-live="polite">
+        <div id="doneIcon" class="result-icon" data-tone="created">✓</div>
+        <div id="doneEyebrow" class="eyebrow result-eyebrow">Saved to your Library</div>
+        <h1 id="doneTitle">Saved</h1>
+        <p id="doneText"></p>
+      </section>
+      <section id="failed" class="state" hidden role="alert" aria-live="assertive">
+        <div class="result-icon" data-tone="error">!</div>
+        <div class="eyebrow error-eyebrow">Capture stopped</div>
+        <h1>Could not save this source</h1>
+        <p id="error"></p>
+        <p class="hint">The save could not be confirmed. Retrying is safe, or check your Library first.</p>
+      </section>
+    </main>
+    <script src="capture-result.js"></script>
+    <script src="capture-policy.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

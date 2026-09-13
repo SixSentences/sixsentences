@@ -12,6 +12,10 @@ const GAP_LABELS: Readonly<Record<string, string>> = {
   "supervisory authority": "Supervisory authority and complaint contact",
   "reachable study contact email": "Valid study contact email",
   "HTTPS privacy notice URL": "A valid HTTPS privacy notice link, or leave this optional field empty",
+  "completed data protection impact assessment": "Completed and approved DPIA for this AI-led interview",
+  "DPIA decision reference and reasoning": "DPIA reference and accountable decision reasoning",
+  "AI interview prohibited-use attestation": "Confirmation that this study stays within the permitted AI-interview scope",
+  "DPIA approval bound to the current study scope": "Fresh DPIA approval for the current guide, settings and participant information",
   "researcher review of the legal basis and participant information": "Your explicit review confirmation after completing the fields",
   "Review the participant information fields.": "Review the participant information fields",
 };

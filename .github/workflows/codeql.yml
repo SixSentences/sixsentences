@@ -2,9 +2,9 @@ name: CodeQL
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   schedule:
     - cron: "27 4 * * 3"
   workflow_dispatch:
@@ -21,16 +21,24 @@ permissions:
 jobs:
   analyze:
     name: ${{ matrix.name }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
           - language: python
             name: Analyze Python
+            os: ubuntu-24.04
+            build-mode: none
           - language: javascript-typescript
             name: Analyze JavaScript / TypeScript
+            os: ubuntu-24.04
+            build-mode: none
+          - language: swift
+            name: Analyze Swift
+            os: macos-26
+            build-mode: manual
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -40,7 +48,18 @@ jobs:
         uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
         with:
           languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
           queries: security-extended
+      - name: Build Swift for CodeQL
+        if: matrix.language == 'swift'
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.1.1.app/Contents/Developer
+          SWIFTPM_MODULECACHE_OVERRIDE: /tmp/sixsentences-codeql-swift-cache
+          CLANG_MODULE_CACHE_PATH: /tmp/sixsentences-codeql-clang-cache
+        run: |
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version | grep -Fx "Xcode 26.1.1"
+          swift build --package-path apps/companion-macos --disable-sandbox
       - name: Analyze
         uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
         with:

@@ -15,13 +15,24 @@ COPY . .
 ARG NEXT_PUBLIC_SIX_API_URL
 ARG NEXT_PUBLIC_APP_URL
 ARG NEXT_PUBLIC_LEGAL_BASE_URL
+ARG SIX_ALLOW_INSECURE_LOCAL_HTTP="false"
 ARG NEXT_PUBLIC_TERMS_VERSION
 ARG NEXT_PUBLIC_PRIVACY_VERSION
 ARG NEXT_PUBLIC_DPA_VERSION
 ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=""
-RUN case "$NEXT_PUBLIC_SIX_API_URL" in https://*) ;; *) echo "NEXT_PUBLIC_SIX_API_URL must be an explicit HTTPS URL" >&2; exit 1 ;; esac \
- && case "$NEXT_PUBLIC_APP_URL" in https://*) ;; *) echo "NEXT_PUBLIC_APP_URL must be an explicit HTTPS URL" >&2; exit 1 ;; esac \
- && case "$NEXT_PUBLIC_LEGAL_BASE_URL" in https://*) ;; *) echo "NEXT_PUBLIC_LEGAL_BASE_URL must be an explicit HTTPS URL" >&2; exit 1 ;; esac \
+RUN validate_public_url() { \
+      value="$1"; name="$2"; \
+      case "$value" in \
+        https://*) return 0 ;; \
+        http://localhost|http://localhost:*|http://localhost/*|http://127.0.0.1|http://127.0.0.1:*|http://127.0.0.1/*) \
+          test "$SIX_ALLOW_INSECURE_LOCAL_HTTP" = "true" && return 0 ;; \
+      esac; \
+      echo "$name must be HTTPS (or loopback HTTP with the explicit local-build opt-in)" >&2; \
+      return 1; \
+    }; \
+    validate_public_url "$NEXT_PUBLIC_SIX_API_URL" NEXT_PUBLIC_SIX_API_URL \
+ && validate_public_url "$NEXT_PUBLIC_APP_URL" NEXT_PUBLIC_APP_URL \
+ && validate_public_url "$NEXT_PUBLIC_LEGAL_BASE_URL" NEXT_PUBLIC_LEGAL_BASE_URL \
  && test -n "$NEXT_PUBLIC_TERMS_VERSION" \
  && test -n "$NEXT_PUBLIC_PRIVACY_VERSION" \
  && test -n "$NEXT_PUBLIC_DPA_VERSION"

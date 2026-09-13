@@ -12,16 +12,16 @@ body:
     id: version
     attributes:
       label: Component and version
-      description: Name the affected component (web application or Python engine) and provide the release version or full commit hash.
-      placeholder: 0.1.0-alpha.1 or 0123456789abcdef...
+      description: Name the affected component and provide the release version or full commit hash.
+      placeholder: API, v0.2.0-alpha.1, commit 0123456789abcdef...
     validations:
       required: true
   - type: input
     id: environment
     attributes:
       label: Environment
-      description: Include relevant Python and/or Node.js versions, operating system, architecture, browser, and installation method.
-      placeholder: Web app, Node.js 22.9.0, Firefox 142, macOS arm64, npm
+      description: Include relevant Python, Node.js, Swift/Xcode, operating system, architecture, browser, and installation method.
+      placeholder: Companion, macOS 15, arm64, Xcode 16.4, source build
     validations:
       required: true
   - type: textarea
@@ -49,7 +49,7 @@ body:
     id: context
     attributes:
       label: Additional context
-      description: Mention the affected app route or engine command, data-source terms, provider configuration, or recent dependency changes when relevant. Do not include credentials or hosted-production details.
+      description: Mention the affected route, command, worker lane, migration, provider type, or deployment mode when relevant. Do not include credentials or hosted-production details.
   - type: checkboxes
     id: checks
     attributes:

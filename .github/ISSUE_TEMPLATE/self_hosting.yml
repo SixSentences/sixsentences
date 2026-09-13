@@ -1,0 +1,69 @@
+name: Self-hosting problem
+description: Report a reproducible install, migration, backup, restore, or container issue.
+title: "self-host: "
+labels:
+  - self-hosting
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use synthetic data and redact environment values. Never paste `.env.selfhost`, tokens, database contents, public capability URLs, or production logs. Report security issues privately.
+  - type: input
+    id: version
+    attributes:
+      label: SixSentences version
+      description: Provide the release tag or full commit hash. For images, include the immutable digest.
+      placeholder: v0.2.0-alpha.1, sha256:...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Fresh installation
+        - Upgrade or migration
+        - API or worker health
+        - Web or proxy health
+        - Backup
+        - Restore
+        - Provider configuration
+        - Other deployment behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, architecture, Docker Engine/Compose versions, local or TLS mode, and relevant resource limits. Redact hostnames when necessary.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Exact sanitized commands and the smallest sequence that reproduces the problem.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Sanitized output
+      description: Include relevant health or error output with every secret, personal datum, research record, and capability URL removed.
+      render: text
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I ran `bash deploy/community/preflight.sh .env.selfhost` and summarized the result without pasting secrets.
+          required: true
+        - label: This report contains no secret, personal data, participant content, database content, or production detail.
+          required: true
+        - label: This is not a security vulnerability or an incident requiring private coordination.
+          required: true
+        - label: I agree to follow the Code of Conduct.
+          required: true
