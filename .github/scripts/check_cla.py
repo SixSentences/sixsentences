@@ -16,6 +16,11 @@ CLA_VERSION: Final = "1.0"
 ACCEPTANCE: Final = f"I have read and agree to the SixSentences CLA v{CLA_VERSION}."
 STATUS_CONTEXT: Final = "CLA / acceptance"
 EXEMPT_AUTHORS: Final = frozenset({"dependabot[bot]"})
+# Marks the one reminder this workflow posts, so a pull request never collects a
+# second copy. The marker is an HTML comment: readers do not see it, and the
+# reminder can never be mistaken for an acceptance, which has to be the exact
+# sentence and nothing else.
+GUIDANCE_MARKER: Final = "<!-- cla-acceptance-guidance -->"
 
 
 def _request(url: str, *, token: str, method: str = "GET", payload: object | None = None) -> object:
@@ -114,12 +119,59 @@ def _set_status(
     )
 
 
+def guidance_is_needed(comments: list[dict[str, object]]) -> bool:
+    """True when this pull request has not been reminded yet."""
+
+    return not any(GUIDANCE_MARKER in str(comment.get("body") or "") for comment in comments)
+
+
+def guidance_body(*, repository: str, cla_sha: str) -> str:
+    """Return the reminder that tells an author how to accept the CLA."""
+
+    base = f"https://github.com/{repository}/blob/{cla_sha}"
+    return f"""{GUIDANCE_MARKER}
+Thanks for the pull request. One required step is still open, and it is not one
+a maintainer can complete for you.
+
+**Contributor License Agreement.** This project records acceptance as a public
+comment on the pull request itself: there is no external CLA service and no
+separately stored token. Read [`CLA.md`]({base}/CLA.md) and post this exact
+sentence as a standalone comment here:
+
+```text
+{ACCEPTANCE}
+```
+
+The `{STATUS_CONTEXT}` status is bound to the exact head commit and is
+re-evaluated when you post the comment or push again, so nothing else is needed.
+
+Two further gates apply to every contribution and are described in
+[`CONTRIBUTING.md`]({base}/CONTRIBUTING.md): every commit carries your own
+`Signed-off-by` trailer (`git commit -s`) and is signed with your own key. A
+maintainer must not add either on your behalf.
+"""
+
+
+def _post_guidance(api_url: str, *, token: str, repository: str, number: int, cla_sha: str) -> None:
+    _request(
+        f"{api_url}/repos/{repository}/issues/{number}/comments",
+        token=token,
+        method="POST",
+        payload={"body": guidance_body(repository=repository, cla_sha=cla_sha)},
+    )
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", required=True)
     parser.add_argument("--number", required=True, type=int)
     parser.add_argument("--cla-sha", required=True)
     parser.add_argument("--api-url", default="https://api.github.com")
+    parser.add_argument(
+        "--remind",
+        action="store_true",
+        help="post a one-time comment explaining how to accept the CLA",
+    )
     return parser
 
 
@@ -165,6 +217,19 @@ def main(argv: list[str] | None = None) -> int:
     if accepted:
         print(f"CLA acceptance verified for @{author} on pull request #{args.number}.")
         return 0
+    if args.remind and guidance_is_needed(comments):
+        try:
+            _post_guidance(
+                args.api_url,
+                token=token,
+                repository=args.repository,
+                number=args.number,
+                cla_sha=args.cla_sha,
+            )
+        except (OSError, ValueError, urllib.error.HTTPError) as exc:
+            print(f"CLA reminder could not be posted: {exc}", file=sys.stderr)
+        else:
+            print(f"Posted the CLA reminder on pull request #{args.number}.")
     print(
         f"CLA acceptance is missing: @{author} must post the exact comment from CLA.md.",
         file=sys.stderr,
