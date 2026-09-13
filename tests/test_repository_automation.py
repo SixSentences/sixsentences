@@ -256,6 +256,29 @@ def test_workflow_job_environment_avoids_step_only_runner_context() -> None:
     assert invalid == []
 
 
+def test_cla_reminder_is_posted_once_and_never_counts_as_the_acceptance() -> None:
+    body = CLA.guidance_body(repository="SixSentences/sixsentences", cla_sha="a" * 40)
+
+    assert CLA.ACCEPTANCE in body
+    assert CLA.GUIDANCE_MARKER in body
+    assert "CONTRIBUTING.md" in body
+    assert CLA.guidance_is_needed([]) is True
+    assert CLA.guidance_is_needed([{"body": body}]) is False
+    # The reminder quotes the acceptance sentence. An acceptance is the exact
+    # sentence and nothing else, so quoting it must never accept on the author's
+    # behalf — not even when the author pastes the reminder back.
+    assert not CLA._accepted([{"user": {"login": "ada"}, "body": body}], author="ada")
+
+
+def test_cla_workflow_reminds_without_ever_checking_out_a_contribution() -> None:
+    workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "cla.yml").read_text(encoding="utf-8")
+
+    assert "--remind" in workflow
+    assert "pull-requests: write" in workflow
+    assert "ref: ${{ github.event.repository.default_branch }}" in workflow
+    assert "persist-credentials: false" in workflow
+
+
 def test_image_publication_is_bound_to_a_verified_release_tag() -> None:
     workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "publish-images.yml").read_text(
         encoding="utf-8"

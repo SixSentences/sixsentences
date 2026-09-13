@@ -151,6 +151,31 @@ authentication, tenancy, participant data, external providers, uploads,
 retention, deletion, or release automation receive an explicit security and
 privacy review.
 
+## Your first pull request
+
+Three requirements apply to every contribution. Automation reports each one, and
+none of them can be added by a maintainer on your behalf:
+
+```console
+# once per machine: sign your commits with your own key (SSH shown)
+git config commit.gpgsign true
+git config gpg.format ssh
+git config user.signingkey ~/.ssh/id_ed25519.pub
+
+# every commit: your own Developer Certificate of Origin sign-off
+git commit -s -m "fix: describe the change"
+```
+
+Then post this exact sentence as a standalone comment on the pull request:
+
+```text
+I have read and agree to the SixSentences CLA v1.0.
+```
+
+If the comment is missing, the pull request receives one automatic reminder with
+the same sentence; the `CLA / acceptance` status is re-evaluated as soon as you
+post it. The sections below explain why each requirement exists.
+
 ## DCO and contributor agreement
 
 SixSentences requires both the [Developer Certificate of Origin 1.1](DCO) and
