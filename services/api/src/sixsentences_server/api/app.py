@@ -613,6 +613,7 @@ from sixsentences_server.repositories.schemas import (
 from sixsentences_server.research_data import (
     DatasetImportError,
     dataset_context,
+    dataset_failure_detail,
     parse_dataset,
     render_dataset_chart,
     render_forest_plot,
@@ -785,6 +786,16 @@ def _abandon_companion_paper_reservation(
                 CompanionPaperChatReceiptRow.run_id.is_(None),
             )
         )
+
+
+def _log_identifier(value: str) -> str:
+    """Keep a caller-supplied identifier on the log line it belongs to.
+
+    A path parameter is caller-controlled text: a newline in it would let the
+    caller forge a second, fully-formed log record, which is how an audit trail
+    stops being evidence. Line breaks become spaces and the value is truncated.
+    """
+    return value.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")[:200]
 
 
 def _rate_limit_allowed(limiter: RateLimiterLike, key: str) -> bool:
@@ -12128,7 +12139,9 @@ def create_app() -> FastAPI:
         except HTTPException:
             raise
         except Exception as exc:
-            logging.getLogger(__name__).exception("writer chat for document %s failed", doc_id)
+            logging.getLogger(__name__).exception(
+                "writer chat for document %s failed", _log_identifier(doc_id)
+            )
             raise HTTPException(502, "the assistant is unavailable right now") from exc
         verification: dict[str, Any] | None = turn.verification
         applicable_edits = [edit for edit in turn.edits if edit.get("applicable")]
@@ -12307,7 +12320,7 @@ def create_app() -> FastAPI:
         request_finished = time.perf_counter()
         logging.getLogger(__name__).info(
             "writer chat completed document=%s mode=%s preparation_ms=%d model_ms=%d postprocess_ms=%d total_ms=%d input_chars=%d",
-            doc_id,
+            _log_identifier(doc_id),
             "local_edit" if local_edit else "research",
             round((preparation_finished - request_started) * 1000),
             round((model_finished - model_started) * 1000),
@@ -13106,7 +13119,15 @@ def create_app() -> FastAPI:
                 safe_path = safe_project_path(path)
             except LatexProjectImportError as exc:
                 raise HTTPException(422, str(exc)) from exc
-            if safe_path not in _writer_project_files(session, doc):
+            # Resolve to the *stored* project file name and use that from here
+            # on. The request never names a path on disk: it selects one of this
+            # document's own files, so a traversal or absolute path cannot be
+            # rebuilt downstream from a string that only had to compare equal.
+            stored_path = next(
+                (name for name in _writer_project_files(session, doc) if name == safe_path),
+                None,
+            )
+            if stored_path is None:
                 raise HTTPException(404, "Writer file not found")
         pdf_path = _writer_pdf_path(resolved_id)
         sync_path = _writer_synctex_path(resolved_id)
@@ -13116,7 +13137,7 @@ def create_app() -> FastAPI:
             result = synctex_forward(
                 pdf=pdf_path.read_bytes(),
                 synctex=sync_path.read_bytes(),
-                path=safe_path,
+                path=stored_path,
                 line=line,
                 column=column,
             )
@@ -14880,14 +14901,21 @@ def create_app() -> FastAPI:
                 if operation == "run_analysis":
                     label = str(action.get("name") or "Dataset analysis").strip()[:240]
                     label = label or "Dataset analysis"
+                    analysis_definition = dict(action.get("definition") or {})
                     try:
                         analysis = run_analysis(
                             dict(row.profile or {}),
                             kind=str(action.get("kind") or ""),
-                            definition=dict(action.get("definition") or {}),
+                            definition=analysis_definition,
                         )
                     except DatasetImportError as exc:
-                        record_failure(operation, label, str(exc))
+                        record_failure(
+                            operation,
+                            label,
+                            dataset_failure_detail(
+                                exc, column=str(analysis_definition.get("column") or "")
+                            ),
+                        )
                         continue
                     version = (
                         session.scalar(
@@ -14953,7 +14981,7 @@ def create_app() -> FastAPI:
                         )
                         continue
                     except DatasetImportError as exc:
-                        record_failure(operation, title, str(exc))
+                        record_failure(operation, title, dataset_failure_detail(exc))
                         continue
                     _require_storage(session, ctx, len(image))
                     fig = FigureRow(
@@ -15022,7 +15050,7 @@ def create_app() -> FastAPI:
                         )
                         continue
                     except DatasetImportError as exc:
-                        record_failure(operation, title, str(exc))
+                        record_failure(operation, title, dataset_failure_detail(exc))
                         continue
                     chart_files.append((fig.id, image))
                     results.append(
@@ -16046,7 +16074,7 @@ def create_app() -> FastAPI:
             ) from exc
         except Exception as exc:
             logging.getLogger(__name__).exception(
-                "repository manuscript preview failed analysis=%s", analysis_id
+                "repository manuscript preview failed analysis=%s", _log_identifier(analysis_id)
             )
             raise HTTPException(502, "repository prose generation is unavailable") from exc
         with db_session() as session:

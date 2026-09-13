@@ -40,6 +40,52 @@ class DatasetImportError(ValueError):
     pass
 
 
+# Every sentence a failed data operation is allowed to show a caller. The API
+# answers with this catalogue's own copy of the text and never with the
+# exception's: a message that was not written for disclosure — a future
+# ``raise`` that quotes a path, a third-party library's wording — then cannot
+# reach a response merely by travelling inside a ``DatasetImportError``.
+NO_NUMERIC_COLUMN = "column {column} contains no numeric values"
+_GENERIC_FAILURE = "this data operation could not run on the stored dataset"
+_DISCLOSABLE_FAILURES: frozenset[str] = frozenset(
+    {
+        "analysis kind must be descriptive, missingness, group_summary, "
+        "correlation or meta_analysis",
+        "correlation is undefined for a constant column",
+        "correlation needs at least two complete numeric pairs",
+        "every JSON record must be an object",
+        "group metric must be mean, median, sum or count",
+        "JSON must contain a non-empty array of records",
+        "meta-analysis needs at least two effects with positive SE",
+        "not a readable JSON dataset",
+        "not a readable XLSX workbook",
+        "the dataset contains no rows",
+        "the dataset has no profiled records to analyse",
+        "the meta-analysis contains no studies to plot",
+        "the selected columns contain no plottable values",
+        "the selected grouping contains no numeric values",
+        "the table must be UTF-8 or Latin-1 text",
+        "the workbook contains no worksheet",
+        "upload CSV, TSV, JSON or XLSX data",
+    }
+)
+
+
+def dataset_failure_detail(error: DatasetImportError, *, column: str = "") -> str:
+    """Return the curated, user-facing text for a failed data operation.
+
+    ``column`` is the column the *caller* asked for, not one read back out of
+    the exception, so the one message that names a column keeps naming it.
+    """
+    reported = str(error)
+    for disclosable in _DISCLOSABLE_FAILURES:
+        if disclosable == reported:
+            return disclosable
+    if column and reported == NO_NUMERIC_COLUMN.format(column=repr(column)):
+        return NO_NUMERIC_COLUMN.format(column=repr(column))
+    return _GENERIC_FAILURE
+
+
 @dataclass
 class ParsedDataset:
     format: str
@@ -320,7 +366,7 @@ def run_analysis(
             number for record in records if (number := _as_number(record.get(column))) is not None
         ]
         if not values:
-            raise DatasetImportError(f"column {column!r} contains no numeric values")
+            raise DatasetImportError(NO_NUMERIC_COLUMN.format(column=repr(column)))
         deviation = statistics.stdev(values) if len(values) > 1 else 0.0
         return {
             "kind": kind,
