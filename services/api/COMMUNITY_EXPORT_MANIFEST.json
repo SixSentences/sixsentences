@@ -277,10 +277,10 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
-      "bytes": 1507936,
+      "bytes": 1508080,
       "mode": "0644",
       "path": "src/sixsentences_server/api/app.py",
-      "sha256": "6f0fef299cbd309737c24bc1ec94c90dfcfe8b4bead9dfc77ec5a88e1b0cb29e"
+      "sha256": "f6fc34382c718d12f5ca3e41f85f6844116121a476878e762471768b236f7092"
     },
     {
       "bytes": 18781,
@@ -541,10 +541,10 @@
       "sha256": "9bf77515b7afd10ff7e09b59abc98e0080226d11baf050d8d47b6cdcbd7fc6a7"
     },
     {
-      "bytes": 23740,
+      "bytes": 24649,
       "mode": "0644",
       "path": "src/sixsentences_server/core/study_participation.py",
-      "sha256": "93f17f1315c54d0af9d1a6986fdc267435d92f1a24baf40901a1dfd40faa9aa9"
+      "sha256": "9e93872d53aad64e0cbacbbf888c400612c554449120879a9c30924475a5447d"
     },
     {
       "bytes": 734,
@@ -1867,10 +1867,10 @@
       "sha256": "184e05605ef02b9c1d076ee185419c17690f7fe7180bd32d51222bb6aa7a2f5b"
     },
     {
-      "bytes": 4908,
+      "bytes": 5244,
       "mode": "0644",
       "path": "tests/test_mfa.py",
-      "sha256": "b325a8591b35956cbcb53b6ba14f279953dc388360cdd3525d83882dd3ec3041"
+      "sha256": "311292f58885a88d7a171b8327493cb4f76556908e39676d37981c973d1ee223"
     },
     {
       "bytes": 11749,
@@ -2167,10 +2167,10 @@
       "sha256": "dc920f5e78d9ad26931f41c7e079703cfe62d99653f690aa23e6bc71be4335af"
     },
     {
-      "bytes": 10194,
+      "bytes": 11080,
       "mode": "0644",
       "path": "tests/test_study_participation.py",
-      "sha256": "43161fd6637d5323d280a79cfa5dc5f155f9c87539210ac9aced9f33e26d445e"
+      "sha256": "c538504d5e526dd43a4cf50dff48c3aa056984c26a7866bcc017a57172f7d150"
     },
     {
       "bytes": 3943,

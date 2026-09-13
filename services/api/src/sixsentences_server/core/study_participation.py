@@ -27,7 +27,12 @@ class ParticipantInformation(BaseModel):
     """Editable draft facts; an explicit researcher review is required to publish."""
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    language: Literal["de", "en"] = "en"
+    # The notice language is a fact about the participants, not a display
+    # preference: Article 12(1) requires the information to be intelligible to
+    # them. Defaulting it would pick a language on the research team's behalf,
+    # which is exactly what this module refuses to do everywhere else, so an
+    # unset value is a gap rather than English.
+    language: Literal["", "de", "en"] = ""
     controller_name: str = Field(default="", max_length=240)
     controller_address: str = Field(default="", max_length=500)
     contact_email: str = Field(default="", max_length=320)
@@ -116,8 +121,14 @@ def invalidate_voice_study_approval(row: Any) -> None:
     row.participant_information = information
 
 
-def participant_information_gaps(value: Any) -> tuple[str, ...]:
-    """Check required facts without inventing a legal basis for a research team."""
+def participant_information_gaps(value: Any, *, study_language: str = "") -> tuple[str, ...]:
+    """Check required facts without inventing a legal basis for a research team.
+
+    ``study_language`` is the language the study itself states. A voice study
+    carries one, and it is part of the scope its DPIA approval is bound to, so it
+    counts as the stated language; a survey has no such field and must name one
+    in the participant information.
+    """
     try:
         info = ParticipantInformation.model_validate(value or {})
     except ValidationError:
@@ -135,6 +146,8 @@ def participant_information_gaps(value: Any) -> tuple[str, ...]:
         "supervisory_authority",
     )
     gaps = [name.replace("_", " ") for name in required if len(getattr(info, name)) < 3]
+    if (info.language or study_language) not in ("de", "en"):
+        gaps.append("participant information language")
     if not _is_reachable_email(info.contact_email):
         gaps.append("reachable study contact email")
     if info.privacy_notice_url:
@@ -177,10 +190,10 @@ def _is_reachable_email(value: str) -> bool:
 
 
 def voice_participant_information_gaps(
-    value: Any, *, expected_scope_fingerprint: str
+    value: Any, *, expected_scope_fingerprint: str, study_language: str = ""
 ) -> tuple[str, ...]:
     """Require a controller-owned DPIA decision before publishing an AI interview."""
-    gaps = list(participant_information_gaps(value))
+    gaps = list(participant_information_gaps(value, study_language=study_language))
     try:
         info = ParticipantInformation.model_validate(value or {})
     except ValidationError:
@@ -206,6 +219,7 @@ def voice_study_participation_ready(row: Any) -> bool:
     return not voice_participant_information_gaps(
         row.participant_information,
         expected_scope_fingerprint=voice_study_scope_fingerprint(row),
+        study_language=str(getattr(row, "language", "") or ""),
     )
 
 

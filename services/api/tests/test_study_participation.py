@@ -36,6 +36,25 @@ def test_information_completeness_does_not_invent_a_legal_basis() -> None:
     assert not participant_information_gaps(PARTICIPANT_INFORMATION)
 
 
+def test_participant_information_requires_an_explicit_notice_language() -> None:
+    """The language of a mandatory notice is a fact about the participants."""
+
+    assert "participant information language" in participant_information_gaps(
+        {**PARTICIPANT_INFORMATION, "language": ""}
+    )
+    for language in ("de", "en"):
+        assert not participant_information_gaps({**PARTICIPANT_INFORMATION, "language": language})
+        notice = participant_notice(
+            {**PARTICIPANT_INFORMATION, "language": language}, mode="survey"
+        )
+        assert notice["language"] == language
+    # A voice study states its own language, and that statement is part of the
+    # scope its DPIA approval is bound to, so it counts as the stated language.
+    assert not participant_information_gaps(
+        {**PARTICIPANT_INFORMATION, "language": ""}, study_language="de"
+    )
+
+
 def test_ai_interview_requires_a_documented_dpia_decision() -> None:
     generic = {
         key: value

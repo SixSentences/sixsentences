@@ -13,7 +13,10 @@ concurrency:
 permissions:
   contents: read
   issues: read
-  pull-requests: read
+  # Write access is used for exactly one thing: the reminder that tells an author
+  # how to accept the CLA. Contribution code is never checked out or executed by
+  # this workflow, so the elevated token never meets untrusted input.
+  pull-requests: write
   statuses: write
 
 jobs:
@@ -43,4 +46,5 @@ jobs:
             --repository "$GITHUB_REPOSITORY" \
             --number "$PR_NUMBER" \
             --cla-sha "$cla_source_sha" \
-            --api-url "$GITHUB_API_URL"
+            --api-url "$GITHUB_API_URL" \
+            --remind

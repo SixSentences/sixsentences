@@ -18424,7 +18424,9 @@ def create_app() -> FastAPI:
     ) -> dict[str, Any]:
         scope_fingerprint = _voice_study_scope_fingerprint(row)
         participant_gaps = voice_participant_information_gaps(
-            row.participant_information, expected_scope_fingerprint=scope_fingerprint
+            row.participant_information,
+            expected_scope_fingerprint=scope_fingerprint,
+            study_language=row.language,
         )
         payload: dict[str, Any] = {
             "id": row.public_id,
@@ -19220,6 +19222,7 @@ def create_app() -> FastAPI:
             voice_participant_information_gaps(
                 study.participant_information,
                 expected_scope_fingerprint=_voice_study_scope_fingerprint(study),
+                study_language=study.language,
             )
         )
         if require_spoken and (not voice_study_spoken_processing_ready(study)):
@@ -19967,6 +19970,7 @@ def create_app() -> FastAPI:
         if voice_participant_information_gaps(
             study.participant_information,
             expected_scope_fingerprint=_voice_study_scope_fingerprint(study),
+            study_language=study.language,
         ):
             return "unavailable"
         used = int(
