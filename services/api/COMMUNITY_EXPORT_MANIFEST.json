@@ -1867,10 +1867,10 @@
       "sha256": "184e05605ef02b9c1d076ee185419c17690f7fe7180bd32d51222bb6aa7a2f5b"
     },
     {
-      "bytes": 4908,
+      "bytes": 5244,
       "mode": "0644",
       "path": "tests/test_mfa.py",
-      "sha256": "b325a8591b35956cbcb53b6ba14f279953dc388360cdd3525d83882dd3ec3041"
+      "sha256": "311292f58885a88d7a171b8327493cb4f76556908e39676d37981c973d1ee223"
     },
     {
       "bytes": 11749,
