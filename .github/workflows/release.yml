@@ -1,34 +1,83 @@
-name: Release Python engine prerelease
+name: Release community prerelease
+run-name: Release ${{ inputs.tag }}
 
 on:
-  push:
-    tags:
-      - "v*-alpha.*"
-      - "v*-beta.*"
-      - "v*-rc.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing signed prerelease tag with a reviewed draft
+        required: true
+        type: string
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag }}
   cancel-in-progress: false
 
 permissions: {}
 
 jobs:
-  build:
-    name: Validate and build Python engine artifacts
+  validate:
+    name: Verify immutable release source
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 10
     permissions:
       contents: read
     outputs:
       package-version: ${{ steps.metadata.outputs.package-version }}
       public-version: ${{ steps.metadata.outputs.public-version }}
+      release-sha: ${{ steps.metadata.outputs.release-sha }}
+      source-date-epoch: ${{ steps.metadata.outputs.source-date-epoch }}
     steps:
-      - name: Check out the complete tagged history
+      - name: Check out the trusted main-branch release verifier
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
           fetch-tags: true
+          persist-credentials: false
+      - name: Verify the signed tag and validate its source as data
+        id: metadata
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          WORKFLOW_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [[ "$WORKFLOW_REF" != "refs/heads/main" ]]; then
+            echo "Release automation must be dispatched from main." >&2
+            exit 1
+          fi
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.(0|[1-9][0-9]*))?$ ]]; then
+            echo "Release tag has unsupported syntax." >&2
+            exit 1
+          fi
+
+          git config --local \
+            gpg.ssh.allowedSignersFile \
+            "$GITHUB_WORKSPACE/.github/release-maintainers.allowed_signers"
+          git verify-tag "$RELEASE_TAG"
+
+          release_sha="$(git rev-parse --verify "${RELEASE_TAG}^{commit}")"
+          git merge-base --is-ancestor "$release_sha" refs/remotes/origin/main
+          git worktree add --detach "$RUNNER_TEMP/release-source" "$release_sha"
+          python .github/scripts/release.py validate \
+            --root "$RUNNER_TEMP/release-source" \
+            --tag "$RELEASE_TAG" \
+            --main-ref refs/remotes/origin/main \
+            --github-output "$GITHUB_OUTPUT"
+          printf 'release-sha=%s\n' "$release_sha" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Validate and build Python engine artifacts
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the verified release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.release-sha }}
           persist-credentials: false
       - name: Set up pinned uv and Python
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
@@ -36,31 +85,22 @@ jobs:
           python-version: "3.12"
           version: "0.10.12"
           enable-cache: false
-      - name: Validate tag and release metadata
-        id: metadata
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          python .github/scripts/release.py validate \
-            --tag "$RELEASE_TAG" \
-            --main-ref refs/remotes/origin/main \
-            --github-output "$GITHUB_OUTPUT"
       - name: Install the frozen development environment
         run: uv sync --frozen --group dev
       - name: Run the release quality gate
         run: |
-          uv run ruff check .
-          uv run ruff format --check .
+          uv run ruff check src tests .github/scripts
+          uv run ruff format --check src tests .github/scripts
           uv run mypy src/sixsentences
           uv run pytest -q
       - name: Build one source distribution
         env:
-          SOURCE_DATE_EPOCH: ${{ steps.metadata.outputs.source-date-epoch }}
+          SOURCE_DATE_EPOCH: ${{ needs.validate.outputs.source-date-epoch }}
         run: uv build --sdist --out-dir release --no-create-gitignore
       - name: Build one wheel from the source distribution
         env:
-          PACKAGE_VERSION: ${{ steps.metadata.outputs.package-version }}
-          SOURCE_DATE_EPOCH: ${{ steps.metadata.outputs.source-date-epoch }}
+          PACKAGE_VERSION: ${{ needs.validate.outputs.package-version }}
+          SOURCE_DATE_EPOCH: ${{ needs.validate.outputs.source-date-epoch }}
         run: |
           uv build \
             "release/sixsentences_engine-${PACKAGE_VERSION}.tar.gz" \
@@ -69,7 +109,7 @@ jobs:
             --no-create-gitignore
       - name: Generate the locked runtime SBOM
         env:
-          PUBLIC_VERSION: ${{ steps.metadata.outputs.public-version }}
+          PUBLIC_VERSION: ${{ needs.validate.outputs.public-version }}
         run: |
           uv export \
             --frozen \
@@ -79,9 +119,9 @@ jobs:
             --output-file "release/sixsentences-engine-${PUBLIC_VERSION}.cdx.json"
       - name: Add and validate release metadata
         env:
-          PACKAGE_VERSION: ${{ steps.metadata.outputs.package-version }}
-          PUBLIC_VERSION: ${{ steps.metadata.outputs.public-version }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          PACKAGE_VERSION: ${{ needs.validate.outputs.package-version }}
+          PUBLIC_VERSION: ${{ needs.validate.outputs.public-version }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
           cp -- "docs/releases/${RELEASE_TAG}.md" release/RELEASE_NOTES.md
           python .github/scripts/release.py finalize \
@@ -91,7 +131,7 @@ jobs:
       - name: Preserve the Python engine release candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: python-engine-release-candidate-${{ github.ref_name }}
+          name: python-engine-release-candidate-${{ inputs.tag }}
           path: release/
           if-no-files-found: error
           retention-days: 14
@@ -100,20 +140,21 @@ jobs:
 
   verify:
     name: Install and verify Python engine artifacts
-    needs: build
+    needs: [validate, build]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
     steps:
-      - name: Check out release verification tools
+      - name: Check out verified release verification tools
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.validate.outputs.release-sha }}
           persist-credentials: false
       - name: Restore the release candidate
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: python-engine-release-candidate-${{ github.ref_name }}
+          name: python-engine-release-candidate-${{ inputs.tag }}
           path: release
       - name: Set up pinned uv and Python
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
@@ -125,7 +166,7 @@ jobs:
         run: python .github/scripts/release.py verify-checksums --directory release
       - name: Smoke-test the wheel in isolation
         env:
-          PACKAGE_VERSION: ${{ needs.build.outputs.package-version }}
+          PACKAGE_VERSION: ${{ needs.validate.outputs.package-version }}
         run: |
           uv run --isolated --no-project --python 3.12 \
             --with "./release/sixsentences_engine-${PACKAGE_VERSION}-py3-none-any.whl" \
@@ -136,7 +177,7 @@ jobs:
             sixsentences --help
       - name: Smoke-test the source distribution in isolation
         env:
-          PACKAGE_VERSION: ${{ needs.build.outputs.package-version }}
+          PACKAGE_VERSION: ${{ needs.validate.outputs.package-version }}
         run: |
           uv run --isolated --no-project --python 3.12 \
             --with "./release/sixsentences_engine-${PACKAGE_VERSION}.tar.gz" \
@@ -148,7 +189,7 @@ jobs:
 
   attest:
     name: Attest Python engine provenance and SBOM
-    needs: [build, verify]
+    needs: [validate, build, verify]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -160,7 +201,7 @@ jobs:
       - name: Restore the verified release candidate
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: python-engine-release-candidate-${{ github.ref_name }}
+          name: python-engine-release-candidate-${{ inputs.tag }}
           path: release
       - name: Attest build provenance
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
@@ -170,12 +211,49 @@ jobs:
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
-            release/sixsentences_engine-${{ needs.build.outputs.package-version }}-py3-none-any.whl
-            release/sixsentences_engine-${{ needs.build.outputs.package-version }}.tar.gz
-          sbom-path: release/sixsentences-engine-${{ needs.build.outputs.public-version }}.cdx.json
+            release/sixsentences_engine-${{ needs.validate.outputs.package-version }}-py3-none-any.whl
+            release/sixsentences_engine-${{ needs.validate.outputs.package-version }}.tar.gz
+          sbom-path: release/sixsentences-engine-${{ needs.validate.outputs.public-version }}.cdx.json
+
+  application-api:
+    name: Validate tagged application API and worker
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: services/api
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONHASHSEED: "42"
+      UV_PROJECT_ENVIRONMENT: /tmp/sixsentences-release-api-env
+    steps:
+      - name: Check out the verified release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.release-sha }}
+          persist-credentials: false
+      - name: Set up pinned uv and Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+          version: "0.10.12"
+          enable-cache: false
+      - name: Install the frozen API environment
+        run: uv sync --frozen --extra dev
+      - name: Run API quality, test, and boundary gates
+        run: |
+          uv run --frozen --no-sync ruff check src scripts tests
+          uv run --frozen --no-sync mypy src
+          uv run --frozen --no-sync pytest -q
+          uv run --frozen --no-sync python scripts/audit_community_export.py .
+          uv run --frozen --no-sync python scripts/check_web_contracts.py --require-complete
 
   web-source:
     name: Validate tagged web source (not a published artifact)
+    needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
@@ -194,9 +272,10 @@ jobs:
       NEXT_PUBLIC_DPA_VERSION: test-v1
       NEXT_PUBLIC_SIX_API_URL: http://127.0.0.1:8000
     steps:
-      - name: Check out the tagged source
+      - name: Check out the verified release source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.validate.outputs.release-sha }}
           persist-credentials: false
       - name: Set up pinned Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -213,67 +292,305 @@ jobs:
       - name: Build the tagged web source for production
         run: npm run build
 
-  publish:
-    name: Publish source prerelease with Python engine artifacts
-    needs: [build, attest, web-source]
+  browser-extension-source:
+    name: Validate tagged browser-extension source (Node 22.9)
+    needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: apps/browser-extension
+    steps:
+      - name: Check out the verified release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.release-sha }}
+          persist-credentials: false
+      - name: Set up pinned Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.9.0"
+          cache: npm
+          cache-dependency-path: apps/browser-extension/package-lock.json
+      - name: Install the locked extension environment
+        run: npm ci
+      - name: Test contracts and build an origin-bound unpacked runtime
+        env:
+          APP_ORIGIN: https://research.example.invalid
+          API_ORIGIN: https://research.example.invalid/api
+          SIX_EXTENSION_ALLOW_INSECURE_LOOPBACK: "false"
+        run: |
+          npm test
+          node scripts/build.mjs --out "$RUNNER_TEMP/sixsentences-browser-extension"
+
+  companion-macos-source:
+    name: Validate tagged macOS Companion source (Xcode 26.1.1)
+    needs: validate
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.1.1.app/Contents/Developer
+      SWIFTPM_MODULECACHE_OVERRIDE: /tmp/sixsentences-companion-release-swift-cache
+      CLANG_MODULE_CACHE_PATH: /tmp/sixsentences-companion-release-clang-cache
+    steps:
+      - name: Check out the verified release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.release-sha }}
+          persist-credentials: false
+      - name: Require the pinned Apple toolchain
+        run: |
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version | grep -Fx "Xcode 26.1.1"
+          swift --version
+      - name: Verify the source-only distribution boundary
+        run: bash apps/companion-macos/Scripts/audit-community-source.sh
+      - name: Resolve, test, and build the tagged source
+        run: |
+          swift package resolve --package-path apps/companion-macos
+          git diff --exit-code -- apps/companion-macos/Package.resolved
+          swift test --package-path apps/companion-macos --disable-sandbox
+          swift build --package-path apps/companion-macos --configuration release --disable-sandbox
+
+  self-hosting:
+    name: Validate tagged self-hosting and container builds
+    needs: [validate, application-api, web-source]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the verified release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.release-sha }}
+          persist-credentials: false
+      - name: Test deployment scripts and boundaries
+        run: bash deploy/community/test.sh
+      - name: Generate and validate disposable local configuration
+        run: |
+          bash deploy/community/init-env.sh --local --output "$RUNNER_TEMP/selfhost.env"
+          bash deploy/community/preflight.sh "$RUNNER_TEMP/selfhost.env"
+      - name: Build the tagged API image
+        env:
+          IMAGE_TAG: ${{ needs.validate.outputs.public-version }}
+        run: docker build --tag "sixsentences-community-api:${IMAGE_TAG}" --file services/api/Dockerfile .
+      - name: Build the tagged origin-specific web image
+        env:
+          IMAGE_TAG: ${{ needs.validate.outputs.public-version }}
+        run: |
+          docker build \
+            --tag "sixsentences-community-web:${IMAGE_TAG}" \
+            --file apps/web/Dockerfile \
+            --build-arg NEXT_PUBLIC_SIX_API_URL=http://127.0.0.1/api \
+            --build-arg NEXT_PUBLIC_APP_URL=http://127.0.0.1 \
+            --build-arg NEXT_PUBLIC_LEGAL_BASE_URL=http://127.0.0.1/legal \
+            --build-arg SIX_ALLOW_INSECURE_LOCAL_HTTP=true \
+            --build-arg NEXT_PUBLIC_TERMS_VERSION=release-test-v1 \
+            --build-arg NEXT_PUBLIC_PRIVACY_VERSION=release-test-v1 \
+            --build-arg NEXT_PUBLIC_DPA_VERSION=release-test-v1 \
+            apps/web
+
+  tag-security:
+    name: Scan the exact verified release source
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the complete verified release history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.release-sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject credential-bearing URIs across reachable history
+        run: python .github/scripts/check_history_credential_uris.py
+      - name: Scan every reachable commit without credential verification
+        uses: trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c # v3.97.4
+        with:
+          path: ./
+          base: ""
+          head: ${{ needs.validate.outputs.release-sha }}
+          version: 3.97.4
+          extra_args: --no-verification --results=verified,unknown,unverified --exclude-detectors=URI
+      - name: Scan the exact release tree for secrets
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret
+          format: table
+          exit-code: "1"
+          hide-progress: true
+          version: v0.69.3
+      - name: Scan locked release dependencies for critical vulnerabilities
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+          hide-progress: true
+          version: v0.69.3
+      - name: Scan the exact release deployment configuration
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          format: table
+          exit-code: "1"
+          hide-progress: true
+          version: v0.69.3
+
+  preview:
+    name: Validate the reviewed draft preview
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the verified preview checksum
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.release-sha }}
+          persist-credentials: false
+      - name: Validate the draft inventory and preview checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$(gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json isDraft \
+            --jq '.isDraft')" != "true" ]]; then
+            echo "A draft release with the reviewed preview asset is required." >&2
+            exit 1
+          fi
+
+          gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json assets \
+            --jq '.assets[].name' > "$RUNNER_TEMP/release-draft-assets"
+          if [[ "$(wc -l < "$RUNNER_TEMP/release-draft-assets" | tr -d ' ')" != "1" ]] \
+            || ! grep -Fxq 'sixsentences-overview.gif' "$RUNNER_TEMP/release-draft-assets"; then
+            echo "The draft must contain only sixsentences-overview.gif." >&2
+            exit 1
+          fi
+
+          mkdir -p "$RUNNER_TEMP/release-preview"
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern sixsentences-overview.gif \
+            --dir "$RUNNER_TEMP/release-preview"
+          (
+            cd "$RUNNER_TEMP/release-preview"
+            sha256sum --check "$GITHUB_WORKSPACE/docs/assets/sixsentences-overview.sha256"
+          )
+
+  publish:
+    name: Publish community source prerelease with engine artifacts
+    needs: [validate, build, attest, self-hosting, browser-extension-source, companion-macos-source, tag-security, preview]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: community-release
+    permissions:
       contents: write
     steps:
+      - name: Check out the verified release metadata
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.release-sha }}
+          persist-credentials: false
       - name: Restore the attested release candidate
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: python-engine-release-candidate-${{ github.ref_name }}
+          name: python-engine-release-candidate-${{ inputs.tag }}
           path: release
       - name: Recheck artifact checksums
         working-directory: release
         run: sha256sum --check SHA256SUMS
+      - name: Verify the reviewed product-preview draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json isDraft \
+            --jq '.isDraft' > "$RUNNER_TEMP/release-is-draft"; then
+            echo "A draft release with the reviewed preview asset is required." >&2
+            exit 1
+          fi
+          if [[ "$(<"$RUNNER_TEMP/release-is-draft")" != "true" ]]; then
+            echo "Refusing to modify an already-published release." >&2
+            exit 1
+          fi
+
+          gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json assets \
+            --jq '.assets[].name' > "$RUNNER_TEMP/release-draft-assets"
+          if [[ "$(wc -l < "$RUNNER_TEMP/release-draft-assets" | tr -d ' ')" != "1" ]] \
+            || ! grep -Fxq 'sixsentences-overview.gif' "$RUNNER_TEMP/release-draft-assets"; then
+            echo "The draft must contain only sixsentences-overview.gif before publication." >&2
+            exit 1
+          fi
+
+          mkdir -p "$RUNNER_TEMP/release-preview"
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern sixsentences-overview.gif \
+            --dir "$RUNNER_TEMP/release-preview"
+          (
+            cd "$RUNNER_TEMP/release-preview"
+            sha256sum --check "$GITHUB_WORKSPACE/docs/assets/sixsentences-overview.sha256"
+          )
       - name: Publish the immutable GitHub prerelease
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
           {
             printf '%s\n' \
               '> [!NOTE]' \
-              '> This release publishes the tagged community source tree. The downloadable, attested build artifacts below cover only the `sixsentences-engine` Python distribution; no prebuilt web application, container, hosted service, or deployment stack is published.' \
+              '> This release publishes the complete tagged community application source, including the tested macOS Companion source. The downloadable, attested build artifacts below cover the `sixsentences-engine` Python distribution. API, web, and Companion sources are validated from the tag; containers and the macOS app remain deployment-built so configuration and signing authority stay explicit.' \
               ''
             cat release/RELEASE_NOTES.md
           } > "$RUNNER_TEMP/release-notes.md"
 
-          if gh release view "$RELEASE_TAG" \
+          if [[ "$(gh release view "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --json isDraft \
-            --jq '.isDraft' > "$RUNNER_TEMP/release-is-draft" 2>/dev/null; then
-            if [[ "$(<"$RUNNER_TEMP/release-is-draft")" != "true" ]]; then
-              echo "Refusing to replace an already-published release." >&2
-              exit 1
-            fi
-
-            gh release upload "$RELEASE_TAG" \
-              release/*.whl \
-              release/*.tar.gz \
-              release/*.cdx.json \
-              release/SHA256SUMS \
-              --repo "$GITHUB_REPOSITORY" \
-              --clobber
-            gh release edit "$RELEASE_TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --verify-tag \
-              --draft=false \
-              --prerelease \
-              --title "SixSentences ${RELEASE_TAG} · source + Python engine artifacts" \
-              --notes-file "$RUNNER_TEMP/release-notes.md"
-          else
-            gh release create "$RELEASE_TAG" \
-              release/*.whl \
-              release/*.tar.gz \
-              release/*.cdx.json \
-              release/SHA256SUMS \
-              --repo "$GITHUB_REPOSITORY" \
-              --verify-tag \
-              --prerelease \
-              --title "SixSentences ${RELEASE_TAG} · source + Python engine artifacts" \
-              --notes-file "$RUNNER_TEMP/release-notes.md"
+            --jq '.isDraft')" != "true" ]]; then
+            echo "The verified release draft is no longer editable." >&2
+            exit 1
           fi
+
+          gh release upload "$RELEASE_TAG" \
+            release/*.whl \
+            release/*.tar.gz \
+            release/*.cdx.json \
+            release/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+          gh release edit "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --draft=false \
+            --prerelease \
+            --latest=false \
+            --title "SixSentences ${RELEASE_TAG} · community source + engine artifacts" \
+            --notes-file "$RUNNER_TEMP/release-notes.md"

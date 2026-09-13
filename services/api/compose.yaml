@@ -1,0 +1,84 @@
+name: sixsentences-community
+
+x-service: &service
+  build:
+    context: ../..
+    dockerfile: services/api/Dockerfile
+  env_file: ${SIX_COMMUNITY_ENV_FILE:-.env}
+  environment:
+    PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+  restart: unless-stopped
+  volumes:
+    - community-data:/data
+    - community-privacy:/privacy
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - community-postgres:/var/lib/postgresql/data
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  migrate:
+    <<: *service
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+
+  api:
+    <<: *service
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  worker:
+    <<: *service
+    command: ["six-community-worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "from sixsentences_server.jobs import worker_heartbeat_age_seconds as age; value = age('all'); raise SystemExit(0 if value is not None and value < 60 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  community-data:
+  community-postgres:
+  community-privacy:

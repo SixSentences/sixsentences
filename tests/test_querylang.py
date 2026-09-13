@@ -92,6 +92,15 @@ def test_parse_empty_raises() -> None:
         parse_query("   ")
 
 
+def test_tokenizer_handles_large_whitespace_runs_in_linear_pass() -> None:
+    assert parse_query("\n " * 100_000 + "evidence") == Term("evidence")
+
+
+def test_unterminated_phrase_fails_at_its_start() -> None:
+    with pytest.raises(QueryParseError, match="unterminated phrase at position 6"):
+        parse_query('title:"unfinished')
+
+
 def test_parse_unbalanced_paren_raises() -> None:
     with pytest.raises(QueryParseError):
         parse_query("(a OR b")

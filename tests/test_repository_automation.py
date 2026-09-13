@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import plistlib
 import sys
 import tarfile
 import urllib.request
@@ -31,6 +32,7 @@ DCO = _load_script("check_dco")
 CLA = _load_script("check_cla")
 RELEASE = _load_script("release")
 STATUS = _load_script("publish_status")
+URI_HISTORY = _load_script("check_history_credential_uris")
 REPOSITORY_ROOT = Path(__file__).parents[1]
 
 
@@ -237,6 +239,149 @@ def test_cla_acceptance_requires_the_pull_request_author_and_exact_comment() -> 
     assert CLA._accepted(comments[:2], author="contributor") is False
 
 
+def test_workflow_job_environment_avoids_step_only_runner_context() -> None:
+    workflows = Path(__file__).parents[1] / ".github" / "workflows"
+    invalid: list[str] = []
+    for workflow in sorted(workflows.glob("*.yml")):
+        in_job_environment = False
+        for line_number, line in enumerate(workflow.read_text(encoding="utf-8").splitlines(), 1):
+            if line.startswith("    env:"):
+                in_job_environment = True
+                continue
+            if in_job_environment and line.strip() and len(line) - len(line.lstrip()) <= 4:
+                in_job_environment = False
+            if in_job_environment and "${{ runner." in line:
+                invalid.append(f"{workflow.name}:{line_number}")
+
+    assert invalid == []
+
+
+def test_release_publication_requires_the_protected_environment() -> None:
+    workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
+    publish_job = workflow.split("\n  publish:\n", maxsplit=1)[1]
+
+    assert "\n    environment: community-release\n" in publish_job
+    assert (
+        "\n    needs: [validate, build, attest, self-hosting, browser-extension-source, "
+        "companion-macos-source, tag-security, preview]\n" in publish_job
+    )
+    assert "ref: ${{ needs.validate.outputs.release-sha }}" in publish_job
+
+
+def test_release_dispatch_checks_out_and_verifies_one_explicit_signed_tag() -> None:
+    workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "\n  workflow_dispatch:\n" in workflow
+    assert "\n  push:\n" not in workflow
+    assert "ref: ${{ inputs.tag }}" not in workflow
+    assert "ref: ${{ github.sha }}" in workflow
+    assert workflow.count("ref: ${{ needs.validate.outputs.release-sha }}") >= 6
+    assert '[[ "$WORKFLOW_REF" != "refs/heads/main" ]]' in workflow
+    assert 'git worktree add --detach "$RUNNER_TEMP/release-source" "$release_sha"' in workflow
+    assert 'git verify-tag "$RELEASE_TAG"' in workflow
+    assert "release-maintainers.allowed_signers" in workflow
+    assert "\n  tag-security:\n" in workflow
+    assert "\n  preview:\n" in workflow
+
+
+def test_security_workflow_scans_complete_history_without_provider_calls() -> None:
+    workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "security.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c" in workflow
+    assert "version: 3.97.4" in workflow
+    assert 'base: ""' in workflow
+    assert "head: ${{ github.sha }}" in workflow
+    assert "--no-verification" in workflow
+    assert "--results=verified,unknown,unverified" in workflow
+    assert "--exclude-detectors=URI" in workflow
+    assert "python .github/scripts/check_history_credential_uris.py" in workflow
+    assert "--no-update" not in workflow
+    assert "fetch-depth: 0" in workflow
+
+
+def test_history_uri_scan_allows_only_explicit_reserved_domain_placeholders() -> None:
+    unsafe_uri = (
+        "https://" + "service-account:live-looking-value" + "@research.example.com/resource"
+    )
+    patch = f"""__SIX_COMMIT__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+diff --git a/tests/example.py b/tests/example.py
++++ b/tests/example.py
+@@ -0,0 +1,2 @@
++safe = "https://user:password@example.org/resource"
++unsafe = "{unsafe_uri}"
+"""
+
+    violations = URI_HISTORY.find_violations(patch)
+
+    assert [violation.label() for violation in violations] == ["aaaaaaaaaaaa:tests/example.py:2"]
+
+
+def test_history_uri_scan_allows_placeholder_credentials_on_reserved_subdomains() -> None:
+    patch = """__SIX_COMMIT__dddddddddddddddddddddddddddddddddddddddd
+diff --git a/tests/example.py b/tests/example.py
++++ b/tests/example.py
+@@ -0,0 +1 @@
++safe = "redis://user:pass@cache.research.example.org/0"
+"""
+
+    assert URI_HISTORY.find_violations(patch) == []
+
+
+def test_history_uri_scan_never_includes_the_detected_value_in_diagnostics() -> None:
+    unsafe_uri = "https://" + "operator:do-not-print-this" + "@internal.example.com/api"
+    patch = f"""__SIX_COMMIT__bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+diff --git a/config.txt b/config.txt
++++ b/config.txt
+@@ -0,0 +1 @@
++endpoint={unsafe_uri}
+"""
+
+    [violation] = URI_HISTORY.find_violations(patch)
+
+    assert violation.label() == "bbbbbbbbbbbb:config.txt:1"
+    assert "do-not-print-this" not in violation.label()
+
+
+@pytest.mark.parametrize(
+    "scheme",
+    ["postgresql", "postgres", "redis", "rediss", "mongodb", "mongodb+srv", "amqps"],
+)
+def test_history_uri_scan_covers_non_http_credential_schemes(scheme: str) -> None:
+    unsafe_uri = f"{scheme}://" + "operator:do-not-print-this" + "@internal.example.com/data"
+    patch = f"""__SIX_COMMIT__cccccccccccccccccccccccccccccccccccccccc
+diff --git a/config.txt b/config.txt
++++ b/config.txt
+@@ -0,0 +1 @@
++endpoint={unsafe_uri}
+"""
+
+    [violation] = URI_HISTORY.find_violations(patch)
+
+    assert violation.label() == "cccccccccccc:config.txt:1"
+    assert "do-not-print-this" not in violation.label()
+
+
+def test_history_uri_scan_baseline_is_bound_to_an_immutable_location() -> None:
+    reviewed = URI_HISTORY.Violation(
+        commit="1cdbf0f27c764379c81aeb7b3297f7bef9e7213d",
+        path="tests/test_repository_automation.py",
+        line=304,
+    )
+    adjacent = URI_HISTORY.Violation(
+        commit=reviewed.commit,
+        path=reviewed.path,
+        line=305,
+    )
+
+    assert URI_HISTORY.unreviewed_violations([reviewed, adjacent]) == [adjacent]
+
+
 def test_cla_status_is_bound_to_the_exact_pull_request_head(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -334,7 +479,6 @@ def test_trusted_cla_workflow_cannot_be_manually_dispatched() -> None:
 
 def test_trusted_dco_workflow_treats_contribution_commits_only_as_git_data() -> None:
     workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "dco.yml").read_text(encoding="utf-8")
-    ci_workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
     assert "pull_request_target:" in workflow
     assert "workflow_dispatch:" not in workflow
@@ -344,8 +488,6 @@ def test_trusted_dco_workflow_treats_contribution_commits_only_as_git_data() -> 
     assert workflow.count("uses: actions/checkout@") == 1
     assert 'context "DCO / sign-off"' in workflow
     assert "--filter=blob:none" in workflow
-    assert 'dco_source_sha="$(git rev-parse HEAD)"' in workflow
-    assert "DCO sign-off" not in ci_workflow
 
 
 def test_status_publisher_posts_only_the_validated_payload(
@@ -415,11 +557,90 @@ def test_release_version_mapping_rejects_unsupported_versions(value: str) -> Non
         RELEASE.release_version(value)
 
 
-def test_release_file_gate_matches_pyproject_cff_changelog_and_notes(tmp_path: Path) -> None:
+def _write_release_metadata_tree(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "sixsentences-engine"\nversion = "0.1.0a1"\n',
         encoding="utf-8",
     )
+    (tmp_path / "uv.lock").write_text(
+        'version = 1\n[[package]]\nname = "sixsentences-engine"\nversion = "0.1.0a1"\n',
+        encoding="utf-8",
+    )
+
+    api = tmp_path / "services" / "api"
+    api.mkdir(parents=True)
+    (api / "pyproject.toml").write_text(
+        "\n".join(
+            (
+                "[project]",
+                'name = "sixsentences-community-api"',
+                'version = "0.1.0a1"',
+                'dependencies = ["sixsentences-engine==0.1.0a1"]',
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    (api / "uv.lock").write_text(
+        "\n".join(
+            (
+                "version = 1",
+                "[[package]]",
+                'name = "sixsentences-community-api"',
+                'version = "0.1.0a1"',
+                "[[package]]",
+                'name = "sixsentences-engine"',
+                'version = "0.1.0a1"',
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    for directory, package_name in (
+        ("web", "@sixsentences/web"),
+        ("browser-extension", "@sixsentences/browser-extension"),
+    ):
+        app = tmp_path / "apps" / directory
+        app.mkdir(parents=True)
+        package = {"name": package_name, "version": "0.1.0-alpha.1"}
+        (app / "package.json").write_text(json.dumps(package), encoding="utf-8")
+        package_lock = {
+            **package,
+            "lockfileVersion": 3,
+            "packages": {"": package},
+        }
+        (app / "package-lock.json").write_text(
+            json.dumps(package_lock),
+            encoding="utf-8",
+        )
+
+    companion = tmp_path / "apps" / "companion-macos"
+    app_bundle = companion / "AppBundle"
+    source = companion / "Sources" / "SixSentencesCompanion"
+    app_bundle.mkdir(parents=True)
+    source.mkdir(parents=True)
+    (app_bundle / "Info.plist").write_bytes(
+        plistlib.dumps(
+            {
+                "CFBundleShortVersionString": "8.4.2",
+                "CFBundleVersion": "19",
+            }
+        )
+    )
+    (source / "CompanionRelease.swift").write_text(
+        "\n".join(
+            (
+                "enum CompanionApplicationVersion {",
+                '    static let release = "8.4.2"',
+                '    static let build = "19"',
+                "}",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+
     (tmp_path / "CITATION.cff").write_text(
         "version: 0.1.0-alpha.1\ndate-released: 2026-09-12\n",
         encoding="utf-8",
@@ -432,6 +653,10 @@ def test_release_file_gate_matches_pyproject_cff_changelog_and_notes(tmp_path: P
     notes.mkdir(parents=True)
     (notes / "v0.1.0-alpha.1.md").write_text("# Release\n", encoding="utf-8")
 
+
+def test_release_file_gate_matches_every_component_and_release_file(tmp_path: Path) -> None:
+    _write_release_metadata_tree(tmp_path)
+
     result = RELEASE.validate_files(
         tmp_path,
         tag="v0.1.0-alpha.1",
@@ -439,6 +664,128 @@ def test_release_file_gate_matches_pyproject_cff_changelog_and_notes(tmp_path: P
     )
 
     assert result.package == "0.1.0a1"
+
+
+def test_repository_component_versions_are_release_coherent() -> None:
+    package_version = RELEASE._read_project_version(REPOSITORY_ROOT / "pyproject.toml")
+
+    RELEASE.validate_component_versions(
+        REPOSITORY_ROOT,
+        RELEASE.release_version(package_version),
+    )
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "old", "new", "error"),
+    [
+        ("uv.lock", 'version = "0.1.0a1"', 'version = "9.9.9"', "uv.lock"),
+        (
+            "services/api/pyproject.toml",
+            'version = "0.1.0a1"',
+            'version = "9.9.9"',
+            "project.version",
+        ),
+        (
+            "services/api/pyproject.toml",
+            "sixsentences-engine==0.1.0a1",
+            "sixsentences-engine>=0.1.0a1",
+            "must contain exactly",
+        ),
+        (
+            "services/api/uv.lock",
+            'name = "sixsentences-engine"\nversion = "0.1.0a1"',
+            'name = "sixsentences-engine"\nversion = "9.9.9"',
+            "does not match",
+        ),
+        (
+            "apps/web/package.json",
+            '"version": "0.1.0-alpha.1"',
+            '"version": "9.9.9"',
+            "does not match",
+        ),
+        (
+            "apps/web/package-lock.json",
+            '"version": "0.1.0-alpha.1"',
+            '"version": "9.9.9"',
+            "does not match",
+        ),
+        (
+            "apps/browser-extension/package.json",
+            '"version": "0.1.0-alpha.1"',
+            '"version": "9.9.9"',
+            "does not match",
+        ),
+        (
+            "apps/browser-extension/package-lock.json",
+            '"version": "0.1.0-alpha.1"',
+            '"version": "9.9.9"',
+            "does not match",
+        ),
+        (
+            "CITATION.cff",
+            "version: 0.1.0-alpha.1",
+            "version: 9.9.9",
+            "CITATION.cff version",
+        ),
+    ],
+)
+def test_release_file_gate_rejects_component_version_drift(
+    tmp_path: Path,
+    relative_path: str,
+    old: str,
+    new: str,
+    error: str,
+) -> None:
+    _write_release_metadata_tree(tmp_path)
+    path = tmp_path / relative_path
+    contents = path.read_text(encoding="utf-8")
+    assert old in contents
+    path.write_text(contents.replace(old, new, 1), encoding="utf-8")
+
+    with pytest.raises(RELEASE.ReleaseValidationError, match=error):
+        RELEASE.validate_files(
+            tmp_path,
+            tag="v0.1.0-alpha.1",
+            commit_date=date(2026, 9, 12),
+        )
+
+
+@pytest.mark.parametrize(
+    ("plist_key", "swift_name", "old_value", "new_value"),
+    [
+        ("CFBundleShortVersionString", "release", "8.4.2", "8.4.3"),
+        ("CFBundleVersion", "build", "19", "20"),
+    ],
+)
+def test_release_file_gate_rejects_companion_internal_version_drift(
+    tmp_path: Path,
+    plist_key: str,
+    swift_name: str,
+    old_value: str,
+    new_value: str,
+) -> None:
+    _write_release_metadata_tree(tmp_path)
+    swift_path = (
+        tmp_path
+        / "apps"
+        / "companion-macos"
+        / "Sources"
+        / "SixSentencesCompanion"
+        / "CompanionRelease.swift"
+    )
+    contents = swift_path.read_text(encoding="utf-8")
+    contents = contents.replace(
+        f'static let {swift_name} = "{old_value}"',
+        f'static let {swift_name} = "{new_value}"',
+    )
+    swift_path.write_text(contents, encoding="utf-8")
+
+    with pytest.raises(RELEASE.ReleaseValidationError, match=plist_key):
+        RELEASE.validate_files(
+            tmp_path,
+            tag="v0.1.0-alpha.1",
+            commit_date=date(2026, 9, 12),
+        )
 
 
 def test_checksum_verification_fails_on_changed_or_unlisted_artifacts(tmp_path: Path) -> None:

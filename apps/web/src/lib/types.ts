@@ -1,4 +1,4 @@
-/** Wire types for a compatible SixSentences workspace API. */
+/** Wire types for the bundled self-hosted SixSentences workspace API. */
 
 export type Role = "owner" | "member";
 
@@ -2640,6 +2640,12 @@ export interface ParticipantInformation {
   additional_transfers?: string;
   supervisory_authority?: string;
   privacy_notice_url?: string;
+  dpia_status?: "" | "completed";
+  dpia_reference?: string;
+  ai_interview_scope_attested?: boolean;
+  spoken_processing_approved?: boolean;
+  dpia_scope_fingerprint?: string;
+  dpia_public_scope_token?: string;
   researcher_reviewed?: boolean;
 }
 
@@ -2672,6 +2678,7 @@ export interface VoiceStudy {
   participant_information?: ParticipantInformation;
   participant_information_ready?: boolean;
   participant_information_gaps?: string[];
+  spoken_processing_ready?: boolean;
   budget_minutes: number;
   guide: { sections: VoiceGuideSection[] };
   guide_version: number;

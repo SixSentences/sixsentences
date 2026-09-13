@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "SixSentences Browser Capture",
+  "version": "0.2.0",
+  "description": "Save available source metadata, selected text and verified PDFs to SixSentences in one click.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": ["activeTab", "scripting", "storage", "identity"],
+  "host_permissions": [],
+  "action": {
+    "default_title": "Save to SixSentences",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'"
+  }
+}

@@ -2,9 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+  merge_group:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -14,8 +16,8 @@ permissions:
   contents: read
 
 jobs:
-  quality:
-    name: Quality, typing, and build (Python 3.12)
+  engine-quality:
+    name: Engine quality and package (Python 3.12)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -34,19 +36,19 @@ jobs:
           cache-dependency-glob: |
             pyproject.toml
             uv.lock
-      - name: Install exact direct dependencies
+      - name: Install the locked engine environment
         run: uv sync --frozen --group dev
-      - name: Lint
-        run: uv run ruff check .
-      - name: Check formatting
-        run: uv run ruff format --check .
+      - name: Lint and check formatting
+        run: |
+          uv run ruff check src tests .github/scripts
+          uv run ruff format --check src tests .github/scripts
       - name: Type-check
         run: uv run mypy src/sixsentences
       - name: Build source and wheel artifacts
         run: uv build
 
-  tests:
-    name: Tests and CLI (Python ${{ matrix.python-version }})
+  engine-tests:
+    name: Engine tests and CLI (Python ${{ matrix.python-version }})
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
@@ -69,19 +71,58 @@ jobs:
           cache-dependency-glob: |
             pyproject.toml
             uv.lock
-      - name: Install exact direct dependencies
+      - name: Install the locked engine environment
         run: uv sync --frozen --group dev
-      - name: Test
+      - name: Test the engine
         run: uv run pytest -q
       - name: Smoke-test the CLI
         run: uv run sixsentences --help
 
+  api:
+    name: Application API quality and tests (Python 3.12)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: services/api
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONHASHSEED: "42"
+      RUFF_CACHE_DIR: /tmp/sixsentences-api-ruff
+      UV_PROJECT_ENVIRONMENT: /tmp/sixsentences-api-env
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+          version: "0.10.12"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+            services/api/pyproject.toml
+            services/api/uv.lock
+      - name: Install the locked API environment
+        run: uv sync --frozen --extra dev
+      - name: Lint the API, worker, and tests
+        run: uv run --frozen --no-sync ruff check src scripts tests
+      - name: Type-check the API and worker
+        run: uv run --frozen --no-sync mypy src
+      - name: Test the API, worker, and migrations
+        run: uv run --frozen --no-sync pytest -q
+      - name: Verify the public source boundary
+        run: uv run --frozen --no-sync python scripts/audit_community_export.py .
+      - name: Require the complete web contract
+        run: uv run --frozen --no-sync python scripts/check_web_contracts.py --require-complete
+
   web:
     name: Web type-check, tests, and production build (Node 22.9)
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    permissions:
-      contents: read
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: apps/web
@@ -90,7 +131,7 @@ jobs:
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
       NEXT_PUBLIC_BROWSER_CAPTURE_STORE_URL: ""
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: ""
-      NEXT_PUBLIC_LEGAL_BASE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_LEGAL_BASE_URL: http://127.0.0.1:3000/legal
       NEXT_PUBLIC_TERMS_VERSION: test-v1
       NEXT_PUBLIC_PRIVACY_VERSION: test-v1
       NEXT_PUBLIC_DPA_VERSION: test-v1
@@ -110,7 +151,111 @@ jobs:
         run: npm ci
       - name: Type-check the web application
         run: npm run typecheck
+      - name: Run security-focused tests
+        run: npm run test:security
       - name: Test every web test file
-        run: node --test tests/*.test.mjs
+        run: npm run test:ui
       - name: Build the web application for production
         run: npm run build
+
+  browser-extension:
+    name: Browser extension contracts and deterministic build (Node 22.9)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/browser-extension
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up pinned Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.9.0"
+          cache: npm
+          cache-dependency-path: apps/browser-extension/package-lock.json
+      - name: Install the locked extension environment
+        run: npm ci
+      - name: Run contract and security tests
+        run: npm test
+      - name: Build deployment-bound unpacked runtime
+        env:
+          APP_ORIGIN: https://research.example.invalid
+          API_ORIGIN: https://research.example.invalid/api
+          SIX_EXTENSION_ALLOW_INSECURE_LOOPBACK: "false"
+        run: node scripts/build.mjs --out "$RUNNER_TEMP/sixsentences-browser-extension"
+
+  companion-macos:
+    name: macOS Companion (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Xcode 16.4 legacy speech
+            os: macos-15
+            developer-dir: /Applications/Xcode_16.4.app/Contents/Developer
+            xcode-version: "Xcode 16.4"
+          - label: Xcode 26.1.1 SpeechAnalyzer
+            os: macos-26
+            developer-dir: /Applications/Xcode_26.1.1.app/Contents/Developer
+            xcode-version: "Xcode 26.1.1"
+    env:
+      DEVELOPER_DIR: ${{ matrix.developer-dir }}
+      SWIFTPM_MODULECACHE_OVERRIDE: /tmp/sixsentences-companion-swift-module-cache
+      CLANG_MODULE_CACHE_PATH: /tmp/sixsentences-companion-clang-module-cache
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require the pinned Apple toolchain
+        run: |
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version | grep -Fx "${{ matrix.xcode-version }}"
+          swift --version
+      - name: Verify plist, scripts, source boundary, and API contracts
+        run: bash apps/companion-macos/Scripts/audit-community-source.sh
+      - name: Resolve the exact Swift dependency graph
+        run: |
+          swift package resolve --package-path apps/companion-macos
+          git diff --exit-code -- apps/companion-macos/Package.resolved
+      - name: Test the macOS Companion
+        run: swift test --package-path apps/companion-macos --disable-sandbox
+      - name: Build release source without signing credentials
+        run: swift build --package-path apps/companion-macos --configuration release --disable-sandbox
+
+  self-hosting:
+    name: Self-hosting definition and container builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    needs: [api, web]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test deployment scripts and boundaries
+        run: bash deploy/community/test.sh
+      - name: Generate disposable local configuration
+        run: bash deploy/community/init-env.sh --local --output "$RUNNER_TEMP/selfhost.env"
+      - name: Validate the resolved Compose model
+        run: bash deploy/community/preflight.sh "$RUNNER_TEMP/selfhost.env"
+      - name: Build the API image
+        run: docker build --tag sixsentences-community-api:ci --file services/api/Dockerfile .
+      - name: Build the web image
+        run: |
+          docker build \
+            --tag sixsentences-community-web:ci \
+            --file apps/web/Dockerfile \
+            --build-arg NEXT_PUBLIC_SIX_API_URL=http://127.0.0.1/api \
+            --build-arg NEXT_PUBLIC_APP_URL=http://127.0.0.1 \
+            --build-arg NEXT_PUBLIC_LEGAL_BASE_URL=http://127.0.0.1/legal \
+            --build-arg SIX_ALLOW_INSECURE_LOCAL_HTTP=true \
+            --build-arg NEXT_PUBLIC_TERMS_VERSION=ci-v1 \
+            --build-arg NEXT_PUBLIC_PRIVACY_VERSION=ci-v1 \
+            --build-arg NEXT_PUBLIC_DPA_VERSION=ci-v1 \
+            apps/web

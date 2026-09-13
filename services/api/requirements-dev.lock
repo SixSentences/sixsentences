@@ -1,0 +1,5 @@
+-r requirements.lock
+hatchling==1.27.0
+mypy==2.3.0
+pytest==9.1.1
+ruff==0.15.21

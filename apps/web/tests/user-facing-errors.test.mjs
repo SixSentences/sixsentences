@@ -108,10 +108,8 @@ test("stable public error codes select local copy and never trust server message
   );
 });
 
-test("stable availability codes distinguish access, resources, concurrency and action limits", () => {
+test("stable availability codes distinguish resources, concurrency and action limits", () => {
   const cases = [
-    ["feature_not_in_plan", "feature", /not enabled/],
-    ["upgrade_required", "feature", /not enabled/],
     ["capacity_exhausted", "resource", /requested resources/],
     ["capacity_unavailable", "resource", /requested resources/],
     ["concurrency_limit", "concurrency", /actions running/],
@@ -135,11 +133,11 @@ test("unknown 402 errors and authorization failures remain deployment-neutral", 
     assert.equal(helpers.userFacingApiErrorMessage(402, detail), "This action is currently unavailable. Please try again or contact the workspace operator.");
   }
   for (const status of [400, 401, 403, 404, 409, 429, 500, 0]) {
-    assert.equal(helpers.availabilityErrorKind(status, { code: "feature_not_in_plan" }), null);
+    assert.equal(helpers.availabilityErrorKind(status, { code: "server_feature_disabled" }), null);
   }
-  assert.equal(helpers.userFacingApiErrorMessage(401, { code: "feature_not_in_plan" }), "Your session is no longer valid. Please sign in again.");
+  assert.equal(helpers.userFacingApiErrorMessage(401, { code: "server_feature_disabled" }), "Your session is no longer valid. Please sign in again.");
   assert.equal(helpers.userFacingApiErrorMessage(403, { code: "capacity_exhausted" }), "You don't have permission to do that.");
-  assert.equal(helpers.userFacingErrorMessage({ status: 403, detail: { code: "feature_not_in_plan" } }), "You don't have permission to do that.");
+  assert.equal(helpers.userFacingErrorMessage({ status: 403, detail: { code: "server_feature_disabled" } }), "You don't have permission to do that.");
 });
 
 test("participant interview resource errors use localized deployment-neutral copy", () => {

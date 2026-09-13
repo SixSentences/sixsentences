@@ -50,10 +50,11 @@ const fields: Array<{ key: keyof ParticipantInformation; label: string; hint?: s
 ];
 
 /** Explicit human-reviewed facts, never generated or silently approved by an agent. */
-export function ParticipantInformationEditor({ value, onSave, gaps = [] }: {
+export function ParticipantInformationEditor({ value, onSave, gaps = [], requireDpia = false }: {
   value: ParticipantInformation;
   onSave: (value: ParticipantInformation) => Promise<unknown>;
   gaps?: readonly string[];
+  requireDpia?: boolean;
 }) {
   const [draft, setDraft] = useState(value);
   const [saving, setSaving] = useState(false);
@@ -97,6 +98,33 @@ export function ParticipantInformationEditor({ value, onSave, gaps = [] }: {
             <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground forced-colors:hidden" />
           </span>
         </label>
+        {requireDpia && (
+          <>
+            <label className="space-y-1 text-sm">Data protection impact assessment
+              <span className="block text-xs leading-relaxed text-muted-foreground">The accountable controller must complete and approve a DPIA for the concrete study before an AI-led interview link is published. For German controllers, DSK mandatory-list item 11 applies to AI-controlled interaction.</span>
+              <span className="relative block">
+                <select className="block w-full appearance-none rounded-xl border border-border bg-background p-2 pr-9 disabled:cursor-not-allowed disabled:opacity-50 forced-colors:appearance-auto" value={draft.dpia_status ?? ""} onChange={(event) => change("dpia_status", event.target.value)}>
+                  <option value="">Choose after assessment</option>
+                  <option value="completed">DPIA completed and approved</option>
+                </select>
+                <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground forced-colors:hidden" />
+              </span>
+            </label>
+            <label className="space-y-1 text-sm @min-[32rem]/participant-information:col-span-2">
+              <span>DPIA decision reference and reasoning</span>
+              <span className="block text-xs leading-relaxed text-muted-foreground">Identify the dated assessment, accountable owner, approval and applicable safeguards. Any material guide or setting change clears this approval and requires a fresh review. This platform record supports accountability but does not replace the controller&apos;s signed assessment.</span>
+              <Textarea rows={3} maxLength={1500} value={draft.dpia_reference ?? ""} onChange={(event) => change("dpia_reference", event.target.value)} />
+            </label>
+            <label className="flex items-start gap-2 text-sm leading-relaxed @min-[32rem]/participant-information:col-span-2">
+              <input type="checkbox" className="mt-1" checked={draft.ai_interview_scope_attested ?? false} onChange={(event) => change("ai_interview_scope_attested", event.target.checked)} />
+              I confirm that this study does not intentionally solicit special-category, criminal-offence or confidential third-party data; use voice or answers to infer or score personality, emotion, health, credibility, suitability, performance, protected traits or identity; perform biometric identification; or make or recommend a legal or similarly significant decision about a participant.
+            </label>
+            <label className="flex items-start gap-2 text-sm leading-relaxed @min-[32rem]/participant-information:col-span-2">
+              <input type="checkbox" className="mt-1" checked={draft.spoken_processing_approved ?? false} onChange={(event) => change("spoken_processing_approved", event.target.checked)} />
+              I confirm that the concrete DPIA also covers spoken interviews: participant audio is processed through this deployment&apos;s authenticated relay and its configured live speech provider. Leave this unchecked to approve written interviews only.
+            </label>
+          </>
+        )}
         {fields.map((field) => <label key={field.key} className={`space-y-1 text-sm ${field.multiline ? "@min-[32rem]/participant-information:col-span-2" : ""}`}>
           <span>{field.label}</span>
           {field.hint && <span className="block text-xs leading-relaxed text-muted-foreground">{field.hint}</span>}
@@ -107,7 +135,9 @@ export function ParticipantInformationEditor({ value, onSave, gaps = [] }: {
       </div>
       <label className="flex items-start gap-2 text-sm leading-relaxed">
         <input type="checkbox" className="mt-1" checked={draft.researcher_reviewed ?? false} onChange={(event) => change("researcher_reviewed", event.target.checked)} />
-        I am authorized by the controller, have assessed the stated legal basis, and have reviewed these facts and the deployment&apos;s processing disclosures. No additional publication or optional use is included in this participation.
+        {requireDpia
+          ? "I am authorized by the controller, have assessed the legal basis, completed and approved the DPIA for this concrete study, and reviewed these facts and the deployment's processing disclosures. The documented safeguards are in force before publication."
+          : "I am authorized by the controller, have assessed the stated legal basis, and have reviewed these facts and the deployment's processing disclosures. No additional publication or optional use is included in this participation."}
       </label>
       <p className="text-xs text-muted-foreground">A completeness check is not legal approval. Confirm your institution's processing agreement and any international-transfer safeguards before inviting participants.</p>
       {publicLegalUrl("privacy") || publicLegalUrl("dpa") ? (
