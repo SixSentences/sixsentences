@@ -100,9 +100,14 @@ def test_two_factor_api_setup_login_recovery_and_disable(
     challenge = password_stage.json()["challenge"]
     assert password_stage.json()["mfa_required"] is True
 
+    # One code, spent twice: a replay is the same code, not a freshly generated
+    # one. Generating it again crosses a TOTP period boundary on a slow runner
+    # and produces a *valid* next-counter code, which the server then accepts —
+    # correctly, and the assertion below would fail for the wrong reason.
+    spent_code = totp_code(secret)
     second_factor = TestClient(create_app()).post(
         "/auth/2fa/verify",
-        json={"challenge": challenge, "code": totp_code(secret)},
+        json={"challenge": challenge, "code": spent_code},
     )
     assert second_factor.status_code == 200
     assert second_factor.json()["token"].startswith("six_ss_")
@@ -114,7 +119,7 @@ def test_two_factor_api_setup_login_recovery_and_disable(
     replay_challenge = replay_stage.json()["challenge"]
     replay = TestClient(create_app()).post(
         "/auth/2fa/verify",
-        json={"challenge": replay_challenge, "code": totp_code(secret)},
+        json={"challenge": replay_challenge, "code": spent_code},
     )
     assert replay.status_code == 401
 
