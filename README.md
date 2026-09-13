@@ -40,7 +40,7 @@
 
 <p align="center">
   <img
-    src="https://github.com/SixSentences/sixsentences/releases/download/v0.2.0-alpha.1/sixsentences-overview.gif"
+    src="https://github.com/SixSentences/sixsentences/releases/download/v0.1.0-alpha.1/sixsentences-overview.gif"
     width="720"
     alt="SixSentences research workspace product overview"
   >
@@ -79,7 +79,7 @@ loopback-only public origins; use the documented TLS mode and host firewalling
 before accepting real users or research data.
 
 ```console
-git clone --branch v0.2.0-alpha.1 --depth 1 https://github.com/SixSentences/sixsentences.git
+git clone --depth 1 https://github.com/SixSentences/sixsentences.git
 cd sixsentences
 make up
 ```
@@ -97,8 +97,9 @@ A tagged release also publishes the two images, so a deployment can skip the
 build entirely:
 
 ```console
-export SIX_API_IMAGE=ghcr.io/sixsentences/community-api:v0.2.0-alpha.1
-export SIX_WEB_IMAGE=ghcr.io/sixsentences/community-web:v0.2.0-alpha.1-localhost
+RELEASE=v0.2.0-alpha.1  # the tag you are deploying, from the releases page
+export SIX_API_IMAGE=ghcr.io/sixsentences/community-api:$RELEASE
+export SIX_WEB_IMAGE=ghcr.io/sixsentences/community-web:$RELEASE-localhost
 make up
 ```
 

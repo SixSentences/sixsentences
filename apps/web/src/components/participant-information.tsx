@@ -81,7 +81,8 @@ export function ParticipantInformationEditor({ value, onSave, gaps = [], require
       <div className="grid min-w-0 gap-4 @min-[32rem]/participant-information:grid-cols-2 [&>*]:min-w-0">
         <label className="space-y-1 text-sm">Participant information language
           <span className="relative block">
-            <select className="block w-full appearance-none rounded-xl border border-border bg-background p-2 pr-9 disabled:cursor-not-allowed disabled:opacity-50 forced-colors:appearance-auto" value={draft.language ?? "en"} onChange={(event) => change("language", event.target.value)}>
+            <select className="block w-full appearance-none rounded-xl border border-border bg-background p-2 pr-9 disabled:cursor-not-allowed disabled:opacity-50 forced-colors:appearance-auto" value={draft.language ?? ""} onChange={(event) => change("language", event.target.value)}>
+              <option value="">Choose the participants&apos; language</option>
               <option value="en">English</option><option value="de">Deutsch</option>
             </select>
             <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground forced-colors:hidden" />
