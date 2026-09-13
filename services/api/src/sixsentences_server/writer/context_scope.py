@@ -150,7 +150,7 @@ def _source_bound_types(text: str) -> set[str]:
         previous_end = first[1]
         for start, end, kind in matches[1:]:
             connector = suffix[previous_end:start]
-            if not re.fullmatch(r"\s*(?:,|&|and|und|sowie|plus)\s*", connector, re.I):
+            if not re.fullmatch(r"\s{0,40}(?:,|&|and|und|sowie|plus)\s{0,40}", connector, re.I):
                 break
             bound.add(kind)
             previous_end = end

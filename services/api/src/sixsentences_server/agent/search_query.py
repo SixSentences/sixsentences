@@ -274,7 +274,7 @@ def formulate_search_query(
         # The web fallback uses only attested request terms. Fixed routing
         # angles belong to the query-writer instructions, not provider terms.
         fallback = _heuristic_query(semantic_request)
-        fallback = re.sub(r"\s+AND\s+", " ", fallback)
+        fallback = re.sub(r"\s{1,20}AND\s{1,20}", " ", fallback)
         if _HASHICORP_TERRAFORM.search(semantic_request):
             commands = re.findall(r"\b(?:plan|apply)\b", semantic_request, re.IGNORECASE)
             if commands:

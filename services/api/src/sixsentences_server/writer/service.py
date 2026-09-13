@@ -37,7 +37,9 @@ _TECTONIC_ERROR = re.compile(
     r"^error: (?:(?P<file>[^:\n]+?):(?P<line>\d+): )?(?P<message>.+)$",
     re.MULTILINE,
 )
-_INCLUDEGRAPHICS = re.compile(r"(\\includegraphics(?:\s*\[[^\]]*\])?\s*\{)([^{}\n]+)(\})")
+_INCLUDEGRAPHICS = re.compile(
+    r"(\\includegraphics(?:\s*\[[^\]\n]{0,400}\])?\s*\{)([^{}\n]{1,400})(\})"
+)
 
 
 @dataclass

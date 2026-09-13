@@ -538,7 +538,7 @@ def _explicit_choice_addition(
     tail_match = re.search(r"\b(?:mit|with)\b(.+)$", request, re.IGNORECASE)
     tail = tail_match.group(1) if tail_match else ""
     tail = re.split(
-        r",?\s*\b(?:auf\s+deutsch|in\s+german|auf\s+englisch|in\s+english)\b",
+        r",?\s{0,40}\b(?:auf\s+deutsch|in\s+german|auf\s+englisch|in\s+english)\b",
         tail,
         maxsplit=1,
         flags=re.IGNORECASE,
@@ -689,7 +689,7 @@ def normalize_questions(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _normalize_option_values(raw: Any) -> list[str]:
     """Normalize choice options without ever treating a string as characters."""
     if isinstance(raw, str):
-        values: list[Any] = re.split(r"\s*(?:\r?\n|\||;|,)\s*", raw.strip())
+        values: list[Any] = re.split(r"\s{0,40}(?:\r?\n|\||;|,)\s{0,40}", raw.strip())
     elif isinstance(raw, (list, tuple)):
         values = list(raw)
         # Older agent output could accidentally persist a string as a list of
@@ -698,7 +698,7 @@ def _normalize_option_values(raw: Any) -> list[str]:
         if values and all(isinstance(value, str) and len(value) <= 1 for value in values):
             joined = "".join(str(value) for value in values).strip()
             if re.search(r"[\r\n|;,]", joined):
-                values = re.split(r"\s*(?:\r?\n|\||;|,)\s*", joined)
+                values = re.split(r"\s{0,40}(?:\r?\n|\||;|,)\s{0,40}", joined)
     else:
         values = []
 
@@ -876,9 +876,9 @@ def run_survey_agent(
         # that edit; it does not forbid it. An independent read-only instruction
         # anywhere else in the request must still veto every mutation.
         read_only_text = re.sub(
-            r"\s*,?\s*\b(?:sonst\s+(?:nichts|nix)\s+(?:mehr\s+)?"
+            r"\s{0,40},?\s{0,40}\b(?:sonst\s+(?:nichts|nix)\s+(?:mehr\s+)?"
             r"(?:ändern|aendern|bearbeiten)|(?:and\s+)?change\s+nothing\s+else)"
-            r"\s*[.!?]*\s*$",
+            r"\s{0,40}[.!?]{0,20}\s{0,40}$",
             "",
             request,
             flags=re.IGNORECASE,

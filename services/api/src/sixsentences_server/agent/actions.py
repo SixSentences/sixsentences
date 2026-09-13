@@ -357,10 +357,10 @@ _EXPLICIT_QUANTITATIVE_VISUAL = re.compile(
     re.IGNORECASE,
 )
 _QUANTITATIVE_VALUE = re.compile(
-    r"(?<![\w@])(?:\d{1,3}(?:[.,]\d+)?\s*%|0[.,]\d+|\d+[.,]\d+)"
+    r"(?<![\w@])(?:\d{1,3}(?:[.,]\d{1,15})?\s*%|0[.,]\d{1,15}|\d{1,15}[.,]\d{1,15})"
     r"(?![\w])|"
     r"\b(?:n|sample|count|score|accuracy|precision|recall|f1|pass@k)"
-    r"\s*[:=]\s*\d+(?:[.,]\d+)?\b",
+    r"\s*[:=]\s*\d{1,15}(?:[.,]\d{1,15})?\b",
     re.IGNORECASE,
 )
 _ACTION_VERB = re.compile(
@@ -903,7 +903,7 @@ _PROJECT_CONTAINER_FOR_WRITING = re.compile(
 _VISUAL_FOR_WRITING_CONTEXT = re.compile(
     r"(?:\b(?:figure|visual|diagramm|abbildung|schaubild)\w*\b|"
     r"\b\w*grafik\w*\b)"
-    r".{0,60}\b(?:for|für|fuer)\s+(?:my|the|mein\w*|die|das|den)?\s*"
+    r".{0,60}\b(?:for|für|fuer)\s+(?:(?:my|the|mein\w{0,20}|die|das|den)\s*)?"
     r"(?:paper|article|thesis|submission|manuscript|abschlussarbeit|"
     r"bachelorarbeit|masterarbeit|manuskript|einreichung)\w*\b",
     re.IGNORECASE,
@@ -1183,10 +1183,10 @@ _CURRENT_DOCUMENT_WORDS = {
 }
 _EXPLICIT_NEW_OUTCOME_FROM_SOURCE = re.compile(
     r"\b(?:create|build|start|prepare|generate|erstell\w*|anleg\w*|bau\w*)\b"
-    r".{0,60}\b(?:new\s+|neu\w*\s+)?(?:survey|questionnaire|umfrage|fragebogen|"
-    r"interviewstud\w*|interviewleitfaden|visual|figure|diagram|grafik|abbildung|"
+    r".{0,60}\b(?:new\s+|neu\w{0,20}\s+)?(?:survey|questionnaire|umfrage|fragebogen|"
+    r"interviewstud\w{0,20}|interviewleitfaden|visual|figure|diagram|grafik|abbildung|"
     r"manuscript|paper|article|manuskript|review|literaturrecherche|dataset|"
-    r"datensatz|project|projekt)\w*\b.{0,60}\b(?:from|using|based\s+on|aus|"
+    r"datensatz|project|projekt)\w{0,20}\b.{0,60}\b(?:from|using|based\s+on|aus|"
     r"auf\s+basis)\b",
     re.IGNORECASE,
 )
@@ -1330,8 +1330,8 @@ def _assistant_preferences_for_request(message: str) -> dict[str, str]:
     if custom_match and not preferences:
         preferences["custom_instructions"] = custom_match.group(1).strip(" .")
     explicit_custom = re.search(
-        r"\b(?:system\s*prompt|custom\s+instructions?|dauerhafte\w*\s+"
-        r"anweisung\w*)\b\s*(?:auf|to|:|=)?\s*[\"“']?(.{4,800}?)"
+        r"\b(?:system\s*prompt|custom\s+instructions?|dauerhafte\w{0,20}\s+"
+        r"anweisung\w{0,20})\b\s*(?:(?:auf|to|:|=)\s*)?[\"“']?(.{4,800}?)"
         r"[\"”']?\s*$",
         message,
         re.IGNORECASE,
@@ -1455,7 +1455,7 @@ _EXPLICIT_REVIEW_START = re.compile(
     r"\b(?:start|run|conduct|launch|create|begin|starte?\w*|führ\w*\s+durch|"
     r"fuehr\w*\s+durch|beginn\w*|erstell\w*)\b.{0,100}\b(?:systematic\s+"
     r"(?:literature\s+)?review|literature\s+review|literaturrecherche|"
-    r"systematische\w*\s+literatur\w*|slr|suchlauf)\w*\b",
+    r"systematische\w{0,20}\s+literatur\w{0,20}|slr|suchlauf)\w{0,20}\b",
     re.IGNORECASE,
 )
 
@@ -1897,7 +1897,7 @@ def _fallback_survey_questions(request: str) -> list[dict[str, Any]]:
     clauses = [
         clause.strip(" .")
         for clause in re.split(
-            r"\s*(?:,|;|\bund\s+(?=(?:eine|einer|einem|einen)\b))\s*",
+            r"\s{0,40}(?:[,;]|\bund\s+(?=(?:eine|einer|einem|einen)\b))\s{0,40}",
             request,
             flags=re.IGNORECASE,
         )

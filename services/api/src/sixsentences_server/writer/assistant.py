@@ -1661,10 +1661,10 @@ def _normalize_mutation_action_typos(message: str) -> str:
     """Correct only unambiguous adjacent swaps in explicit mutation verb stems."""
 
     command_match = re.match(
-        r"\s*(?:(?:please|pls|bitte)\b[\s,:]*)?"
+        r"\s{0,40}(?:(?:please|pls|bitte)\b[\s,:]{0,40})?"
         r"(?:(?:can\s+you|could\s+you|kannst\s+du|könntest\s+du|"
-        r"koenntest\s+du)\b[\s,:]*)?"
-        r"(?:(?:please|pls|bitte)\b[\s,:]*)?"
+        r"koenntest\s+du)\b[\s,:]{0,40})?"
+        r"(?:(?:please|pls|bitte)\b[\s,:]{0,40})?"
         r"(?P<action>[^\W\d_]+)",
         message,
         re.IGNORECASE | re.UNICODE,
@@ -1704,7 +1704,7 @@ def _requests_manuscript_mutation(message: str) -> bool:
     )
     for clause in clauses:
         if re.match(
-            r"\s*(?:(?:please|pls|bitte|just|nur)\s+)*"
+            r"\s{0,40}(?:(?:please|pls|bitte|just|nur)\s{1,40}){0,8}"
             r"(?:explain|describe|tell\s+me|erkl(?:ä|ae)r\w*|beschreib\w*)"
             r"\s+(?:how|whether|why|wie|ob|warum)\b",
             clause,
@@ -2354,13 +2354,14 @@ def _rewrite_numeric_facts(text: str, *, include_words: bool = True) -> set[str]
 
     # Citation/asset identifiers are not prose evidence.
     prose = re.sub(
-        r"\\(?:cite\w*|ref|eqref|label|includegraphics|url|href)\*?(?:\[[^\]]*\])?\{[^}]*\}",
+        r"\\(?:cite\w{0,20}|ref|eqref|label|includegraphics|url|href)"
+        r"\*?(?:\[[^\]\n]{0,400}\])?\{[^}\n]{0,2000}\}",
         " ",
         text,
     )
     facts = {
         format(Decimal(match.replace(",", ".")).normalize(), "f")
-        for match in re.findall(r"(?<![\w])\d+(?:[.,]\d+)?(?![\w])", prose)
+        for match in re.findall(r"(?<![\w])\d{1,15}(?:[.,]\d{1,15})?(?![\w])", prose)
     }
     if not include_words:
         return facts
@@ -2470,7 +2471,7 @@ def _writer_identity_receipts(
 
     if not isinstance(raw_edits, list) or not 1 <= len(raw_edits) <= MAX_WRITER_EDITS:
         return []
-    named_paths = set(re.findall(r"(?<![\w/])[\w./-]+\.(?:tex|latex|ltx)\b", message))
+    named_paths = set(re.findall(r"(?<![\w/])[\w./-]{1,200}\.(?:tex|latex|ltx)\b", message))
     if named_paths - project_files.keys():
         return []
     targets: list[tuple[str, int, int]] = []

@@ -687,7 +687,7 @@ def paper_discovery_constraints(question: str) -> PaperDiscoveryConstraints:
 
 
 _PAPER_CONTEXT_ENVELOPE = re.compile(
-    r"Prior topic context only:\s*(?P<prior>.+?)"
+    r"Prior topic context only:\s*(?P<prior>.{1,20000}?)"
     r"(?:\nCurrent authoritative request:\s*(?P<current>.*)|$)",
     re.IGNORECASE | re.DOTALL,
 )
@@ -709,7 +709,7 @@ def _paper_discovery_request_parts(question: str) -> tuple[str, str]:
 
 
 _EXPLICIT_TOPIC_PHRASE = re.compile(
-    r"\b(?:about|on|zu|(?:ü|ue)ber|im\s+bereich)\s+(?P<topic>.+)$",
+    r"\b(?:about|on|zu|(?:ü|ue)ber|im\s+bereich)\s+(?P<topic>\S.*)$",
     re.IGNORECASE,
 )
 _REFERENTIAL_TOPIC_PHRASE = re.compile(
@@ -762,7 +762,7 @@ def _paper_discovery_topic(question: str) -> str:
     explicit_current_topic = _explicit_current_topic(current_request)
     question = explicit_current_topic or prior_context or current_request
     match = re.search(
-        r"\b(?:about|on|zu|über|ueber|im\s+bereich)\s+(.+)$",
+        r"\b(?:about|on|zu|über|ueber|im\s+bereich)\s+(\S.*)$",
         question,
         re.IGNORECASE,
     )
@@ -1491,13 +1491,14 @@ _SAVE_PAPER_ASK = re.compile(
 )
 _NO_NEW_RESEARCH = re.compile(
     r"\b(?:"
-    r"(?:do\s+not|don['’]?t|without|no)\s+(?:new|another|further|more)?\s*"
+    r"(?:do\s+not|don['’]?t|without|no)\s+(?:(?:new|another|further|more)\s*)?"
     r"(?:(?:web|internet|online)\s+)?(?:search(?:ing)?|research|lookup|brows\w*|googl\w*|"
     r"look(?:ing)?(?:\s+(?:it|this|that))?\s+(?:up|online)|"
     r"(?:check|consult|read)\s+(?:the\s+)?(?:web|internet|online|official))|"
     r"nothing\s+(?:new|else)\s+to\s+(?:search|look\s+up)|"
-    r"(?:nichts|nix|nichts\s+mehr|nicht|keine)\s+(?:neu\w*|weiter\w*|nochmal|"
-    r"erneut)?\s*(?:(?:im\s+(?:internet|web|netz)|online)\s+)?"
+    r"(?:nichts|nix|nichts\s+mehr|nicht|keine)\s+"
+    r"(?:(?:neu\w{0,20}|weiter\w{0,20}|nochmal|erneut)\s*)?"
+    r"(?:(?:im\s+(?:internet|web|netz)|online)\s+)?"
     r"(?:such\w*|recherch\w*|nachschlag\w*|(?:web|internet)(?:suche|recherche)|googel\w*)|"
     r"ohne\s+(?:(?:neue|weitere|erneute)\s+)?"
     r"(?:suche|recherche|(?:web|internet)(?:suche|recherche))|"
@@ -1701,7 +1702,7 @@ def _claim_text_for_verification(question: str) -> str:
     """Extract an explicitly quoted claim from a compound user request."""
 
     match = re.search(
-        r"\b(?:claim|aussage|behauptung|these)\w*\s*[:\-]?\s*"
+        r"\b(?:claim|aussage|behauptung|these)\w{0,20}\s*(?:[:\-]\s*)?"
         r"[\"„“']([^\"„“']{8,800})[\"„“']",
         question,
         re.IGNORECASE,

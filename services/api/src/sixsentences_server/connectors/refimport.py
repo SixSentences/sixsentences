@@ -13,7 +13,7 @@ from typing import Any
 _RIS_TAG = re.compile(r"^([A-Z][A-Z0-9])\s{0,2}-\s?(.*)$")
 _BIB_ENTRY = re.compile(r"@(\w+)\s*\{", re.IGNORECASE)
 _BIB_FIELD = re.compile(
-    r"(\w+)\s*=\s*(\{(?:[^{}]|\{[^{}]*\})*\}|\"[^\"]*\"|[^,\n]+)", re.IGNORECASE
+    r"(\w{1,60})\s*=\s*(\{(?:[^{}]|\{[^{}]*\})*\}|\"[^\"]*\"|[^,\n]+)", re.IGNORECASE
 )
 _YEAR = re.compile(r"(19|20)\d{2}")
 
@@ -196,7 +196,7 @@ def parse_endnote_tagged(text: str) -> list[dict[str, Any]]:
         if not line.strip():
             flush()
             continue
-        match = re.match(r"^%([A-Z0-9])\s+(.*)$", line)
+        match = re.match(r"^%([A-Z0-9])\s{1,40}(.*)$", line)
         if not match:
             continue
         tag, value = match.group(1), match.group(2).strip()
