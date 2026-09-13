@@ -45,8 +45,9 @@ A tagged release publishes the API image and a `localhost` web image. Pointing
 the deployment at them replaces the longest step of a first start:
 
 ```console
-export SIX_API_IMAGE=ghcr.io/sixsentences/community-api:v0.2.0-alpha.1
-export SIX_WEB_IMAGE=ghcr.io/sixsentences/community-web:v0.2.0-alpha.1-localhost
+RELEASE=v0.2.0-alpha.1  # the tag you are deploying, from the releases page
+export SIX_API_IMAGE=ghcr.io/sixsentences/community-api:$RELEASE
+export SIX_WEB_IMAGE=ghcr.io/sixsentences/community-web:$RELEASE-localhost
 bash deploy/community/quickstart.sh --pull
 ```
 
