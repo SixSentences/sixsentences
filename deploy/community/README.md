@@ -21,6 +21,53 @@ extraction use only endpoints and credentials supplied by the operator.
 - reviewed processor terms and participant information before enabling any
   external model, web-search or spoken-interview processing.
 
+## Quick start
+
+One command writes a private local configuration, runs the preflight below,
+starts the stack health-gated, and creates the first account:
+
+```console
+make up
+```
+
+It runs `quickstart.sh`, which is exactly the documented sequence with a health
+gate and the owner prompt attached; every step can still be run by hand. The
+same script serves a public deployment:
+
+```console
+bash deploy/community/quickstart.sh --domain research.example.org
+```
+
+An existing environment file is reused, never overwritten, so re-running the
+script is a safe way to restart a deployment after a configuration change.
+
+A tagged release publishes the API image and a `localhost` web image. Pointing
+the deployment at them replaces the longest step of a first start:
+
+```console
+export SIX_API_IMAGE=ghcr.io/sixsentences/community-api:v0.2.0-alpha.1
+export SIX_WEB_IMAGE=ghcr.io/sixsentences/community-web:v0.2.0-alpha.1-localhost
+bash deploy/community/quickstart.sh --pull
+```
+
+The web client bakes `SIX_PUBLIC_ORIGIN` and `SIX_PUBLIC_API_URL` at build time,
+so a published web image serves only the origin it was built for. A TLS
+deployment keeps building its own web image and may still pull the API image.
+
+## First account
+
+Public registration stays off until mail is configured, so the first account is
+created on the command line — `quickstart.sh` prompts for it, and it can be run
+again at any time:
+
+```console
+docker compose --env-file .env.selfhost run --rm api \
+  six-community auth create-owner --email you@example.org --org "My Lab"
+```
+
+The password is prompted twice and is never accepted as a flag, so it reaches
+neither a shell history nor a process list.
+
 ## Production TLS setup
 
 Generate a private configuration without printing its secrets:
