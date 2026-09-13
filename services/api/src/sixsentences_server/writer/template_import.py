@@ -130,8 +130,11 @@ class _LinkParser(HTMLParser):
             self._text = []
 
 
+# ``</script >`` and ``</script\n>`` are valid end tags: the closing angle may be
+# separated from the name by whitespace. Without ``\s*`` the pair stays unmatched
+# and the *contents* of the element survive into the imported template text.
 _DROP = re.compile(
-    r"<(?:script|style|noscript)\b[^>]*>.*?</(?:script|style|noscript)>",
+    r"<(?:script|style|noscript)\b[^>]*>.*?</(?:script|style|noscript)\s*>",
     re.I | re.S,
 )
 _TAG = re.compile(r"<[^>]+>")
