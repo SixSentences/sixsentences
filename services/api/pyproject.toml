@@ -23,7 +23,7 @@ dependencies = [
     "sixsentences-engine==0.2.0a1",
     "sqlalchemy==2.0.51",
     "typer==0.26.8",
-    "uvicorn==0.51.0",
+    "uvicorn==0.52.4",
     "websockets==16.1.1",
 ]
 
