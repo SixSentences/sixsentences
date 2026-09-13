@@ -7,6 +7,8 @@ A work with no reachable OA copy yields an empty plan with an honest reason,
 which becomes a PRISMA "report not retrieved" entry.
 """
 
+from urllib.parse import urlparse
+
 from sixsentences_server.acquisition.models import (
     AcquisitionCandidate,
     AcquisitionPlan,
@@ -32,7 +34,14 @@ _STATUS_BASIS = {
 
 
 def _is_arxiv(url: str) -> bool:
-    return "arxiv.org" in url.lower()
+    """True only when the *host* is arXiv, not when the string appears anywhere.
+
+    ``https://evil.example/arxiv.org/paper.pdf`` contains the substring but is
+    not arXiv, and treating it as such would attach the wrong legal basis and
+    rewrite the candidate to the arXiv export host.
+    """
+    host = (urlparse(url).hostname or "").lower()
+    return host == "arxiv.org" or host.endswith(".arxiv.org")
 
 
 def _basis_for_status(oa_status: str | None) -> LegalBasis:

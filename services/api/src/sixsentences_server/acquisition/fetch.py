@@ -17,6 +17,7 @@ chat evidence, making it a *readable* SSRF. Redirects are followed manually
 (the client does not auto-follow) precisely so each hop can be revalidated.
 """
 
+import re
 import time
 from collections.abc import Callable
 from typing import Protocol
@@ -38,6 +39,13 @@ _REDIRECT_STATUS = (301, 302, 303, 307, 308)
 DEFAULT_MAX_BYTES = 64 * 1024 * 1024
 
 UrlGuard = Callable[[str], bool]
+
+# The host guard alone trusts that the string it inspected is the string httpx
+# will dial. That holds only for a URL made of URL characters: whitespace,
+# control characters, a backslash or embedded "user@" credentials are exactly
+# the shapes that parse differently in two parsers. Require a plain, printable
+# http(s) URL first, then check where it points.
+_PLAIN_HTTP_URL = re.compile(r"https?://[A-Za-z0-9._~:/?#\[\]!$&'()*+,;=%-]{1,2000}")
 
 
 class DocumentFetcher(Protocol):
@@ -76,6 +84,8 @@ class HttpxFetcher:
         redirects = 0
         attempt = 0
         while True:
+            if not _PLAIN_HTTP_URL.fullmatch(current):
+                return None  # not a plain http(s) URL: refuse before resolving it
             if not self._guard(current):
                 return None  # SSRF guard: refuse a non-public target / hop
             transient = False

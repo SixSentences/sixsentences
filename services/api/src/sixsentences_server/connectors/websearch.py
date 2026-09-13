@@ -379,7 +379,11 @@ def categorize(domain: str) -> str:
         return "standard/gov"
     if domain in _ACADEMIC or domain.endswith(".edu"):
         return "academic"
-    if domain.startswith("docs.") or domain.endswith("readthedocs.io"):
+    if (
+        domain.startswith("docs.")
+        or domain == "readthedocs.io"
+        or domain.endswith(".readthedocs.io")
+    ):
         return "documentation"
     if domain in _NEWS:
         return "news"

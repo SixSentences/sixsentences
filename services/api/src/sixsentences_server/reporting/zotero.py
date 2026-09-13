@@ -1,5 +1,6 @@
 """Zotero Web API v3 client and loss-minimising item mapping."""
 
+import re
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
@@ -10,6 +11,13 @@ from sixsentences_server.core.models import WorkRecord
 
 ZOTERO_API = "https://api.zotero.org"
 _MAX_ITEMS = 50  # Zotero accepts up to 50 items per write
+# The library coordinates come from a request body and are pasted straight into
+# the request path. Anything outside this alphabet ("..", "?", "#", "//", "@")
+# could move the call off the ``/users/<id>/items`` path it must stay on, so the
+# client refuses it instead of asking the caller to have validated it.
+_LIBRARY_TYPES = ("user", "group")
+_LIBRARY_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
+_COLLECTION_KEY = re.compile(r"[A-Za-z0-9]{1,32}")
 
 
 def to_zotero_items(works: list[WorkRecord]) -> list[dict[str, Any]]:
@@ -51,6 +59,10 @@ class ZoteroClient:
         *,
         http: httpx.Client | None = None,
     ) -> None:
+        if library_type not in _LIBRARY_TYPES:
+            raise ValueError("Zotero library type must be 'user' or 'group'")
+        if not _LIBRARY_ID.fullmatch(library_id):
+            raise ValueError("Zotero library id must be letters, digits, '-' or '_'")
         self.api_key = api_key
         self.root = f"{ZOTERO_API}/{library_type}s/{library_id}"
         self.url = f"{self.root}/items"
@@ -98,6 +110,8 @@ class ZoteroClient:
         limit: int = 10_000,
     ) -> ZoteroPage:
         """Read an incremental library snapshot, preserving notes and attachments."""
+        if collection_key and not _COLLECTION_KEY.fullmatch(collection_key):
+            raise ValueError("Zotero collection key must be letters or digits")
         items: list[dict[str, Any]] = []
         start = 0
         library_version = since

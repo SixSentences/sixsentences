@@ -24,6 +24,13 @@ PER_PAGE = 200
 _MAX_RETRIES = 4  # a 50k ingest is ~250 pages; a single slow page must not kill it
 _TRANSIENT_STATUS = (429, 500, 502, 503, 504)
 _EXACT_LOOKUP_TIMEOUT_SECONDS = 8.0
+# The three id shapes callers actually resolve: a DOI, an arXiv id, or a bare
+# OpenAlex id. Everything else is refused before it reaches the request path.
+_EXTERNAL_ID = re.compile(
+    r"doi:10\.\d{4,9}/[A-Za-z0-9._:;()\[\]<>+*/-]{1,180}"
+    r"|arxiv:[A-Za-z0-9./-]{1,40}"
+    r"|[A-Za-z]\d{2,18}"
+)
 _MAX_EXACT_LOOKUP_BYTES = 1_000_000
 
 WORK_FIELDS = (
@@ -372,6 +379,15 @@ class OpenAlexClient:
         """Resolve one work by an external id ("doi:10.x/y" or a bare OpenAlex
         id; arXiv papers resolve via their DataCite DOI 10.48550/arXiv.<id>).
         Returns None when OpenAlex does not know it."""
+        # The id is read out of an uploaded PDF's text, so it is attacker-shaped
+        # input pasted into the request path: "//host/x" is a protocol-relative
+        # URL that would retarget the whole request, "../" walks out of /works/,
+        # and "?"/"#" rewrite the query the caller built. Refuse anything that is
+        # not a plain DOI or OpenAlex id rather than encoding around it.
+        if ".." in external_id:
+            return None
+        if not _EXTERNAL_ID.fullmatch(external_id):
+            return None
         try:
             with self.http.stream(
                 "GET",
