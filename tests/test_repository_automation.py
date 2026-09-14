@@ -279,6 +279,47 @@ def test_cla_workflow_reminds_without_ever_checking_out_a_contribution() -> None
     assert "persist-credentials: false" in workflow
 
 
+def test_companion_reports_its_context_without_starting_a_toolchain_it_does_not_need() -> None:
+    """A required context must report on every pull request, macOS or not.
+
+    A job that a path filter *skips* never reports, and a required context that
+    never reports blocks a merge forever. The job therefore keeps its name and
+    always runs; only its runner and its steps depend on what changed.
+    """
+
+    workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    companion = workflow.split("\n  companion-macos:\n", maxsplit=1)[1]
+
+    assert "name: macOS Companion (${{ matrix.label }})" in companion
+    assert "needs: changes" in companion
+    assert (
+        "runs-on: ${{ needs.changes.outputs.companion == 'true' && matrix.os || 'ubuntu-24.04' }}"
+        in companion
+    )
+    for step in (
+        "Require the pinned Apple toolchain",
+        "Verify plist, scripts, source boundary, and API contracts",
+        "Test the macOS Companion",
+        "Build release source without signing credentials",
+    ):
+        assert step in companion
+    assert companion.count("if: needs.changes.outputs.companion == 'true'") >= 6
+
+    detector = workflow.split("\n  changes:\n", maxsplit=1)[1].split("\n  engine-quality:")[0]
+    # The Companion's own audit reads two files outside its directory, so a
+    # change to either has to reach the full job.
+    for path in (
+        "apps/companion-macos/*",
+        "THIRD_PARTY_NOTICES.md",
+        "docs/assets/sixsentences-mark.svg",
+        ".github/workflows/ci.yml",
+    ):
+        assert path in detector
+    # No pull request to compare against means run everything, never skip.
+    assert 'if [ -z "${BASE_REF:-}" ]' in detector
+    assert 'echo "companion=true" >> "$GITHUB_OUTPUT"' in detector
+
+
 def test_image_publication_is_bound_to_a_verified_release_tag() -> None:
     workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "publish-images.yml").read_text(
         encoding="utf-8"

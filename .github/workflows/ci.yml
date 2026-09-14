@@ -16,6 +16,49 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect the areas a pull request touches
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      companion: ${{ steps.areas.outputs.companion }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Compare the pull request against its merge base
+        id: areas
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          # A push build has no pull request to compare against. A missing base
+          # is a reason to run everything, never to assume nothing changed.
+          if [ -z "${BASE_REF:-}" ]; then
+            echo "companion=true" >> "$GITHUB_OUTPUT"
+            echo "No pull-request base: running every area."
+            exit 0
+          fi
+          git fetch --quiet origin "$BASE_REF"
+          base="$(git merge-base "origin/$BASE_REF" HEAD)"
+          companion=false
+          while IFS= read -r path; do
+            case "$path" in
+              # The Companion sources themselves, plus the two repository files
+              # its boundary audit reads and the definition of its own job.
+              apps/companion-macos/* | \
+              THIRD_PARTY_NOTICES.md | \
+              docs/assets/sixsentences-mark.svg | \
+              .github/workflows/ci.yml)
+                companion=true
+                ;;
+            esac
+          done <<< "$(git diff --name-only "$base" HEAD)"
+          echo "companion=$companion" >> "$GITHUB_OUTPUT"
+          echo "Companion-relevant changes: $companion"
+
   engine-quality:
     name: Engine quality and package (Python 3.12)
     runs-on: ubuntu-24.04
@@ -189,7 +232,12 @@ jobs:
 
   companion-macos:
     name: macOS Companion (${{ matrix.label }})
-    runs-on: ${{ matrix.os }}
+    needs: changes
+    # macOS runners are the scarcest capacity this repository has. A pull request
+    # that touches no Companion source still has to report this required context,
+    # so the job keeps its name and runs — on a cheap runner, without starting an
+    # Xcode toolchain.
+    runs-on: ${{ needs.changes.outputs.companion == 'true' && matrix.os || 'ubuntu-24.04' }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -208,24 +256,35 @@ jobs:
       SWIFTPM_MODULECACHE_OVERRIDE: /tmp/sixsentences-companion-swift-module-cache
       CLANG_MODULE_CACHE_PATH: /tmp/sixsentences-companion-clang-module-cache
     steps:
+      - name: Report an untouched Companion
+        if: needs.changes.outputs.companion != 'true'
+        run: |
+          echo "No Companion source, third-party notice, brand asset or CI"
+          echo "definition changed, so the Xcode toolchain was not started."
       - name: Check out source
+        if: needs.changes.outputs.companion == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Require the pinned Apple toolchain
+        if: needs.changes.outputs.companion == 'true'
         run: |
           test -d "$DEVELOPER_DIR"
           xcodebuild -version | grep -Fx "${{ matrix.xcode-version }}"
           swift --version
       - name: Verify plist, scripts, source boundary, and API contracts
+        if: needs.changes.outputs.companion == 'true'
         run: bash apps/companion-macos/Scripts/audit-community-source.sh
       - name: Resolve the exact Swift dependency graph
+        if: needs.changes.outputs.companion == 'true'
         run: |
           swift package resolve --package-path apps/companion-macos
           git diff --exit-code -- apps/companion-macos/Package.resolved
       - name: Test the macOS Companion
+        if: needs.changes.outputs.companion == 'true'
         run: swift test --package-path apps/companion-macos --disable-sandbox
       - name: Build release source without signing credentials
+        if: needs.changes.outputs.companion == 'true'
         run: swift build --package-path apps/companion-macos --configuration release --disable-sandbox
 
   self-hosting:
