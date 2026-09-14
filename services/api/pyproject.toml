@@ -13,7 +13,7 @@ dependencies = [
     "fastapi==0.141.1",
     "httpx==0.28.1",
     "pillow==12.3.0",
-    "psycopg[binary]==3.3.4",
+    "psycopg[binary]==3.3.5",
     "pyarrow==25.0.1",
     "pycryptodomex==3.23.0",
     "pydantic-settings==2.15.0",
