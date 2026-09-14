@@ -59,6 +59,16 @@ python scripts/check_web_contracts.py --require-complete
 python scripts/audit_community_export.py
 ```
 
+A change under `services/api/` — a dependency bump included — has to rewrite the
+manifest that binds these files to their digests:
+
+```text
+python scripts/audit_community_export.py --refresh-manifest
+```
+
+It runs every other gate first and only then records the tree, printing which
+entries it added, changed or removed.
+
 The generated `SOURCE_EXPORT_MANIFEST.json` binds every copied source file to the
 pinned private source commit. `COMMUNITY_EXPORT_MANIFEST.json` binds the final,
 sanitized service files. The export scripts refuse an unexpected commit or a
