@@ -55,6 +55,22 @@ The web client bakes `SIX_PUBLIC_ORIGIN` and `SIX_PUBLIC_API_URL` at build time,
 so a published web image serves only the origin it was built for. A TLS
 deployment keeps building its own web image and may still pull the API image.
 
+## Checking a running deployment
+
+The preflight proves a configuration is consistent before the stack starts.
+Afterwards, one command reports what each part can actually do — whether the
+database carries its tables, whether documents can be written, whether the
+configured mail host accepts a session, and which optional features are off and
+why:
+
+```console
+docker compose --env-file .env.selfhost exec api six-community doctor
+```
+
+A feature that is switched off is reported as off rather than as broken, and no
+configured secret appears in the output, so the result can be pasted into an
+issue. `quickstart.sh` runs it once after the stack starts.
+
 ## First account
 
 Public registration stays off until mail is configured, so the first account is

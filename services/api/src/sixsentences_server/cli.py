@@ -48,6 +48,7 @@ from sixsentences_server.jobs import cancel_run_jobs
 from sixsentences_server.llm.base import BudgetGovernor, LLMConfigError
 from sixsentences_server.llm.pool import LLMPool, RoutingConfig
 from sixsentences_server.llm.providers import PROVIDERS
+from sixsentences_server.ops.doctor import Check, failed, run_doctor
 from sixsentences_server.pipeline.run import execute_run
 from sixsentences_server.reporting.exports import (
     EXTENSIONS,
@@ -1245,3 +1246,24 @@ def api_cmd(port: int = typer.Option(8000)) -> None:
 
 if __name__ == "__main__":
     app()
+
+
+@app.command("doctor")
+def doctor_cmd() -> None:
+    """Report whether this deployment can do what it is configured for."""
+
+    checks: list[Check] = run_doctor()
+    width = max(len(check.name) for check in checks)
+    for check in checks:
+        marker = {"ok": "ok", "off": "off", "failed": "FAIL"}[check.state]
+        typer.echo(f"{marker:>4}  {check.name:<{width}}  {check.detail}")
+    problems = failed(checks)
+    if problems:
+        typer.echo("", err=True)
+        typer.echo(
+            f"{len(problems)} check(s) need attention before this deployment can be used.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    typer.echo("")
+    typer.echo("Every configured feature answered.")
