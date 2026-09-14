@@ -12,7 +12,7 @@ equivalents for Python package metadata.
 
 - Nothing yet.
 
-## [0.2.0-alpha.1] - 2026-09-12
+## [0.2.0-alpha.1] - 2026-09-14
 
 ### Added
 
