@@ -61,11 +61,14 @@ names the files to change and how to check the result.
 
 ## Workflow
 
-`main` contains reviewed release-ready history; `develop` is the integration
-branch. Create a short-lived branch such as `fix/interview-retention` or
-`feat/ris-import` from `develop` and open the pull request back to `develop`.
-Release pull requests promote `develop` to `main`. Urgent fixes branch from
-`main` and are merged back into `develop` after release.
+`main` is the only long-lived branch and always holds reviewed, release-ready
+history. Create a short-lived branch such as `fix/interview-retention` or
+`feat/ris-import` from `main` and open the pull request back to `main`. Delete
+it after the merge. Releases are tagged from reviewed `main` commits.
+
+Nothing reaches `main` unreviewed: it requires a pull request, the full check
+suite, code scanning, DCO sign-off, CLA acceptance, signed commits, and linear
+history.
 
 Keep each pull request focused. Use Conventional Commit subjects where
 practical: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, or `chore:`. Do not

@@ -190,8 +190,8 @@ for you. Reading them before you write code saves a round trip:
 3. **Accept the CLA** by posting the exact sentence from `CLA.md` as a
    standalone comment on your pull request. A bot will remind you there.
 
-Branch from `develop` and open the pull request back to `develop`. Reference
-this issue in the description so the two are linked.
+Branch from `main` and open the pull request back to `main`. Reference this
+issue in the description so the two are linked.
 
 A claim expires after {STALE_AFTER.days} days without activity, so the issue
 does not stay parked if life gets in the way — commenting here resets that

@@ -2,7 +2,6 @@ version: 2
 updates:
   - package-ecosystem: uv
     directory: /
-    target-branch: develop
     schedule:
       interval: weekly
       day: monday
@@ -40,7 +39,6 @@ updates:
 
   - package-ecosystem: uv
     directory: /services/api
-    target-branch: develop
     schedule:
       interval: weekly
       day: monday
@@ -81,7 +79,6 @@ updates:
 
   - package-ecosystem: docker
     directory: /
-    target-branch: develop
     schedule:
       interval: weekly
       day: monday
@@ -93,7 +90,6 @@ updates:
 
   - package-ecosystem: docker
     directory: /apps/web
-    target-branch: develop
     schedule:
       interval: weekly
       day: monday
@@ -112,7 +108,6 @@ updates:
 
   - package-ecosystem: github-actions
     directory: /
-    target-branch: develop
     schedule:
       interval: weekly
       day: monday
@@ -132,7 +127,6 @@ updates:
 
   - package-ecosystem: npm
     directory: /apps/web
-    target-branch: develop
     schedule:
       interval: weekly
       day: monday
@@ -164,7 +158,6 @@ updates:
 
   - package-ecosystem: npm
     directory: /apps/browser-extension
-    target-branch: develop
     schedule:
       interval: weekly
       day: monday
@@ -176,7 +169,6 @@ updates:
 
   - package-ecosystem: swift
     directory: /apps/companion-macos
-    target-branch: develop
     schedule:
       interval: weekly
       day: monday

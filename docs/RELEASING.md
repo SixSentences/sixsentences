@@ -9,9 +9,9 @@ uses no long-lived registry or Apple credential.
 
 ## Authority and protection
 
-Only a release maintainer may create `v*` tags or publish a release. Promote a
-reviewed release commit from `develop` to `main`, with both branches protected
-by the checks described in [GOVERNANCE.md](../GOVERNANCE.md). Protect
+Only a release maintainer may create `v*` tags or publish a release. Releases
+are cut from reviewed `main` commits, with `main` protected by the checks
+described in [GOVERNANCE.md](../GOVERNANCE.md). Protect
 release tags against force-push, update, and deletion, and restrict tag creation
 to release maintainers.
 

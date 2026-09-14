@@ -78,7 +78,7 @@ or production configuration.
 
 ## Repository controls
 
-- [ ] `main` and `develop` reject force pushes and require review, conversation
+- [ ] `main` rejects force pushes and requires review, conversation
       resolution, DCO, CLA, CI, CodeQL, dependency review, and security checks.
 - [ ] While the documented founding single-maintainer exception applies, the
       release pull request contains a line-by-line self-review record. Once a
