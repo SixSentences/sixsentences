@@ -1693,10 +1693,10 @@
       "sha256": "1db3cc5f6078fa5ca68f77c4abbdf1c7248b7ae9a5911114e2bc8681e47eccdb"
     },
     {
-      "bytes": 3342,
+      "bytes": 3768,
       "mode": "0644",
       "path": "tests/test_credential_storage.py",
-      "sha256": "5927bfb0d8e971bed67474fb18c59f9dfa7835522efca3234eff32e5e68f47fb"
+      "sha256": "78c0f5d1c9732354faa06a73f3d038b3a031c41ddd5808402be62e132d1c6ba1"
     },
     {
       "bytes": 1991,
