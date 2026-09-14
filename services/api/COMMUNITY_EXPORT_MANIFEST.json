@@ -100,7 +100,7 @@
       "bytes": 1940,
       "mode": "0644",
       "path": "pyproject.toml",
-      "sha256": "8849dad90a6ba16473f63b174b4a8958ae57eb031d00bcc1cc4477ee25d7cdaa"
+      "sha256": "e43a15f7bb3db9d3fbbbd24c515178502b59bf3a3cb0b7f9f89863641460099c"
     },
     {
       "bytes": 79,
@@ -2419,10 +2419,10 @@
       "sha256": "5e623acc688d729e25fcb6d8544dbd84dbc515161690b32a3dacb00ccb88df6c"
     },
     {
-      "bytes": 262349,
+      "bytes": 262354,
       "mode": "0644",
       "path": "uv.lock",
-      "sha256": "f5b349861d1b27fdb2b44742e2bd540a75b40858c2eaaefb40c6f713bf13a2db"
+      "sha256": "a4259aa4ab0d56d1eae4ab2c02b2393972805eb6ee9fc80e4a82f4550c2db3ad"
     }
   ],
   "format": 1,
