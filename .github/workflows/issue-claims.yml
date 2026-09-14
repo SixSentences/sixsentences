@@ -1,0 +1,78 @@
+name: Issue claims
+
+on:
+  issue_comment:
+    types: [created]
+  schedule:
+    # Once a day is often enough for a fortnight-long expiry, and keeps the
+    # thread quiet.
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  # Two people claiming the same issue in the same second must not both win.
+  group: claims-${{ github.event.issue.number || 'sweep' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  command:
+    name: Apply an issue claim command
+    # Pull requests have their own assignment conventions; this is for issues.
+    if: github.event_name == 'issue_comment' && !github.event.issue.pull_request
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      # Assign, label, and answer. The handler comes from the protected default
+      # branch and no contributor-controlled code is checked out or executed.
+      issues: write
+    steps:
+      - name: Check out the protected claim handler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Apply the command
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          # The comment body is attacker-controlled text. It reaches the handler
+          # through the environment and is never interpolated into this shell,
+          # which is what keeps a comment from becoming a command here.
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association }}
+        run: |
+          set -euo pipefail
+          docs_sha="$(git rev-parse HEAD)"
+          python .github/scripts/claim_issue.py command \
+            --repository "$GITHUB_REPOSITORY" \
+            --number "$ISSUE_NUMBER" \
+            --api-url "$GITHUB_API_URL" \
+            --docs-url "https://github.com/$GITHUB_REPOSITORY/blob/$docs_sha/CONTRIBUTING.md"
+
+  sweep:
+    name: Release claims that went quiet
+    if: github.event_name != 'issue_comment'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out the protected claim handler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Release expired claims
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python .github/scripts/claim_issue.py sweep \
+            --repository "$GITHUB_REPOSITORY" \
+            --api-url "$GITHUB_API_URL"

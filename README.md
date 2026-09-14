@@ -213,6 +213,12 @@ workflow uses no external CLA service or separately stored secret. Decisions
 and maintainer responsibilities are described in
 [GOVERNANCE.md](GOVERNANCE.md).
 
+Starting out: the
+[`good first issue`](https://github.com/SixSentences/sixsentences/labels/good%20first%20issue)
+label collects work that is finishable without knowing the rest of the system,
+and each of those issues names the files to change and how to check the result.
+Comment `/claim` on one to take it, so nobody builds the same thing twice.
+
 Report vulnerabilities through the repository's
 [private advisory form](https://github.com/SixSentences/sixsentences/security/advisories/new),
 never through a public issue. See [SECURITY.md](SECURITY.md).
