@@ -41,6 +41,9 @@ owner: ## Create one tenant owner: make owner EMAIL=you@example.org
 preflight: ## Re-run the fail-closed configuration check
 	bash deploy/community/preflight.sh $(ENV_FILE)
 
+doctor: ## Report what the running deployment can actually do
+	$(COMPOSE) exec api six-community doctor
+
 backup: ## Write an authenticated backup to SIX_BACKUP_DIR
 	bash deploy/community/backup.sh $(ENV_FILE)
 

@@ -143,6 +143,13 @@ if ! compose exec -T api python -c 'import urllib.request; urllib.request.urlope
 fi
 echo "The API reports ready and the database migrations have been applied."
 
+step "Configuration"
+# Reports what each configured feature can actually do. A failing check does not
+# stop a running stack; it names what to fix.
+if ! compose exec -T api six-community doctor; then
+  echo "The stack is running. The checks above name what still needs attention."
+fi
+
 PUBLIC_ORIGIN="$(awk 'index($0, "SIX_PUBLIC_ORIGIN=") == 1 { print substr($0, 19); exit }' "$ENV_FILE" | tr -d '\r')"
 
 OWNER_COMMAND="docker compose --env-file $ENV_FILE run --rm api six-community auth create-owner --email you@example.org --org \"My Lab\""
