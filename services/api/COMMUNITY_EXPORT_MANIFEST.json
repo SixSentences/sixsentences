@@ -1723,10 +1723,10 @@
       "sha256": "96a616709e2214dba065d3b2843d5e7bc3f0046e31e38222c1edce4044944a0e"
     },
     {
-      "bytes": 4778,
+      "bytes": 7625,
       "mode": "0644",
       "path": "tests/test_email_verification.py",
-      "sha256": "07195606f92927e50fb42af362ab1abb69b8bc6346906d98f2d0d2b5b0a854c1"
+      "sha256": "080a29c4ae770bda5bdbe06249734badf1ccf43a680d11ddabbcd610b3389f2b"
     },
     {
       "bytes": 6010,
