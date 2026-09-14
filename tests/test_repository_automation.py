@@ -368,6 +368,28 @@ def test_release_publication_requires_the_protected_environment() -> None:
     assert "ref: ${{ needs.validate.outputs.release-sha }}" in publish_job
 
 
+def test_the_preview_gate_can_see_the_draft_it_guards() -> None:
+    """The gate reads a draft release, which a read-only token cannot see.
+
+    GitHub shows draft releases only to callers with push access. Under
+    `contents: read` the job's first call answers "release not found", so the
+    gate fails every run it exists to pass — which is exactly how it behaved the
+    first time it ever ran. The write scope buys visibility, nothing else.
+    """
+
+    workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
+    preview_job = workflow.split("\n  preview:\n", maxsplit=1)[1].split("\n  publish:\n")[0]
+
+    assert "\n    permissions:\n      contents: write\n" in preview_job
+    # Visibility, not mutation: the job lists the draft and checks one checksum.
+    for mutation in ("gh release create", "gh release edit", "gh release upload"):
+        assert mutation not in preview_job
+    assert "sha256sum --check" in preview_job
+    assert "docs/assets/sixsentences-overview.sha256" in preview_job
+
+
 def test_release_dispatch_checks_out_and_verifies_one_explicit_signed_tag() -> None:
     workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "release.yml").read_text(
         encoding="utf-8"
