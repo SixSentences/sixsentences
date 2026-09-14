@@ -18,7 +18,7 @@ dependencies = [
     "pycryptodomex==3.23.0",
     "pydantic-settings==2.14.2",
     "pydantic==2.13.5",
-    "pypdf==6.18.0",
+    "pypdf==6.18.1",
     "python-docx==1.2.0",
     "sixsentences-engine==0.2.0a1",
     "sqlalchemy==2.0.51",
