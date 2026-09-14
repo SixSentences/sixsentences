@@ -147,7 +147,45 @@ def verify_manifest(root: Path, files: list[Path]) -> None:
             path for path in set(expected) & set(actual) if expected[path] != actual[path]
         )
         detail = (missing or extra or changed or ["unknown"])[0]
-        raise RuntimeError(f"manifest:file-set-or-hash:{detail}")
+        raise RuntimeError(
+            f"manifest:file-set-or-hash:{detail} — a change under services/api/ has to"
+            " rewrite the manifest: python scripts/audit_community_export.py"
+            " --refresh-manifest"
+        )
+
+
+def refresh_manifest(root: Path, files: list[Path]) -> tuple[str, ...]:
+    """Rewrite the manifest for the current tree and report what it changed.
+
+    Only ever reached after every other gate passed. The manifest records a tree
+    that has already been shown to hold the source boundary, so refreshing it can
+    record new hashes but never grant approval to something the audit rejects.
+    """
+
+    manifest_path = root / MANIFEST_NAME
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    before = {str(item["path"]): str(item["sha256"]) for item in payload.get("files", [])}
+    entries = [
+        {
+            "bytes": path.stat().st_size,
+            "mode": f"{path.stat().st_mode & 0o777:04o}",
+            "path": path.relative_to(root).as_posix(),
+            "sha256": sha256(path),
+        }
+        for path in files
+    ]
+    after = {str(entry["path"]): str(entry["sha256"]) for entry in entries}
+    payload["files"] = sorted(entries, key=lambda entry: str(entry["path"]))
+    manifest_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return tuple(
+        sorted(
+            [f"changed:{name}" for name in before.keys() & after.keys() if before[name] != after[name]]
+            + [f"added:{name}" for name in after.keys() - before.keys()]
+            + [f"removed:{name}" for name in before.keys() - after.keys()]
+        )
+    )
 
 
 def scan_tree(root: Path, files: list[Path]) -> None:
@@ -286,18 +324,33 @@ def main() -> int:
     parser.add_argument(
         "service", type=Path, nargs="?", default=Path(__file__).resolve().parents[1]
     )
+    parser.add_argument(
+        "--refresh-manifest",
+        action="store_true",
+        help="rewrite the manifest for this tree once every other gate has passed",
+    )
     args = parser.parse_args()
     root = args.service.resolve()
+    refreshed: tuple[str, ...] = ()
     try:
         files = included_files(root)
-        verify_manifest(root, files)
+        if not args.refresh_manifest:
+            verify_manifest(root, files)
         scan_tree(root, files)
         verify_codeql_regressions(root)
         verify_packaging(root)
         verify_runtime(root)
+        if args.refresh_manifest:
+            refreshed = refresh_manifest(root, files)
     except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as exc:
         print(f"community export audit failed: {exc}", file=sys.stderr)
         return 1
+    if args.refresh_manifest:
+        print(
+            "community export manifest refreshed: "
+            + (", ".join(refreshed) if refreshed else "no change")
+        )
+        return 0
     print(
         "community export audit passed: "
         f"{len(files)} files, {EXPECTED_HTTP_OPERATIONS} HTTP operations, "
