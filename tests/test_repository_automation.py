@@ -10,7 +10,7 @@ import plistlib
 import sys
 import tarfile
 import urllib.request
-from datetime import date
+from datetime import UTC, date, datetime
 from email.message import Message
 from pathlib import Path
 from types import ModuleType
@@ -30,6 +30,7 @@ def _load_script(name: str) -> ModuleType:
 
 DCO = _load_script("check_dco")
 CLA = _load_script("check_cla")
+CLAIM = _load_script("claim_issue")
 RELEASE = _load_script("release")
 STATUS = _load_script("publish_status")
 URI_HISTORY = _load_script("check_history_credential_uris")
@@ -366,6 +367,28 @@ def test_release_publication_requires_the_protected_environment() -> None:
         "companion-macos-source, tag-security, preview]\n" in publish_job
     )
     assert "ref: ${{ needs.validate.outputs.release-sha }}" in publish_job
+
+
+def test_the_preview_gate_can_see_the_draft_it_guards() -> None:
+    """The gate reads a draft release, which a read-only token cannot see.
+
+    GitHub shows draft releases only to callers with push access. Under
+    `contents: read` the job's first call answers "release not found", so the
+    gate fails every run it exists to pass — which is exactly how it behaved the
+    first time it ever ran. The write scope buys visibility, nothing else.
+    """
+
+    workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
+    preview_job = workflow.split("\n  preview:\n", maxsplit=1)[1].split("\n  publish:\n")[0]
+
+    assert "\n    permissions:\n      contents: write\n" in preview_job
+    # Visibility, not mutation: the job lists the draft and checks one checksum.
+    for mutation in ("gh release create", "gh release edit", "gh release upload"):
+        assert mutation not in preview_job
+    assert "sha256sum --check" in preview_job
+    assert "docs/assets/sixsentences-overview.sha256" in preview_job
 
 
 def test_release_dispatch_checks_out_and_verifies_one_explicit_signed_tag() -> None:
@@ -927,3 +950,145 @@ def test_sdist_gate_requires_lockfile(tmp_path: Path) -> None:
 
     _write_sdist(archive, include_lockfile=True)
     RELEASE._verify_sdist(archive, package_version="0.1.0a1")
+
+
+def _issue(
+    *,
+    number: int = 7,
+    state: str = "open",
+    assignees: tuple[str, ...] = (),
+    updated_at: str = "2026-09-14T00:00:00Z",
+) -> dict[str, object]:
+    return {
+        "number": number,
+        "state": state,
+        "assignees": [{"login": login} for login in assignees],
+        "updated_at": updated_at,
+    }
+
+
+def _decide(issue: dict[str, object], *, actor: str, open_claims: tuple[int, ...] = ()) -> object:
+    return CLAIM.claim_decision(
+        issue, actor=actor, open_claims=list(open_claims), docs_url="https://example.org/c.md"
+    )
+
+
+def test_a_claim_command_has_to_be_the_whole_comment() -> None:
+    """Discussing the feature must not trigger it."""
+
+    assert CLAIM.parse_command("/claim") == "/claim"
+    assert CLAIM.parse_command("  /CLAIM \n") == "/claim"
+    assert CLAIM.parse_command("/unclaim") == "/unclaim"
+    assert CLAIM.parse_command("I think /claim is the wrong approach here") is None
+    assert CLAIM.parse_command("/claim this whole area of the codebase") is None
+    assert CLAIM.parse_command("") is None
+
+
+def test_an_unheld_open_issue_is_granted_with_the_gates_spelled_out() -> None:
+    decision = _decide(_issue(), actor="newcomer")
+
+    assert decision.action == "claim"
+    # A newcomer's first pull request fails on these three, so the grant names
+    # them rather than assuming the contributing guide was read first.
+    assert "git commit -s" in decision.message
+    assert "CLA.md" in decision.message
+    assert "https://example.org/c.md" in decision.message
+    assert "develop" in decision.message
+
+
+def test_an_issue_someone_else_holds_is_not_reassigned() -> None:
+    decision = _decide(_issue(assignees=("first",)), actor="second")
+
+    assert decision.action == "reply"
+    assert "@first" in decision.message
+    # The reply has to leave a way forward, not just a refusal.
+    assert "/unclaim" in decision.message
+    assert str(CLAIM.STALE_AFTER.days) in decision.message
+
+
+def test_claiming_twice_is_harmless() -> None:
+    decision = _decide(_issue(assignees=("holder",)), actor="holder")
+
+    assert decision.action == "reply"
+    assert "already holds this one" in decision.message
+
+
+def test_a_closed_issue_cannot_be_claimed() -> None:
+    decision = _decide(_issue(state="closed"), actor="newcomer")
+
+    assert decision.action == "reply"
+    assert "closed" in decision.message
+
+
+def test_one_person_cannot_park_the_whole_backlog() -> None:
+    at_limit = _decide(_issue(number=7), actor="collector", open_claims=(1, 2, 3))
+
+    assert at_limit.action == "reply"
+    assert "#1, #2, #3" in at_limit.message
+
+    below_limit = _decide(_issue(number=7), actor="collector", open_claims=(1, 2))
+    assert below_limit.action == "claim"
+
+
+def test_an_issue_does_not_count_against_its_own_claim_limit() -> None:
+    """A stale-swept issue being reclaimed must not be blocked by itself."""
+
+    decision = _decide(_issue(number=7), actor="collector", open_claims=(7, 1, 2))
+
+    assert decision.action == "claim"
+
+
+def test_a_claim_is_released_by_its_holder_or_a_maintainer_only() -> None:
+    held = _issue(assignees=("holder",))
+
+    assert CLAIM.release_decision(held, actor="holder", is_maintainer=False).action == "release"
+    assert CLAIM.release_decision(held, actor="owner", is_maintainer=True).action == "release"
+
+    stranger = CLAIM.release_decision(held, actor="stranger", is_maintainer=False)
+    assert stranger.action == "reply"
+    assert "@holder" in stranger.message
+
+    free = CLAIM.release_decision(_issue(), actor="anyone", is_maintainer=False)
+    assert free.action == "reply"
+    assert "nothing to release" in free.message
+
+
+def test_a_quiet_claim_expires_and_an_active_one_does_not() -> None:
+    now = datetime(2026, 9, 14, tzinfo=UTC)
+    quiet = _issue(number=1, assignees=("holder",), updated_at="2026-08-20T00:00:00Z")
+    active = _issue(number=2, assignees=("holder",), updated_at="2026-09-13T00:00:00Z")
+    # A pull request carrying the label is not an issue claim.
+    pull = {**_issue(number=3, assignees=("holder",), updated_at="2026-01-01T00:00:00Z")}
+    pull["pull_request"] = {"url": "https://example.invalid/3"}
+
+    assert CLAIM.stale_claims([quiet, active, pull], now=now) == [(1, "holder")]
+
+
+def test_a_malformed_timestamp_never_releases_a_claim() -> None:
+    """Failing to parse a date must not look like a fortnight of silence."""
+
+    now = datetime(2026, 9, 14, tzinfo=UTC)
+    broken = _issue(number=1, assignees=("holder",), updated_at="not a date")
+    missing = {"number": 2, "state": "open", "assignees": [{"login": "holder"}]}
+
+    assert CLAIM.stale_claims([broken, missing], now=now) == []
+
+
+def test_the_claim_workflow_never_puts_a_comment_into_a_shell() -> None:
+    """The comment body is attacker-controlled text."""
+
+    workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "issue-claims.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "COMMENT_BODY: ${{ github.event.comment.body }}" in workflow
+    # Reaching the handler through the environment is the whole mitigation:
+    # the body must never be substituted into a run block.
+    assert "${{ github.event.comment.body }}" not in workflow.split("run: |", maxsplit=1)[1]
+    assert "ref: ${{ github.event.repository.default_branch }}" in workflow
+    assert "persist-credentials: false" in workflow
+    assert "\npermissions:\n  contents: read\n" in workflow
+    assert "issues: write" in workflow
+    assert "!github.event.issue.pull_request" in workflow
+    assert "concurrency:" in workflow
+    assert "cancel-in-progress: false" in workflow

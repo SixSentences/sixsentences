@@ -5,7 +5,7 @@ message: >-
 title: SixSentences
 type: software
 version: 0.2.0-alpha.1
-date-released: 2026-09-12
+date-released: 2026-09-14
 authors:
   - name: SixSentences contributors
 repository-code: https://github.com/SixSentences/sixsentences

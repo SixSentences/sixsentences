@@ -28,6 +28,37 @@ Provider-neutral interfaces, self-hosting controls, and operator-supplied
 integrations are in scope when their privacy, cost, failure, and data-egress
 boundaries are explicit.
 
+## Claim an issue before you build it
+
+Two people finishing the same issue means one pull request is closed unmerged,
+so say out loud that you are starting. Comment `/claim` — on its own, as the
+whole comment — on any open, unclaimed issue:
+
+```text
+/claim
+```
+
+Automation assigns you, adds the `claimed` label, and replies with the three
+contribution gates. Comment `/unclaim` to hand it back; nobody minds, and it is
+far better than a claim that quietly goes nowhere.
+
+Three rules keep the backlog honest:
+
+- One claim per issue. If someone already holds it, pick another one — or say in
+  the thread what you would do differently, which is worth discussing either way.
+- At most three open claims per person, so no single contributor parks the
+  backlog.
+- A claim expires after 14 days without activity and the issue reopens to
+  everyone. Any comment, or a pull request referencing the issue, resets that
+  clock, and you can always take an expired claim straight back.
+
+Claiming is not required for a small fix you have already written, and it is not
+a promise. It is a courtesy to the next person reading the issue list.
+
+Issues labelled [`good first issue`](https://github.com/SixSentences/sixsentences/labels/good%20first%20issue)
+are scoped to be finishable without knowing the rest of the system, and each one
+names the files to change and how to check the result.
+
 ## Workflow
 
 `main` contains reviewed release-ready history; `develop` is the integration
