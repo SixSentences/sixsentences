@@ -11,7 +11,7 @@ ORG ?= My Lab
 FIRST_NAME ?=
 
 .DEFAULT_GOAL := help
-.PHONY: help up build-up down logs ps owner preflight backup update test
+.PHONY: help up build-up down logs ps owner preflight doctor backup restore update test
 
 help: ## Show the available targets
 	@awk 'BEGIN { FS = ":.*## " } /^[a-z-]+:.*## / { printf "  make %-12s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -46,6 +46,21 @@ doctor: ## Report what the running deployment can actually do
 
 backup: ## Write an authenticated backup to SIX_BACKUP_DIR
 	bash deploy/community/backup.sh $(ENV_FILE)
+
+# restore.sh refuses to run without --confirm RESTORE. That guard is the point,
+# so this target asks for the same word rather than supplying it: a shortcut
+# must not make a destructive operation easier to reach than the script it wraps.
+restore: ## Replace all data from a backup: make restore BACKUP=/abs/dir CONFIRM=RESTORE
+	@test -n "$(BACKUP)" || { \
+		echo "set BACKUP to the absolute backup directory, for example:" >&2; \
+		echo "  make restore BACKUP=/srv/six/backups/2026-09-14 CONFIRM=RESTORE" >&2; \
+		exit 2; }
+	@test "$(CONFIRM)" = "RESTORE" || { \
+		echo "This replaces the database and every uploaded document with the backup." >&2; \
+		echo "Repeat with CONFIRM=RESTORE once you are sure." >&2; \
+		exit 2; }
+	SIX_SELFHOST_ENV_FILE=$(ENV_FILE) bash deploy/community/restore.sh \
+		--backup "$(BACKUP)" --confirm RESTORE
 
 update: ## Apply a newer checkout or newer published images
 	bash deploy/community/preflight.sh $(ENV_FILE)
