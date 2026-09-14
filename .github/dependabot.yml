@@ -51,6 +51,13 @@ updates:
       prefix: "chore(deps)"
     ignore:
       - dependency-name: sixsentences-engine
+      # anthropic 1.x moves the SDK to httpx2, which would put a second HTTP
+      # stack and a second TLS trust store in the same image as the 21 call
+      # sites behind the SSRF guard. That is an architecture decision, tracked
+      # in #77; until it is made, a weekly pull request only adds noise.
+      - dependency-name: anthropic
+        update-types:
+          - version-update:semver-major
     groups:
       community-runtime-dependencies:
         applies-to: version-updates
@@ -95,6 +102,13 @@ updates:
     open-pull-requests-limit: 3
     commit-message:
       prefix: "chore(deps)"
+    ignore:
+      # The Node major is declared in ci.yml, package.json engines, this
+      # Dockerfile and @types/node. Moving one of them publishes an image on a
+      # runtime no test exercises, so they move together, in #97.
+      - dependency-name: node
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: github-actions
     directory: /
@@ -127,6 +141,18 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
+    ignore:
+      # react-pdf 11 turns on Suspense across the three viewers and takes PDF.js
+      # to 6, which can move the text-layer DOM that review-pdf.tsx selects on.
+      # A migration with hand verification, tracked in #98.
+      - dependency-name: react-pdf
+        update-types:
+          - version-update:semver-major
+      # Follows whichever Node major the project settles on in #97, not its own
+      # release cadence.
+      - dependency-name: "@types/node"
+        update-types:
+          - version-update:semver-major
     groups:
       web-minor-patch:
         applies-to: version-updates
