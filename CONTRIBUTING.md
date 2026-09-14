@@ -68,6 +68,20 @@ uv run --project services/api python services/api/scripts/audit_community_export
 uv run --project services/api python services/api/scripts/check_web_contracts.py --require-complete
 ```
 
+`COMMUNITY_EXPORT_MANIFEST.json` binds every file under `services/api/` to its
+digest, so any change there — including a dependency bump that rewrites
+`uv.lock` — has to rewrite the manifest too, or the audit fails with the path it
+did not recognise:
+
+```console
+uv run --project services/api python services/api/scripts/audit_community_export.py services/api --refresh-manifest
+```
+
+The refresh runs every other gate first and rewrites the manifest only once they
+pass, so it records a tree that already holds the source boundary; it can never
+approve one that does not. It prints exactly which entries it added, changed or
+removed.
+
 ### Web application
 
 ```console

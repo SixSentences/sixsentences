@@ -31,16 +31,22 @@
       "sha256": "e0bfeec4f11af50244091b2a1323faaeb056ef1e3ee5d4a94d91e40fb9706b2e"
     },
     {
-      "bytes": 3417,
+      "bytes": 3743,
       "mode": "0644",
       "path": "README.md",
-      "sha256": "ce529fd31b7d3a783c81d8f5bd24922a20a24eead0fc9371c74e4b2dc9026419"
+      "sha256": "fb6aa7e29bf14442aac57d59b1cc99907f096077cab58e16ed827ca41003db07"
     },
     {
       "bytes": 142910,
       "mode": "0644",
       "path": "SOURCE_EXPORT_MANIFEST.json",
       "sha256": "ec4685034118a8cd91e099b12cf780e139077125074af37be68acdfdf4e8d2cd"
+    },
+    {
+      "bytes": 5000,
+      "mode": "0644",
+      "path": "alembic.ini",
+      "sha256": "17673a380d40c2763b72794d87ce3d9b7311c0d123457efb0e66082189ebdf11"
     },
     {
       "bytes": 38,
@@ -65,12 +71,6 @@
       "mode": "0644",
       "path": "alembic/versions/20260912_0001_community_baseline.py",
       "sha256": "0b2acc3adc93a5e9a465d97f9ab0f21b33139aefb2337c945803fbf47fd04a27"
-    },
-    {
-      "bytes": 5000,
-      "mode": "0644",
-      "path": "alembic.ini",
-      "sha256": "17673a380d40c2763b72794d87ce3d9b7311c0d123457efb0e66082189ebdf11"
     },
     {
       "bytes": 2113,
@@ -115,10 +115,10 @@
       "sha256": "7918b810601db56cf0fcd7028aada0259b86aea62bbe0fabcd99abee9287f85f"
     },
     {
-      "bytes": 11451,
+      "bytes": 13588,
       "mode": "0644",
       "path": "scripts/audit_community_export.py",
-      "sha256": "1ab30a234b8fb26bb7f934e84708311fa91578df01d14cd0eff2e3911ff5c8c4"
+      "sha256": "49dac3a6d4d4bc55d8da2e63a30117fcffee3f7d38d098f06c54b0ee2c352cb6"
     },
     {
       "bytes": 9906,
@@ -1727,6 +1727,12 @@
       "mode": "0644",
       "path": "tests/test_evidence_type.py",
       "sha256": "9c39d2dde3e3e73d27ebbc465ac41a38bb84bbde626a418c60dd29a8324dca0a"
+    },
+    {
+      "bytes": 3007,
+      "mode": "0644",
+      "path": "tests/test_export_manifest.py",
+      "sha256": "5b6d8522a1f1131406150a5f0f354eb7a580951785080b0367898d4d71df4770"
     },
     {
       "bytes": 2730,
