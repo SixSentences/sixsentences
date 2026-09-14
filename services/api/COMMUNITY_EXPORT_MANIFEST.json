@@ -43,6 +43,12 @@
       "sha256": "ec4685034118a8cd91e099b12cf780e139077125074af37be68acdfdf4e8d2cd"
     },
     {
+      "bytes": 5000,
+      "mode": "0644",
+      "path": "alembic.ini",
+      "sha256": "17673a380d40c2763b72794d87ce3d9b7311c0d123457efb0e66082189ebdf11"
+    },
+    {
       "bytes": 38,
       "mode": "0644",
       "path": "alembic/README",
@@ -65,12 +71,6 @@
       "mode": "0644",
       "path": "alembic/versions/20260912_0001_community_baseline.py",
       "sha256": "0b2acc3adc93a5e9a465d97f9ab0f21b33139aefb2337c945803fbf47fd04a27"
-    },
-    {
-      "bytes": 5000,
-      "mode": "0644",
-      "path": "alembic.ini",
-      "sha256": "17673a380d40c2763b72794d87ce3d9b7311c0d123457efb0e66082189ebdf11"
     },
     {
       "bytes": 2113,
@@ -319,10 +319,10 @@
       "sha256": "362c3f72b1ce478603a3e2797c97ff8e9d66b1db13f9b49d84e171244e82b892"
     },
     {
-      "bytes": 47867,
+      "bytes": 48653,
       "mode": "0644",
       "path": "src/sixsentences_server/cli.py",
-      "sha256": "2e984a04e39296ba5a6ca8df80b8392d7a2491fa4fa5b4b52e9c53e2a3bb56d9"
+      "sha256": "2ea41c0232451167c032b5f6995bf237def2839a93dd0a390e08fd21e2482186"
     },
     {
       "bytes": 14232,
@@ -899,6 +899,12 @@
       "mode": "0644",
       "path": "src/sixsentences_server/ops/backup.py",
       "sha256": "4938aa7c4873a7bf2e7392333d41a0a34a51592e34b84fc433bab5f8b46142ca"
+    },
+    {
+      "bytes": 5621,
+      "mode": "0644",
+      "path": "src/sixsentences_server/ops/doctor.py",
+      "sha256": "30affac0f2d2d38e51f752a3a8548406d15a6409db6906711d241b13e6fb720f"
     },
     {
       "bytes": 7519,
@@ -1697,6 +1703,12 @@
       "mode": "0644",
       "path": "tests/test_dedup_merge.py",
       "sha256": "92af76d32ab9409311ae0dab3c725d2f1d6270c55296be5a29557684fd740c75"
+    },
+    {
+      "bytes": 2575,
+      "mode": "0644",
+      "path": "tests/test_doctor.py",
+      "sha256": "9f7dfac5f5479a3ba4281db19d1f41dd9a6be13f5804113bc1c724b325ce4280"
     },
     {
       "bytes": 62506,
