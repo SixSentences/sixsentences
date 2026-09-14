@@ -10,7 +10,7 @@ dependencies = [
     "anthropic==0.116.0",
     "defusedxml==0.7.1",
     "duckdb==1.5.5",
-    "fastapi==0.139.0",
+    "fastapi==0.141.1",
     "httpx==0.28.1",
     "pillow==12.3.0",
     "psycopg[binary]==3.3.4",
