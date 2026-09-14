@@ -993,7 +993,7 @@ def test_an_unheld_open_issue_is_granted_with_the_gates_spelled_out() -> None:
     assert "git commit -s" in decision.message
     assert "CLA.md" in decision.message
     assert "https://example.org/c.md" in decision.message
-    assert "develop" in decision.message
+    assert "main" in decision.message
 
 
 def test_an_issue_someone_else_holds_is_not_reassigned() -> None:

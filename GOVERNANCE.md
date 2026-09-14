@@ -42,10 +42,15 @@ private until coordinated disclosure is safe.
 
 ## Branches, review, and merge
 
-`main` contains reviewed release-ready history and `develop` is the integration
-branch. Ordinary work uses short-lived branches into `develop`; release pull
-requests promote `develop` to `main`. Urgent fixes branch from `main` and are
-merged back into `develop`. Releases are tagged from reviewed `main` commits.
+`main` is the only long-lived branch and holds reviewed, release-ready history.
+Ordinary work uses short-lived branches into `main`, which are deleted after the
+merge. Releases are tagged from reviewed `main` commits.
+
+A separate integration branch is deliberately not used. With the protection
+`main` carries — required review, the full check suite, code scanning, DCO, CLA,
+signed commits and linear history — staging adds no safety, while a second
+long-lived branch has to be kept in step by hand and drifts silently when it is
+not.
 Force pushes to either protected branch and movement or deletion of release
 tags are prohibited.
 
