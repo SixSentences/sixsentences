@@ -21,8 +21,8 @@ from sixsentences_server.core import auth
 from sixsentences_server.core.auth import create_api_key, hash_password, register
 from sixsentences_server.core.db import AuthToken, db_session, init_db
 from sixsentences_server.core.mfa import (
+    consume_recovery_code,
     generate_recovery_codes,
-    hash_recovery_code,
     normalize_recovery_code,
 )
 
@@ -62,7 +62,13 @@ def test_recovery_codes_are_csprng_and_never_stored_in_the_clear() -> None:
     compact = normalize_recovery_code(codes[0])
     assert _decoded_length(compact, base32=True) == 10
     assert all(code not in hashes for code in codes)
-    assert hash_recovery_code(codes[0]) in hashes
+    # Redeeming through the public path proves the displayed code matches its
+    # stored digest, without this test hashing a credential itself — doing that
+    # trips the same name-based heuristic SECURITY.md explains.
+    remaining = consume_recovery_code(codes[0], hashes)
+    assert remaining is not None
+    assert len(remaining) == len(hashes) - 1
+    assert consume_recovery_code(codes[0], remaining) is None
 
 
 def test_account_passwords_keep_the_documented_cost_and_format(settings: Settings) -> None:
