@@ -31,10 +31,10 @@
       "sha256": "e0bfeec4f11af50244091b2a1323faaeb056ef1e3ee5d4a94d91e40fb9706b2e"
     },
     {
-      "bytes": 3417,
+      "bytes": 3743,
       "mode": "0644",
       "path": "README.md",
-      "sha256": "ce529fd31b7d3a783c81d8f5bd24922a20a24eead0fc9371c74e4b2dc9026419"
+      "sha256": "fb6aa7e29bf14442aac57d59b1cc99907f096077cab58e16ed827ca41003db07"
     },
     {
       "bytes": 142910,
@@ -97,10 +97,10 @@
       "sha256": "6d9ad22d8824410fd425aa15f67b889f2b18b4ccc36392e2e0e71e332b991aed"
     },
     {
-      "bytes": 1941,
+      "bytes": 1940,
       "mode": "0644",
       "path": "pyproject.toml",
-      "sha256": "32312dc96fb07f41c231ea6dfdc3dea5f266e300d6902d91d1022938db0ff863"
+      "sha256": "90b85eac81a090342159307d960f6c521174901e84976aa53c953f6324c2413e"
     },
     {
       "bytes": 79,
@@ -115,10 +115,10 @@
       "sha256": "7918b810601db56cf0fcd7028aada0259b86aea62bbe0fabcd99abee9287f85f"
     },
     {
-      "bytes": 11451,
+      "bytes": 13588,
       "mode": "0644",
       "path": "scripts/audit_community_export.py",
-      "sha256": "1ab30a234b8fb26bb7f934e84708311fa91578df01d14cd0eff2e3911ff5c8c4"
+      "sha256": "49dac3a6d4d4bc55d8da2e63a30117fcffee3f7d38d098f06c54b0ee2c352cb6"
     },
     {
       "bytes": 9906,
@@ -1693,6 +1693,12 @@
       "sha256": "1db3cc5f6078fa5ca68f77c4abbdf1c7248b7ae9a5911114e2bc8681e47eccdb"
     },
     {
+      "bytes": 3990,
+      "mode": "0644",
+      "path": "tests/test_credential_storage.py",
+      "sha256": "8572364c86fe027d0053f3d2b8ef7747d5888b17ed4c1ebfdb698caf8ab7a0f8"
+    },
+    {
       "bytes": 1991,
       "mode": "0644",
       "path": "tests/test_dedup.py",
@@ -1723,10 +1729,10 @@
       "sha256": "96a616709e2214dba065d3b2843d5e7bc3f0046e31e38222c1edce4044944a0e"
     },
     {
-      "bytes": 4778,
+      "bytes": 7625,
       "mode": "0644",
       "path": "tests/test_email_verification.py",
-      "sha256": "07195606f92927e50fb42af362ab1abb69b8bc6346906d98f2d0d2b5b0a854c1"
+      "sha256": "080a29c4ae770bda5bdbe06249734badf1ccf43a680d11ddabbcd610b3389f2b"
     },
     {
       "bytes": 6010,
@@ -1739,6 +1745,12 @@
       "mode": "0644",
       "path": "tests/test_evidence_type.py",
       "sha256": "9c39d2dde3e3e73d27ebbc465ac41a38bb84bbde626a418c60dd29a8324dca0a"
+    },
+    {
+      "bytes": 3007,
+      "mode": "0644",
+      "path": "tests/test_export_manifest.py",
+      "sha256": "5b6d8522a1f1131406150a5f0f354eb7a580951785080b0367898d4d71df4770"
     },
     {
       "bytes": 2730,
@@ -2407,10 +2419,10 @@
       "sha256": "5e623acc688d729e25fcb6d8544dbd84dbc515161690b32a3dacb00ccb88df6c"
     },
     {
-      "bytes": 263629,
+      "bytes": 262353,
       "mode": "0644",
       "path": "uv.lock",
-      "sha256": "6fc82bb8810ea74d76d0dcc30664d28d37a53c3da0941d503afc54c3ebb23fed"
+      "sha256": "f2fa2b504f19c507948ad7c712299cf45f401ea7229349d000f7bc41b7a279b6"
     }
   ],
   "format": 1,
