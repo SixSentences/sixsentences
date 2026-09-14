@@ -45,9 +45,13 @@ def test_issued_bearer_tokens_carry_the_entropy_their_storage_assumes(
         user, _ = register(session, "owner@example.org", "StrongPass123!", "Owner")
         raw = create_api_key(session, user, "ci")
 
-    prefix, _, random_part = raw.rpartition("_")
+    # token_urlsafe emits "-" and "_" itself, so the secret has to be taken as
+    # everything after the marker. Splitting on the *last* underscore cuts it in
+    # half for roughly every second token.
+    scheme, marker, random_part = raw.split("_", 2)
 
-    assert prefix.startswith("six_")
+    assert scheme == "six"
+    assert marker == "sk"
     # 32 bytes from the operating system's CSPRNG — the claim SECURITY.md makes.
     assert _decoded_length(random_part) == 32
 
