@@ -40,7 +40,7 @@
 
 <p align="center">
   <img
-    src="https://github.com/SixSentences/sixsentences/releases/download/v0.1.0-alpha.1/sixsentences-overview.gif"
+    src="https://github.com/SixSentences/sixsentences/releases/download/v0.2.0-alpha.1/sixsentences-overview.gif"
     width="720"
     alt="SixSentences research workspace product overview"
   >
