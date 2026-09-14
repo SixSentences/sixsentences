@@ -69,6 +69,41 @@ only after reviewing their data flow, terms, retention, transfer, security, and
 cost behavior. An operator confirmation switch is a safety gate, not a legal or
 regulatory certification.
 
+### How credentials are stored
+
+Four kinds of secret reach this service, and each is stored the way its own
+threat model requires rather than the way the others are.
+
+**Account passwords** are the only low-entropy secret a person chooses, so they
+are the only ones behind a deliberately expensive function: PBKDF2-HMAC-SHA256
+with a per-password random salt and 600,000 iterations, stored as
+`pbkdf2_sha256$iterations$salt$hash` so the cost can be raised later without
+invalidating existing accounts.
+
+**Bearer tokens** — API keys, sessions, e-mail verification, MFA challenges,
+stream tickets, Companion and capture codes — are not chosen by anyone. Each is
+`secrets.token_urlsafe(32)`: 32 bytes from the operating system's CSPRNG, 256
+bits of entropy, stored as a SHA-256 digest. A slow function here would add no
+strength, because there is no guessable structure to slow an attacker down
+against, and it would run on every authenticated request. The digest exists so a
+database copy does not hand over usable tokens.
+
+**Two-factor recovery codes** carry 80 bits from the same CSPRNG and are stored
+as SHA-256 digests of their normalized form, for the same reason.
+
+**Third-party connector credentials** are the exception that cannot be hashed:
+they have to be replayed to the provider that issued them. They are stored under
+authenticated encryption with the deployment's own key, so a database copy
+without that key yields nothing, and a tampered record fails to decrypt instead
+of decrypting to something else. TOTP secrets are stored the same way.
+
+The token design depends on one assumption: that issued tokens really are
+CSPRNG output of the stated length. `test_credential_storage.py` asserts exactly
+that, so the assumption cannot quietly stop holding. A static analyser that
+classifies any hashed credential as a password will flag the SHA-256 in
+`_token_hash`; the answer is this section, not a slow hash over a random 256-bit
+value.
+
 ### Authentication and browser state
 
 Treat the configured API origin as a trust boundary. Protect bearer tokens and
