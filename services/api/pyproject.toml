@@ -42,7 +42,7 @@ six-community-retention = "sixsentences_server.ops.retention:main"
 sixsentences-engine = { path = "../..", editable = false }
 
 [build-system]
-requires = ["hatchling==1.27.0"]
+requires = ["hatchling==1.32.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
