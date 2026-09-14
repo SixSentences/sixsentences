@@ -51,6 +51,13 @@ bash deploy/community/restore.sh \
   --confirm RESTORE
 ```
 
+Or through the `make` shortcut, which asks for the same confirmation rather than
+supplying it:
+
+```console
+make restore BACKUP=/absolute/backup/root/20260912T120000Z CONFIRM=RESTORE
+```
+
 Restore is intentionally destructive. It requires an exact confirmation,
 accepts only a non-symlink directory below the configured backup root, verifies
 every checksum, rejects link, special-file and traversal entries, and verifies

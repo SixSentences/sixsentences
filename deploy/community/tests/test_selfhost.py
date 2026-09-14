@@ -252,9 +252,26 @@ class SelfHostDeploymentTests(unittest.TestCase):
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
         self.assertIn("ENV_FILE ?= .env.selfhost", makefile)
         self.assertIn("docker compose --env-file $(ENV_FILE)", makefile)
-        for target in ("up:", "down:", "owner:", "preflight:", "backup:"):
+        for target in ("up:", "down:", "owner:", "preflight:", "doctor:", "backup:", "restore:"):
             self.assertIn(f"\n{target}", makefile)
         self.assertNotIn("--password", makefile)
+        # A target shadowed by a like-named file stops working silently.
+        phony = next(line for line in makefile.splitlines() if line.startswith(".PHONY:"))
+        for target in ("doctor", "restore", "backup", "up", "down"):
+            self.assertIn(target, phony.split())
+
+    def test_make_restore_asks_for_the_confirmation_instead_of_supplying_it(self) -> None:
+        """A shortcut must not reach a destructive action faster than its script."""
+
+        makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+        restore = makefile.split("\nrestore:", maxsplit=1)[1].split("\nupdate:")[0]
+
+        # The operator types RESTORE; the target forwards it, never invents it.
+        self.assertIn('test "$(CONFIRM)" = "RESTORE"', restore)
+        self.assertIn("--confirm RESTORE", restore)
+        self.assertIn('test -n "$(BACKUP)"', restore)
+        # And it says what is about to be destroyed before it is.
+        self.assertIn("replaces the database", restore)
 
     def test_preflight_enforces_compose_version_for_gateway_selection(self) -> None:
         source = (COMMUNITY / "preflight.sh").read_text(encoding="utf-8")
