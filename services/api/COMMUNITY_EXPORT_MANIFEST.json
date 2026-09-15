@@ -133,10 +133,10 @@
       "sha256": "733baf6df6fcde7731662d6698f3f19066440874211e2c0bd3f839b14af5e8a6"
     },
     {
-      "bytes": 83,
+      "bytes": 316,
       "mode": "0644",
       "path": "src/sixsentences_server/__init__.py",
-      "sha256": "3a58f3145ac47bef1933f49476642513b663f617acd138dfdf70b6c61dd7ab4c"
+      "sha256": "874ded1e9ee52ddb45e1664b15254929ddb93b783fb6f4cd2050ef27bf4472bf"
     },
     {
       "bytes": 484,
@@ -319,10 +319,10 @@
       "sha256": "362c3f72b1ce478603a3e2797c97ff8e9d66b1db13f9b49d84e171244e82b892"
     },
     {
-      "bytes": 48653,
+      "bytes": 49196,
       "mode": "0644",
       "path": "src/sixsentences_server/cli.py",
-      "sha256": "2ea41c0232451167c032b5f6995bf237def2839a93dd0a390e08fd21e2482186"
+      "sha256": "e020cc2409ad3975e5988ed259ca718328718401ec7cc9f4512e1ed80dafeeb4"
     },
     {
       "bytes": 14232,
@@ -1577,6 +1577,12 @@
       "mode": "0644",
       "path": "tests/test_chat_ui.py",
       "sha256": "a1a6b3b83ecf67fadb36d40eccbe9453d4c4f0fecc658ee4c9920d9af2dd1e50"
+    },
+    {
+      "bytes": 1095,
+      "mode": "0644",
+      "path": "tests/test_cli.py",
+      "sha256": "c0c8943673c3af5ce49434226c1c53e07a8cb100030b60ef769a97f457ad760e"
     },
     {
       "bytes": 1164,

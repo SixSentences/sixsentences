@@ -25,6 +25,7 @@ import typer
 import uvicorn
 from sqlalchemy import select
 
+from sixsentences_server import __version__
 from sixsentences_server.chat.service import ChatError, answer_question
 from sixsentences_server.config import get_settings
 from sixsentences_server.connectors.openalex import OpenAlexClient
@@ -76,6 +77,27 @@ app.add_typer(db_app, name="db")
 app.add_typer(auth_app, name="auth")
 app.add_typer(runs_app, name="runs")
 app.add_typer(quality_app, name="quality")
+
+
+def _print_version(requested: bool) -> None:
+    """Answer `--version` before Typer looks for a subcommand."""
+
+    if requested:
+        typer.echo(f"six-community {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def root(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_print_version,
+        is_eager=True,
+        help="print the installed server version and exit",
+    ),
+) -> None:
+    """Operate a self-hosted SixSentences deployment."""
 
 
 def _runtime_revision_is_attested() -> bool:
