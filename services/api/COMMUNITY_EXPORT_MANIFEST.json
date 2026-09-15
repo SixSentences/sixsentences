@@ -2287,6 +2287,12 @@
       "sha256": "da076c40efb10a5242a84d0ba367e3fe41f00f743e53b7f8212c0181e3b6a345"
     },
     {
+      "bytes": 19563,
+      "mode": "0644",
+      "path": "tests/test_voice_relay_transport.py",
+      "sha256": "5d465272b941d9b83c6d3ce929dccfdfdb2d0cda1320b4bc18651969c5d70409"
+    },
+    {
       "bytes": 7283,
       "mode": "0644",
       "path": "tests/test_voice_service_tokens.py",
