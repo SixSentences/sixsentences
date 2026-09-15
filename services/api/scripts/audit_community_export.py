@@ -103,7 +103,7 @@ REQUIRED_ROUTE_FRAGMENTS = (
     "/repository-",
 )
 MANIFEST_NAME = "COMMUNITY_EXPORT_MANIFEST.json"
-IGNORED_DIRS = {".mypy_cache", ".pytest_cache", ".ruff_cache", "__pycache__", "data"}
+IGNORED_DIRS = {".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv", "__pycache__", "data", "venv"}
 
 
 def sha256(path: Path) -> str:

@@ -86,3 +86,23 @@ def test_refreshing_keeps_the_export_identity(tmp_path: Path) -> None:
 
     assert payload["source_commit"] == AUDIT.EXPECTED_SOURCE_COMMIT
     assert payload["format"] == 1
+
+
+def test_local_virtualenv_directories_are_ignored(tmp_path: Path) -> None:
+    _tree(tmp_path, "before\n")
+    baseline = [path.relative_to(tmp_path) for path in AUDIT.included_files(tmp_path)]
+
+    for dirname in (".venv", "venv"):
+        bindir = tmp_path / dirname / "bin"
+        bindir.mkdir(parents=True)
+        (bindir / "python").symlink_to("/usr/bin/python3")
+
+    assert [path.relative_to(tmp_path) for path in AUDIT.included_files(tmp_path)] == baseline
+
+
+def test_symlink_outside_ignored_directories_is_rejected(tmp_path: Path) -> None:
+    _tree(tmp_path, "before\n")
+    (tmp_path / "linked.txt").symlink_to(tmp_path / "kept.txt")
+
+    with pytest.raises(RuntimeError, match=r"^symlink:linked\.txt$"):
+        AUDIT.included_files(tmp_path)
