@@ -8,7 +8,15 @@ on:
 
 concurrency:
   group: cla-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
-  cancel-in-progress: true
+  # Queue, never cancel. `CONTRIBUTING.md` tells an author to post the acceptance
+  # sentence on the pull request they just opened, so the comment event reliably
+  # arrives while the opening event's run is still going. Cancelling that run
+  # leaves a failed check on a pull request that is in fact fine.
+  #
+  # Serializing is also what keeps the result correct: the runs read the head
+  # commit and the comments live, so the one that finishes last is the one that
+  # saw the newest state.
+  cancel-in-progress: false
 
 permissions:
   contents: read
