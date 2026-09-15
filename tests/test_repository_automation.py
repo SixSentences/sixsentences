@@ -586,6 +586,89 @@ def test_cla_replaces_a_stale_success_with_pending_before_reading_comments(
     assert states == ["pending"]
 
 
+def test_the_cla_workflow_queues_its_runs_instead_of_cancelling_them() -> None:
+    """Opening a pull request and accepting the CLA are one sequence, not a race.
+
+    `CONTRIBUTING.md` asks the author to post the acceptance sentence on the pull
+    request they just opened, so the `issue_comment` event reliably arrives while
+    the `pull_request_target` run is still going. Cancelling that run leaves a
+    failed check named `Publish CLA status` on a pull request whose required
+    `CLA / acceptance` status is green, which is the opposite of informative.
+
+    Queueing is also what keeps the answer correct: each run reads the head
+    commit and the comments live, so serialized runs end with the newest state.
+    """
+
+    workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "cla.yml").read_text(encoding="utf-8")
+
+    assert "concurrency:" in workflow
+    assert "cancel-in-progress: false" in workflow
+    assert "cancel-in-progress: true" not in workflow
+
+
+def test_repeated_cla_runs_repeat_the_result_without_repeating_the_reminder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Serialized runs must be idempotent, or queueing would be worse than cancelling."""
+
+    states: list[str] = []
+    comments: list[dict[str, object]] = []
+
+    monkeypatch.setenv("GITHUB_TOKEN", "synthetic-token")
+    monkeypatch.setattr(CLA, "_pull_request_identity", lambda *args, **kwargs: ("alice", "a" * 40))
+    monkeypatch.setattr(CLA, "_set_status", lambda *args, state, **kwargs: states.append(state))
+    monkeypatch.setattr(CLA, "_comments", lambda *args, **kwargs: list(comments))
+    monkeypatch.setattr(
+        CLA,
+        "_post_guidance",
+        lambda *args, **kwargs: comments.append(
+            {
+                "user": {"login": "six-bot"},
+                "body": CLA.guidance_body(repository="example/project", cla_sha="b" * 40),
+            }
+        ),
+    )
+
+    def run() -> None:
+        assert (
+            CLA.main(
+                [
+                    "--repository",
+                    "example/project",
+                    "--number",
+                    "42",
+                    "--cla-sha",
+                    "b" * 40,
+                    "--api-url",
+                    "https://api.github.test",
+                    "--remind",
+                ]
+            )
+            == 0
+        )
+
+    # Opening the pull request: nothing accepted yet, so the author is reminded.
+    run()
+    assert states == ["pending", "failure"]
+    assert len(comments) == 1
+
+    # The reminder itself is an event. The queued run must not remind twice.
+    run()
+    assert states == ["pending", "failure", "pending", "failure"]
+    assert len(comments) == 1
+
+    # The author accepts; the next run reads it and publishes the same verdict
+    # it would have published had it been the only run.
+    comments.append({"user": {"login": "alice"}, "body": CLA.ACCEPTANCE})
+    run()
+    assert states[-2:] == ["pending", "success"]
+    assert len(comments) == 2
+
+    run()
+    assert states[-2:] == ["pending", "success"]
+    assert len(comments) == 2
+
+
 def test_trusted_cla_workflow_cannot_be_manually_dispatched() -> None:
     workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "cla.yml").read_text(encoding="utf-8")
 
