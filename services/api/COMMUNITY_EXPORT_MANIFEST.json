@@ -115,10 +115,10 @@
       "sha256": "7918b810601db56cf0fcd7028aada0259b86aea62bbe0fabcd99abee9287f85f"
     },
     {
-      "bytes": 13588,
+      "bytes": 13605,
       "mode": "0644",
       "path": "scripts/audit_community_export.py",
-      "sha256": "49dac3a6d4d4bc55d8da2e63a30117fcffee3f7d38d098f06c54b0ee2c352cb6"
+      "sha256": "ac8ccfba8771b9c20da2e77946a76c1c3754792c0dd7701367f31cc5a7f5f445"
     },
     {
       "bytes": 9906,
@@ -1753,10 +1753,10 @@
       "sha256": "9c39d2dde3e3e73d27ebbc465ac41a38bb84bbde626a418c60dd29a8324dca0a"
     },
     {
-      "bytes": 3007,
+      "bytes": 3766,
       "mode": "0644",
       "path": "tests/test_export_manifest.py",
-      "sha256": "5b6d8522a1f1131406150a5f0f354eb7a580951785080b0367898d4d71df4770"
+      "sha256": "301c79b130743012d1b8be313aed21f03c037b968102cf16a0963b239f406cd5"
     },
     {
       "bytes": 2730,
