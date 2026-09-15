@@ -12,11 +12,16 @@ equivalents for Python package metadata.
 
 - `sixsentences --version` and `six-community --version` report the installed
   version of each command-line tool.
+- Every `sixsentences` subcommand accepts `--output PATH`. A file receives
+  exactly the bytes stdout would have received, and is written only after the
+  command succeeds.
 
 ### Changed
 
 - The server package reads its version from the installed distribution metadata
   instead of a second literal in `sixsentences_server/__init__.py`.
+- `sixsentences prisma --format svg --output PATH` now ends the file with a
+  newline, like every other written result.
 
 ## [0.2.0-alpha.1] - 2026-09-14
 
