@@ -10,7 +10,13 @@ equivalents for Python package metadata.
 
 ### Added
 
-- Nothing yet.
+- `sixsentences --version` and `six-community --version` report the installed
+  version of each command-line tool.
+
+### Changed
+
+- The server package reads its version from the installed distribution metadata
+  instead of a second literal in `sixsentences_server/__init__.py`.
 
 ## [0.2.0-alpha.1] - 2026-09-14
 

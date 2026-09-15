@@ -1,8 +1,12 @@
 """The CLI exposes engine functions without starting a service."""
 
 import json
+import tomllib
 from pathlib import Path
 
+import pytest
+
+from sixsentences import __version__
 from sixsentences.cli import main
 
 
@@ -88,3 +92,22 @@ def test_data_analyze_command_reports_invalid_numeric_cells(tmp_path: Path, caps
 
     assert main(["data-analyze", str(dataset), "descriptive", "--column", "score"]) == 2
     assert "non-missing non-numeric" in capsys.readouterr().err  # type: ignore[attr-defined]
+
+
+def test_version_flag_answers_before_a_subcommand_is_demanded(capsys: object) -> None:
+    """The first thing a bug report asks for has to be reachable without one."""
+
+    with pytest.raises(SystemExit) as exit_info:
+        main(["--version"])
+
+    assert exit_info.value.code == 0
+    assert capsys.readouterr().out.strip() == f"sixsentences {__version__}"  # type: ignore[attr-defined]
+
+
+def test_version_is_read_from_the_installed_distribution() -> None:
+    """A literal in the source is a second place for the version to drift."""
+
+    project = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    declared = tomllib.loads(project.read_text(encoding="utf-8"))["project"]["version"]
+
+    assert __version__ == declared

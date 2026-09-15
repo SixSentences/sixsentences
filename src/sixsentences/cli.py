@@ -13,6 +13,7 @@ from typing import Any, cast
 
 from pydantic import ValidationError
 
+from sixsentences import __version__
 from sixsentences.connectors.openalex import OpenAlexClient, OpenAlexError
 from sixsentences.core.models import PrismaCounts, ReviewProtocol, WorkRecord
 from sixsentences.corpus.local import CorpusError, LocalCorpus, build_local_corpus
@@ -203,6 +204,14 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="sixsentences",
         description="Open building blocks for auditable research workflows.",
+    )
+    # argparse resolves an eager action while it consumes the option, so this
+    # answers before the required subcommand below is enforced.
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+        help="print the installed engine version and exit",
     )
     subcommands = parser.add_subparsers(dest="command", required=True)
 
