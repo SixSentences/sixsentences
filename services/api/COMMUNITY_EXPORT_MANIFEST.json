@@ -319,10 +319,10 @@
       "sha256": "362c3f72b1ce478603a3e2797c97ff8e9d66b1db13f9b49d84e171244e82b892"
     },
     {
-      "bytes": 49196,
+      "bytes": 50068,
       "mode": "0644",
       "path": "src/sixsentences_server/cli.py",
-      "sha256": "e020cc2409ad3975e5988ed259ca718328718401ec7cc9f4512e1ed80dafeeb4"
+      "sha256": "286c94f8994ad124c1662564a37f3e094474ba74ed6e8f285aef84726710be47"
     },
     {
       "bytes": 14232,
@@ -1717,10 +1717,10 @@
       "sha256": "92af76d32ab9409311ae0dab3c725d2f1d6270c55296be5a29557684fd740c75"
     },
     {
-      "bytes": 2575,
+      "bytes": 4786,
       "mode": "0644",
       "path": "tests/test_doctor.py",
-      "sha256": "9f7dfac5f5479a3ba4281db19d1f41dd9a6be13f5804113bc1c724b325ce4280"
+      "sha256": "ec521a8f040e3ea3dd30d07ba70de252aecd19603e8b8d8109d1ae5585ffbd51"
     },
     {
       "bytes": 62506,

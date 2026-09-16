@@ -15,6 +15,9 @@ equivalents for Python package metadata.
 - Every `sixsentences` subcommand accepts `--output PATH`. A file receives
   exactly the bytes stdout would have received, and is written only after the
   command succeeds.
+- `six-community doctor --json` emits one object per check — `name`, `state` and
+  `detail` — as the whole of standard output, so a deployment can be monitored
+  rather than read. The exit code is unchanged in both modes.
 
 ### Changed
 

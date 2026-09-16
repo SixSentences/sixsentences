@@ -71,6 +71,18 @@ A feature that is switched off is reported as off rather than as broken, and no
 configured secret appears in the output, so the result can be pasted into an
 issue. `quickstart.sh` runs it once after the stack starts.
 
+To watch the same answers from a monitor rather than read them, add `--json`:
+
+```console
+docker compose --env-file .env.selfhost exec api six-community doctor --json
+```
+
+That prints one object per check — `name`, `state` (`ok`, `off` or `failed`) and
+`detail` — as the whole of standard output, and nothing else, so it can be piped
+straight into a parser. The exit code is the same in both modes: non-zero when
+any check failed. Those three field names are a stable interface; alerting on
+them is safe.
+
 ## First account
 
 Public registration stays off until mail is configured, so the first account is

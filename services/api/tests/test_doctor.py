@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
-from sixsentences_server.config import Settings
+from sixsentences_server.cli import DOCTOR_JSON_FIELDS, app
+from sixsentences_server.config import Settings, get_settings
 from sixsentences_server.core.db import init_db
 from sixsentences_server.ops.doctor import _mail_check, _storage_check, failed, run_doctor
 
@@ -59,6 +62,62 @@ def test_no_configured_secret_reaches_the_output(
         assert canary not in rendered
     # The enabled feature is still reported, just without its credential.
     assert "speech" in rendered
+
+    # The machine-readable form is pasted into issues just as often.
+    emitted = CliRunner().invoke(app, ["doctor", "--json"]).stdout
+    for canary in ("mail-user-canary", "mail-password-canary", "gemini-key-canary"):
+        assert canary not in emitted
+
+
+def test_json_output_is_the_whole_of_stdout(settings: Settings) -> None:
+    """Whatever reads this is parsing it, so nothing else may share the stream."""
+    init_db()
+
+    result = CliRunner().invoke(app, ["doctor", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload
+    for entry in payload:
+        assert tuple(entry) == DOCTOR_JSON_FIELDS
+        assert entry["state"] in {"ok", "off", "failed"}
+        assert entry["detail"]
+    # The same questions the text table answers, in the same order.
+    assert [entry["name"] for entry in payload] == [check.name for check in run_doctor(settings)]
+
+
+def test_json_output_keeps_the_exit_code(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A monitor reads both the body and the status."""
+    monkeypatch.setenv("SIX_SMTP_HOST", "127.0.0.1")
+    monkeypatch.setenv("SIX_SMTP_PORT", "1")
+    # The command reads its own settings, and they are cached.
+    get_settings.cache_clear()
+    init_db()
+
+    result = CliRunner().invoke(app, ["doctor", "--json"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert [entry for entry in payload if entry["state"] == "failed"]
+
+
+def test_the_text_table_is_what_it_was(settings: Settings) -> None:
+    """--json is an addition; the format people read must not move."""
+    init_db()
+
+    result = CliRunner().invoke(app, ["doctor"])
+    checks = run_doctor(settings)
+    width = max(len(check.name) for check in checks)
+    expected = [
+        f"{ {'ok': 'ok', 'off': 'off', 'failed': 'FAIL'}[check.state]:>4}  "
+        f"{check.name:<{width}}  {check.detail}"
+        for check in checks
+    ]
+
+    assert result.exit_code == 0
+    assert result.stdout.splitlines() == [*expected, "", "Every configured feature answered."]
 
 
 def test_unwritable_storage_is_reported_rather_than_raised(tmp_path: Path) -> None:
