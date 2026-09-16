@@ -1270,11 +1270,41 @@ if __name__ == "__main__":
     app()
 
 
+#: The field names `doctor --json` emits. They are an interface: a monitor
+#: alerting on `state` breaks the day one of them is renamed, so treat a change
+#: here the way a change to an API response is treated.
+DOCTOR_JSON_FIELDS = ("name", "state", "detail")
+
+
 @app.command("doctor")
-def doctor_cmd() -> None:
+def doctor_cmd(
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit the checks as JSON on stdout instead of the text table.",
+    ),
+) -> None:
     """Report whether this deployment can do what it is configured for."""
 
     checks: list[Check] = run_doctor()
+
+    if as_json:
+        import json
+
+        typer.echo(
+            json.dumps(
+                [
+                    {field: getattr(check, field) for field in DOCTOR_JSON_FIELDS}
+                    for check in checks
+                ],
+                ensure_ascii=False,
+            )
+        )
+        # Nothing else goes to either stream: whatever reads this is parsing it.
+        if failed(checks):
+            raise typer.Exit(1)
+        return
+
     width = max(len(check.name) for check in checks)
     for check in checks:
         marker = {"ok": "ok", "off": "off", "failed": "FAIL"}[check.state]
