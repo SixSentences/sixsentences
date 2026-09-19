@@ -114,6 +114,21 @@ elif [[ "$SPOKEN_ENABLED" != "false" ]]; then
   fail "SIX_PUBLIC_SPOKEN_INTERVIEWS_ENABLED must be true or false"
 fi
 
+PUBMED_ENABLED="$(required_value SIX_PUBMED_ENABLED)"
+PUBMED_EMAIL="$(env_value SIX_PUBMED_EMAIL)"
+PUBMED_API_KEY="$(env_value SIX_PUBMED_API_KEY)"
+if [[ "$PUBMED_ENABLED" == "true" ]]; then
+  [[ -n "$PUBMED_EMAIL" ]] || fail "PubMed retrieval requires an NCBI contact email"
+elif [[ "$PUBMED_ENABLED" != "false" ]]; then
+  fail "SIX_PUBMED_ENABLED must be true or false"
+fi
+if [[ -n "$PUBMED_EMAIL" ]] \
+  && [[ ! "$PUBMED_EMAIL" =~ ^[^@[:space:]]+@[^@[:space:].]+(\.[^@[:space:].]+)+$ ]]; then
+  fail "SIX_PUBMED_EMAIL must be a valid contact email address"
+fi
+[[ "$PUBMED_API_KEY" != *[[:space:]]* ]] \
+  || fail "SIX_PUBMED_API_KEY must not contain whitespace"
+
 FORBIDDEN_PREFIX='SIX_STR''IPE_'
 if grep -Eq "^${FORBIDDEN_PREFIX}" "$ENV_FILE"; then
   fail "the community environment contains a commercial-account variable"
@@ -137,5 +152,5 @@ if ((COMPOSE_MAJOR < 2)) \
 fi
 docker compose --env-file "$ENV_FILE" --file "$COMPOSE_FILE" config --quiet
 
-unset POSTGRES_SECRET CONNECTOR_SECRET ERASURE_SECRET
+unset POSTGRES_SECRET CONNECTOR_SECRET ERASURE_SECRET PUBMED_EMAIL PUBMED_API_KEY
 echo "Self-host preflight passed. No secret values were printed."

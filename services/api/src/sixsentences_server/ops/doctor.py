@@ -104,6 +104,21 @@ def _mail_check(settings: Settings) -> Check:
 def _provider_checks(settings: Settings) -> list[Check]:
     """Report what each optional integration would do, never its credential."""
 
+    if not settings.pubmed_enabled:
+        pubmed = Check("PubMed", "off", "disabled; no scholarly query is sent to NCBI")
+    elif settings.pubmed_ready:
+        pubmed = Check(
+            "PubMed",
+            "ok",
+            "enabled; translated scholarly queries are sent to NCBI",
+        )
+    else:
+        pubmed = Check(
+            "PubMed",
+            "failed",
+            "enabled but the NCBI contact email or optional API key is invalid",
+        )
+
     return [
         Check(
             "metadata",
@@ -119,6 +134,7 @@ def _provider_checks(settings: Settings) -> list[Check]:
             if settings.websearch_enabled
             else "needs a provider key and the data-processing confirmation",
         ),
+        pubmed,
         Check(
             "speech",
             "ok" if settings.gemini_enabled else "off",

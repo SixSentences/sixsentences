@@ -29,6 +29,7 @@ function loadTs(path, dependencies = {}) {
 
 const { ReportDoc } = loadTs("src/lib/report-doc.tsx", {
   "@/lib/ai-media-provenance": loadTs("src/lib/ai-media-provenance.ts"),
+  "@/lib/scholarly-work": loadTs("src/lib/scholarly-work.ts"),
   "@react-pdf/renderer": {
     ...renderer,
     Font: {

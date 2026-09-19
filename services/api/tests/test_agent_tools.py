@@ -400,6 +400,31 @@ def test_related_walks_the_citation_graph_both_ways() -> None:
     assert seen_filters == ["cites:W123", "cited_by:W123"]
 
 
+def test_citation_graph_rejects_pubmed_identity_without_openalex_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "sixsentences_server.chat.service.OpenAlexClient",
+        lambda **_kwargs: pytest.fail("PubMed identity must not reach OpenAlex"),
+    )
+
+    step, works = _execute_tool(
+        "citation_graph",
+        "cites:pubmed:12345678",
+        "Follow citations",
+    )
+
+    assert works == []
+    assert step.status == "failed"
+    assert step.results == [
+        {
+            "error": "citation graph lookup requires an OpenAlex work identity",
+            "error_code": "unsupported_provider_identity",
+            "retryable": False,
+        }
+    ]
+
+
 def test_author_works_resolves_the_author_then_their_works() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:

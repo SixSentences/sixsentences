@@ -100,6 +100,11 @@ export interface ChatModelCatalog {
   /** Opaque deployment route declared by the connected API. */
   routing_mode?: string;
   content_scope?: "private";
+  /** Provider features that are enabled on the connected API deployment. */
+  runtime_capabilities?: {
+    web_search: boolean;
+    pubmed: boolean;
+  };
   models: ChatModelOption[];
 }
 
@@ -823,6 +828,8 @@ export interface RunConfig {
   web_search: boolean;
   /** Explicit, run-bound confirmation that web-search input is public data only. */
   web_search_public_data_confirmed?: boolean;
+  /** Search PubMed as an additional public biomedical literature source. */
+  pubmed?: boolean;
   retrieval_limit: number;
   exhaustive: boolean;
   canary_ids: string[];
@@ -861,6 +868,8 @@ export interface RunCreateRequest {
   web_search?: boolean;
   /** Required and true when web_search is enabled; omitted otherwise. */
   web_search_public_data_confirmed?: boolean;
+  /** Search PubMed as an additional public biomedical literature source. */
+  pubmed?: boolean;
   retrieval_limit?: number;
   exhaustive?: boolean;
   canary_ids?: string[];
@@ -1965,6 +1974,7 @@ export interface ToolStepPayload {
     snippet?: string;
     category?: string;
     id?: string;
+    doi?: string | null;
     year?: number | null;
     venue?: string | null;
     cited_by_count?: number;

@@ -40,8 +40,8 @@ test("review options never implicitly enable or disable live discovery", async (
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   for (const live of [false, true]) {
-    for (const key of ["screen", "webSearch", "snowball", "semantic", "acquire", "fullText", "gateProtocol"]) {
-      let options = { live, screen: false, webSearch: false, snowball: false, semantic: false, acquire: false, fullText: false, gateProtocol: false };
+    for (const key of ["screen", "pubmed", "webSearch", "snowball", "semantic", "acquire", "fullText", "gateProtocol"]) {
+      let options = { live, screen: false, pubmed: false, webSearch: false, snowball: false, semantic: false, acquire: false, fullText: false, gateProtocol: false };
       const exports = {};
       runInNewContext(compiled, {
         exports,

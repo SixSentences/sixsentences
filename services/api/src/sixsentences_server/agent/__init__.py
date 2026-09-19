@@ -22,6 +22,16 @@ from sixsentences_server.agent.loop import (
     AgentToolAuthorization,
     AgentToolResult,
 )
+from sixsentences_server.agent.research_plan import (
+    MAX_RESEARCH_ANGLES,
+    MIN_RESEARCH_ANGLES,
+    RESEARCH_PLAN_SCHEMA_VERSION,
+    ResearchAngle,
+    ResearchAngleDraft,
+    ResearchCoveragePolicy,
+    ResearchPlan,
+    build_research_plan,
+)
 
 __all__ = [
     "CONTROL_WORKSPACE_ACTION_TYPES",
@@ -34,7 +44,15 @@ __all__ = [
     "AgentTool",
     "AgentToolAuthorization",
     "AgentToolResult",
+    "MAX_RESEARCH_ANGLES",
+    "MIN_RESEARCH_ANGLES",
+    "RESEARCH_PLAN_SCHEMA_VERSION",
+    "ResearchAngle",
+    "ResearchAngleDraft",
+    "ResearchCoveragePolicy",
+    "ResearchPlan",
     "analytical_chart_kind",
+    "build_research_plan",
     "bind_workspace_actions",
     "control_only_workspace_actions",
     "ensure_workspace_actions",

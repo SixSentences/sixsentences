@@ -9,6 +9,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useWorks } from "@/hooks/queries";
 import { authorLine, formatNumber } from "@/lib/format";
+import {
+  normalizeScholarlyWorkId,
+  scholarlyDoiUrl,
+  scholarlyWorkUrl,
+} from "@/lib/scholarly-work";
 import type { RankedWork, Verdict, WorkVerdictFilter } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -56,11 +61,14 @@ function SignalBars({ work }: { work: RankedWork }) {
 
 function WorkRow({ work, completed }: { work: RankedWork; completed: boolean }) {
   const [open, setOpen] = useState(false);
-  const doiUrl = work.doi
-    ? work.doi.startsWith("http")
-      ? work.doi
-      : `https://doi.org/${work.doi.replace(/^doi:/, "")}`
-    : null;
+  const doiUrl = scholarlyDoiUrl(work.doi);
+  const providerUrl = scholarlyWorkUrl(work.id);
+  const normalizedWorkId = normalizeScholarlyWorkId(work.id);
+  const providerLabel = normalizedWorkId.startsWith("pubmed:")
+    ? "PubMed"
+    : normalizedWorkId.startsWith("W")
+      ? "OpenAlex"
+      : "DOI";
 
   return (
     <div
@@ -171,7 +179,17 @@ function WorkRow({ work, completed }: { work: RankedWork; completed: boolean }) 
           )}
           <div className="flex flex-wrap items-center gap-3 text-[0.75rem]">
             <span className="font-mono text-muted-foreground">{work.id}</span>
-            {doiUrl && (
+            {providerUrl && (
+              <a
+                href={providerUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-moss underline decoration-moss/30 underline-offset-2 hover:decoration-moss"
+              >
+                {providerLabel} <ExternalLink className="size-3" />
+              </a>
+            )}
+            {doiUrl && doiUrl !== providerUrl && (
               <a
                 href={doiUrl}
                 target="_blank"

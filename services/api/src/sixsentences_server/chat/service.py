@@ -54,6 +54,11 @@ from sixsentences_server.agent.loop import (
     AgentTool,
     AgentToolResult,
 )
+from sixsentences_server.agent.research_plan import (
+    MIN_RESEARCH_ANGLES,
+    ResearchPlan,
+    build_research_plan,
+)
 from sixsentences_server.agent.search_query import (
     formulate_search_query,
     query_requires_formulation,
@@ -213,10 +218,11 @@ CHAT_SYSTEM = (
     "Absence is not proof of the opposite: a negative claim such as 'does not "
     "enforce' needs direct evidence too. Never invent implementation details "
     "such as what is controlled by configuration unless a source states them. "
-    "(2) Support every claim drawn from a paper with its source id in square "
-    "brackets, e.g. [W2741809807]. One id per bracket pair, NOTHING else "
-    "inside the brackets (no page numbers, no commas): write [W1] [W2], "
-    "never [W1, W2] or [W1, p. 3]. Name pages in the sentence itself "
+    "(2) Support every claim drawn from a paper with its provided source id in square "
+    "brackets, e.g. [W2741809807] or [pubmed:12345678]. One id per bracket pair, "
+    "NOTHING else inside the brackets (no page numbers, no commas): write "
+    "[W1] [pubmed:12345678], never [W1, pubmed:12345678] or [W1, p. 3]. "
+    "Name pages in the sentence itself "
     "(on page 3). Every factual sentence or table row about the literature "
     "must carry at least one source id; do not leave evidence claims uncited. "
     "Refer to web findings by their domain. "
@@ -353,7 +359,22 @@ _NAMED_PAPER_COMPARISON = re.compile(
     r"gegenueberstell)\w*\b",
     re.IGNORECASE,
 )
-_WORK_ID_TOKEN = re.compile(r"W\d+", re.IGNORECASE)
+_WORK_ID_FRAGMENT = r"(?:W\d+|pubmed:[1-9]\d{0,11})"
+_WORK_ID_TOKEN = re.compile(_WORK_ID_FRAGMENT, re.IGNORECASE)
+_OPENALEX_WORK_ID = re.compile(r"W[1-9]\d*", re.IGNORECASE)
+
+
+def _normalize_work_id(value: str) -> str:
+    """Normalize only recognized provider IDs; leave other text untouched."""
+
+    stripped = value.strip()
+    if stripped.casefold().startswith("pubmed:"):
+        return stripped.casefold()
+    if stripped[:1].casefold() == "w" and stripped[1:].isdigit():
+        return f"W{stripped[1:]}"
+    return stripped
+
+
 _PAPER_DISCOVERY_STOPWORDS = {
     "an",
     "about",
@@ -1966,6 +1987,7 @@ def _confirmed_public_web_query(
     steps: Sequence["ToolStep"],
     *,
     approved_query: str | None = None,
+    research_plan: ResearchPlan | None = None,
 ) -> str:
     """Use exact approved terms, or derive a query only from the attested message.
 
@@ -1982,7 +2004,7 @@ def _confirmed_public_web_query(
         raise ChatError("Name the public topic you want to search for.")
     previous = [step.query for step in steps if step.tool == "web_search"][-3:]
     pass_number = len(previous) + 1
-    angles = (
+    fallback_angles = (
         (
             "official documentation for the exact requested pages",
             "official reference pages for the remaining requested topics",
@@ -1995,10 +2017,20 @@ def _confirmed_public_web_query(
             "recent limitations and conflicting findings",
         )
     )
-    context = (
-        f"Independent public web evidence pass {pass_number}; use the angle "
-        f"{angles[min(pass_number - 1, len(angles) - 1)]}."
-    )
+    if research_plan is not None and not _OFFICIAL_WEB_VERIFICATION.search(request):
+        plan_angle = research_plan.angles[min(pass_number - 1, len(research_plan.angles) - 1)]
+        context = (
+            f"Independent public web evidence pass {pass_number}; research angle "
+            f"{plan_angle.id} ({plan_angle.label}): {plan_angle.subquestion} "
+            f"Coverage criterion: {plan_angle.coverage_criterion}"
+        )
+        fallback_qualifier = plan_angle.label
+    else:
+        fallback_qualifier = fallback_angles[min(pass_number - 1, len(fallback_angles) - 1)]
+        context = (
+            f"Independent public web evidence pass {pass_number}; use the angle "
+            f"{fallback_qualifier}."
+        )
     if previous:
         context += f" Previous public web queries: {' | '.join(previous)}"
     candidate = formulate_search_query(request, pool, surface="web", context=context)
@@ -2012,7 +2044,7 @@ def _confirmed_public_web_query(
     # The base is still the query writer's request-only output (or a neutral
     # fallback), so no router draft or private context can reach Sonar.
     base = candidate or "public information"
-    qualifier = angles[min(pass_number - 1, len(angles) - 1)]
+    qualifier = fallback_qualifier
     distinct = f"{base} {qualifier}"[:300]
     if " ".join(distinct.casefold().split()) not in normalized_previous:
         return distinct
@@ -2024,7 +2056,10 @@ _BROAD_WEB_RESEARCH = re.compile(
     r"überblick|ueberblick|landscape|paper\w*|stud(?:y|ies|ie|ien)\w*)\b",
     re.IGNORECASE,
 )
-_WORK_ID_IN = re.compile(r"\bW\d{4,}\b")
+_WORK_ID_IN = re.compile(
+    r"(?<![\w:])(?:W\d{4,}|pubmed:[1-9]\d{0,11})(?![\w:])",
+    re.IGNORECASE,
+)
 _URL_IN_MESSAGE = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
 _DEEP_RESEARCH_ASK = re.compile(
     r"\b(?:gründlich\w*|ausführlich\w*|umfassend\w*|tiefgehend\w*|"
@@ -2206,9 +2241,9 @@ TOOL_DECISION_SYSTEM = (
     '{{"action": "tool", "tool": "export_works", '
     '"format": "bibtex" | "ris" | "csl", "reason": "..."}}\n'
     '{{"action": "tool", "tool": "compare_papers", '
-    '"work_ids": ["W…", "W…"], "reason": "..."}} (2 or 3 ids)\n'
+    '"work_ids": ["<source id>", "<source id>"], "reason": "..."}} (2 or 3 ids)\n'
     '{{"action": "tool", "tool": "extract_data", '
-    '"columns": ["<field>", "<field>", ...], "work_ids": ["W…", ...] or [], '
+    '"columns": ["<field>", "<field>", ...], "work_ids": ["<source id>", ...] or [], '
     '"reason": "..."}} (a comparison/evidence table across works; work_ids '
     "empty = the run's included works)\n"
     '{{"action": "tool", "tool": "edit_table", "message_id": 123, '
@@ -2276,11 +2311,11 @@ TOOL_DECISION_SYSTEM = (
     '"verdicts" | "top_venues" | "top_cited" | "prisma_funnel", "scope": '
     '"all" | "included" | "excluded" | "unsure", "reason": "..."}} '
     "(use the requested review-decision scope; default all)\n"
-    '{{"action": "tool", "tool": "read_paper", "work_id": "W…", "reason": "..."}}\n'
-    '{{"action": "tool", "tool": "cite", "work_id": "W…", "reason": "..."}}\n'
-    '{{"action": "tool", "tool": "show_paper", "work_id": "W…", '
+    '{{"action": "tool", "tool": "read_paper", "work_id": "<source id>", "reason": "..."}}\n'
+    '{{"action": "tool", "tool": "cite", "work_id": "<source id>", "reason": "..."}}\n'
+    '{{"action": "tool", "tool": "show_paper", "work_id": "<source id>", '
     '"focus": "<what the user wants to see in the paper>", "reason": "..."}}\n'
-    '{{"action": "tool", "tool": "save_paper", "work_id": "W…", '
+    '{{"action": "tool", "tool": "save_paper", "work_id": "<source id>", '
     '"reason": "..."}} (store the paper in the workspace library; use when '
     "the user explicitly asks to save or add it there)\n"
     '{{"action": "tool", "tool": "clarify", "questions": '
@@ -2382,7 +2417,7 @@ _TOOL_DESCRIPTIONS = {
     "checks remain authoritative",
 }
 
-_ID_PATTERN = re.compile(r"W\d+")
+_ID_PATTERN = _WORK_ID_TOKEN
 ABSTRACT_CHARS = 600
 # Row limits, not conversational pairs. Keep over 100 complete exchanges plus
 # a separate bounded user-instruction window for older corrections/references.
@@ -2711,7 +2746,9 @@ def _context_works(
         return []
     probe = ReviewProtocol(question=question, query_string=question)
     ranked = rank_works(works, probe, now_year=None)
-    referenced_ids = list(dict.fromkeys(re.findall(r"\bW\d+\b", question)))
+    referenced_ids = list(
+        dict.fromkeys(_normalize_work_id(value) for value in _WORK_ID_TOKEN.findall(question))
+    )
     reference_order = {work_id: index for index, work_id in enumerate(referenced_ids)}
     top_score = max((item.score for item in ranked), default=0.0)
     if referenced_ids:
@@ -3309,7 +3346,7 @@ def _latest_reader_work_id(session: Session, run_id: int) -> str:
         for candidate in candidates:
             work_id = str(candidate or "")
             if _WORK_ID_IN.fullmatch(work_id):
-                return work_id
+                return _normalize_work_id(work_id)
     return ""
 
 
@@ -3367,18 +3404,18 @@ def _latest_discussed_work_id(session: Session, run_id: int) -> str:
         # follow-ups such as "lade das Paper" keep the intended referent.
         mentioned = _WORK_ID_IN.findall(str(row.content or ""))
         if mentioned:
-            return str(mentioned[-1])
+            return _normalize_work_id(str(mentioned[-1]))
         for work_id in reversed([str(item) for item in (row.citations or [])]):
             if _WORK_ID_IN.fullmatch(work_id):
-                return work_id
+                return _normalize_work_id(work_id)
         payload = row.payload or {}
         explicit = str(payload.get("work_id") or "")
         if _WORK_ID_IN.fullmatch(explicit):
-            return explicit
+            return _normalize_work_id(explicit)
         for result in payload.get("results") or []:
             candidate = str(result.get("id") or result.get("work_id") or "")
             if _WORK_ID_IN.fullmatch(candidate):
-                return candidate
+                return _normalize_work_id(candidate)
     return ""
 
 
@@ -3409,7 +3446,7 @@ def _requested_reader_work_id(
 ) -> str:
     """Choose the paper named now, linked now, or discussed most recently."""
     if match := _WORK_ID_IN.search(question):
-        return match.group(0)
+        return _normalize_work_id(match.group(0))
     for raw_url in _URL_IN_MESSAGE.findall(question):
         if resolved := _work_from_shared_url(raw_url.rstrip(".,);]")):
             if session.get(WorkRow, resolved.id) is None:
@@ -3969,7 +4006,7 @@ _EXTRACT_SYSTEM = (
     "a systematic reviewer fills a data-extraction sheet. Given the papers "
     "(title, abstract, and any full text) and the requested columns, respond "
     "with STRICT JSON only: "
-    '{"rows": [{"work_id": "W...", "relevance": '
+    '{"rows": [{"work_id": "<provided source id>", "relevance": '
     '"direct|partial|unrelated", "entity_key": "<canonical comparison '
     'entity>", "values": {"<requested column>": '
     '"<cell>", ...}}, ...]}. Judge relevance against the supplied comparison '
@@ -4256,7 +4293,7 @@ _VERIFY_CLAIM_SYSTEM = (
     "evidence from contradiction. Respond with STRICT JSON only: "
     '{"verdict":"supported"|"contradicted"|"mixed"|"insufficient",'
     '"confidence":"high"|"medium"|"low","rationale":"<2 concise sentences>",'
-    '"evidence":[{"work_id":"W...","stance":"supports"|"contradicts"|'
+    '"evidence":[{"work_id":"<provided source id>","stance":"supports"|"contradicts"|'
     '"context","reason":"<one evidence-specific sentence>"}]}. '
     "Only use work ids supplied below. 'supported' requires clear direct "
     "support; 'contradicted' requires direct contrary evidence; 'mixed' "
@@ -4790,19 +4827,32 @@ def _execute_tool(tool: str, query: str, reason: str) -> tuple[ToolStep, list[Wo
             extra = [resolved]
     elif tool == "citation_graph":
         direction, _, work_id = query.partition(":")
-        oa = OpenAlexClient(mailto=settings.openalex_mailto, api_key=settings.openalex_api_key)
-        try:
-            extra = oa.related(work_id, direction=direction, limit=TOOL_RESULTS)
-        except (OpenAlexError, httpx.HTTPError):
-            extra = []
+        if _OPENALEX_WORK_ID.fullmatch(work_id) is None:
             step.status = "failed"
             step.results = [
                 {
-                    "error": "the scholarly connector was temporarily unavailable",
-                    "error_code": "connector_failed",
-                    "retryable": True,
+                    "error": "citation graph lookup requires an OpenAlex work identity",
+                    "error_code": "unsupported_provider_identity",
+                    "retryable": False,
                 }
             ]
+        else:
+            oa = OpenAlexClient(
+                mailto=settings.openalex_mailto,
+                api_key=settings.openalex_api_key,
+            )
+            try:
+                extra = oa.related(work_id, direction=direction, limit=TOOL_RESULTS)
+            except (OpenAlexError, httpx.HTTPError):
+                extra = []
+                step.status = "failed"
+                step.results = [
+                    {
+                        "error": "the scholarly connector was temporarily unavailable",
+                        "error_code": "connector_failed",
+                        "retryable": True,
+                    }
+                ]
         if step.status != "failed":
             step.results = _work_results(extra)
     elif tool == "author_lookup":
@@ -5457,6 +5507,7 @@ class _QuickAnswerResearchDecisionPool:
         preferred_search_tool: str = "",
         decision_controller: Callable[[], dict[str, Any] | None] | None = None,
         approved_web_query: str | None = None,
+        research_plan: ResearchPlan | None = None,
     ) -> None:
         self.pool = pool
         self.request = request
@@ -5474,6 +5525,7 @@ class _QuickAnswerResearchDecisionPool:
         self.preferred_search_tool = preferred_search_tool
         self.decision_controller = decision_controller
         self.approved_web_query = approved_web_query
+        self.research_plan = research_plan
         self.validation_feedback = ""
         self.deferred_decision: dict[str, Any] | None = None
 
@@ -5501,6 +5553,16 @@ class _QuickAnswerResearchDecisionPool:
         else:
             decision = self.decision_controller() if self.decision_controller else None
             if decision is None:
+                research_plan_note = (
+                    "Bounded research plan: "
+                    + json.dumps(
+                        self.research_plan.to_metadata(),
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    )
+                    if self.research_plan is not None
+                    else ""
+                )
                 decision = _decide_tool(
                     self.pool,
                     self.request,
@@ -5508,7 +5570,9 @@ class _QuickAnswerResearchDecisionPool:
                     self.works(),
                     self.steps,
                     available,
-                    note="\n\n".join(part for part in (self.note, feedback) if part),
+                    note="\n\n".join(
+                        part for part in (self.note, research_plan_note, feedback) if part
+                    ),
                     extension_gate=len(self.steps) >= self.base_tool_calls,
                 )
 
@@ -5534,19 +5598,43 @@ class _QuickAnswerResearchDecisionPool:
         """Return the coverage floor for the observations collected so far."""
 
         required = self.minimum_searches
+        if self.research_plan is not None:
+            required = max(
+                required,
+                self.research_plan.coverage.minimum_covered_angles,
+            )
         if self.expand_search_floor_after_first and self.coverage_search_count():
             required = max(required, RESEARCH_SEARCH_MIN)
         return required
 
     def coverage_search_count(self) -> int:
-        """Count current and topic-matched persisted search receipts."""
+        """Count only successful search receipts with traceable evidence."""
+
+        def evidence_bearing(step: ToolStep) -> bool:
+            if step.status != "completed" or not step.results:
+                return False
+            if step.tool == "find_papers":
+                return any(
+                    not result.get("error")
+                    and _WORK_ID_TOKEN.fullmatch(str(result.get("id") or "")) is not None
+                    for result in step.results
+                )
+            if step.tool == "web_search":
+                return any(
+                    not result.get("error")
+                    and isinstance(result.get("url"), str)
+                    and is_public_http_url(str(result["url"]), resolve=False)
+                    for result in step.results
+                )
+            return False
 
         if self.approved_web_query is not None:
             # Historical evidence cannot stand in for the one exact search
             # the user has just approved in this turn.
-            return sum(step.tool == "web_search" for step in self.steps)
+            return sum(step.tool == "web_search" and evidence_bearing(step) for step in self.steps)
         return sum(
-            step.tool in {"find_papers", "web_search"} for step in [*self.prior_steps, *self.steps]
+            step.tool in {"find_papers", "web_search"} and evidence_bearing(step)
+            for step in [*self.prior_steps, *self.steps]
         )
 
     def _ensure_search_decision(
@@ -5579,10 +5667,27 @@ class _QuickAnswerResearchDecisionPool:
         raw_query = str((decision or {}).get("query") or "").strip()
         surface: Literal["academic", "web"] = "web" if proposed_tool == "web_search" else "academic"
         pass_number = len(previous_steps) + 1
-        angles = (
+        plan_angle = (
+            self.research_plan.angles[min(pass_number - 1, len(self.research_plan.angles) - 1)]
+            if self.research_plan is not None
+            else None
+        )
+        fallback_angles = (
             "authoritative primary sources",
             "independent evaluation evidence",
             "recent limitations and conflicting findings",
+        )
+        angle_context = (
+            (
+                f"Research angle {plan_angle.id} ({plan_angle.label}): "
+                f"{plan_angle.subquestion}\nCoverage criterion: "
+                f"{plan_angle.coverage_criterion}"
+            )
+            if plan_angle is not None
+            else (
+                "Use a distinct angle: "
+                f"{fallback_angles[min(pass_number - 1, len(fallback_angles) - 1)]}."
+            )
         )
         if surface == "web" and self.approved_web_query is not None:
             raw_query = self.approved_web_query
@@ -5597,8 +5702,7 @@ class _QuickAnswerResearchDecisionPool:
                 self.pool,
                 surface="web",
                 context=(
-                    f"Evidence-search pass {len(previous_queries) + 1}; use a distinct angle: "
-                    f"{angles[min(len(previous_queries), len(angles) - 1)]}.\n"
+                    f"Evidence-search pass {len(previous_queries) + 1}; {angle_context}\n"
                     f"Previous public web queries: {' | '.join(previous_queries[-3:])}"
                 ),
             )
@@ -5608,8 +5712,7 @@ class _QuickAnswerResearchDecisionPool:
                 self.pool,
                 surface=surface,
                 context=(
-                    f"Evidence-search pass {pass_number}; use a distinct angle: "
-                    f"{angles[min(pass_number - 1, len(angles) - 1)]}.\n"
+                    f"Evidence-search pass {pass_number}; {angle_context}\n"
                     f"Previous queries: {' | '.join(previous_queries[-3:])}\n"
                     f"Recent conversation: {self.history[-2_000:]}"
                 ),
@@ -5625,7 +5728,12 @@ class _QuickAnswerResearchDecisionPool:
                 if previous_queries
                 else ("public information" if surface == "web" else self.request)
             )
-            raw_query = f'"{topic}" {angles[min(pass_number - 1, len(angles) - 1)]}'[:240]
+            angle_label = (
+                plan_angle.label
+                if plan_angle is not None
+                else fallback_angles[min(pass_number - 1, len(fallback_angles) - 1)]
+            )
+            raw_query = f'"{topic}" {angle_label}'[:240]
         return {
             "action": "tool",
             "tool": proposed_tool,
@@ -5834,6 +5942,11 @@ def _run_quick_answer_research_agent(
         return set(), None
     if web_search_budget is None:
         web_search_budget = WebSearchCallBudget(limit=WEB_SEARCH_MAX)
+    research_plan = (
+        build_research_plan(request)
+        if minimum_searches >= MIN_RESEARCH_ANGLES and approved_web_query is None
+        else None
+    )
 
     decision_pool = _QuickAnswerResearchDecisionPool(
         pool,
@@ -5852,6 +5965,7 @@ def _run_quick_answer_research_agent(
         preferred_search_tool=preferred_search_tool,
         decision_controller=decision_controller,
         approved_web_query=approved_web_query,
+        research_plan=research_plan,
     )
 
     def handler(tool_name: str) -> Callable[[dict[str, Any]], AgentToolResult]:
@@ -5869,7 +5983,11 @@ def _run_quick_answer_research_agent(
                 # its draft is not an egress-safe search term. Re-formulate
                 # every Sonar query from this turn's confirmed public request.
                 query = _confirmed_public_web_query(
-                    request, pool, steps, approved_query=approved_web_query
+                    request,
+                    pool,
+                    steps,
+                    approved_query=approved_web_query,
+                    research_plan=research_plan,
                 )
                 if approved_web_query is not None and any(
                     step.tool == "web_search" for step in steps
@@ -5979,6 +6097,7 @@ def _run_quick_answer_research_agent(
         final_validator=validate_final,
         cancel_check=pool.cancel_check,
         plan_steps=plan_steps,
+        research_plan=research_plan,
     )
 
     def publish_event(event: dict[str, Any]) -> None:
@@ -7061,7 +7180,7 @@ _DOC_MAX_DOCS = 2
 
 _EVIDENCE_INSTRUCTION = (
     "\n\nAfter your answer, add ONE final line: SOURCES: followed by a JSON "
-    'array of 1 to 4 objects {"work_id": "W...", "page": <page number>, '
+    'array of 1 to 4 objects {"work_id": "<provided source id>", "page": <page number>, '
     '"quote": "<a verbatim 8-30 word substring copied exactly from that page '
     'of the full text above>"} pointing at the passages your answer rests '
     "on. Quotes must come from the full-text pages shown above, never from "
@@ -7074,10 +7193,14 @@ _SOURCES_TAIL = re.compile(r"\n\s*SOURCES:\s*(\[.*?\])\s*$", re.DOTALL)
 # "[W1, W2]") and every drifted bracket renders as raw text instead of a
 # citation chip — so the contract is enforced mechanically after the call
 _BRACKET_PAGE = re.compile(
-    r"\[\s*(W\d+)[\s,;]*(?:pages?|pp\.?|p\.?|seite|s\.?)\s*(\d+(?:\s*[-–]\s*\d+)?)\s*\]",
+    rf"\[\s*({_WORK_ID_FRAGMENT})[\s,;]*(?:pages?|pp\.?|p\.?|seite|s\.?)"
+    r"\s*(\d+(?:\s*[-–]\s*\d+)?)\s*\]",
     re.IGNORECASE,
 )
-_BRACKET_MULTI = re.compile(r"\[\s*(W\d+(?:\s*[,;]\s*W\d+)+)\s*\]")
+_BRACKET_MULTI = re.compile(
+    rf"\[\s*({_WORK_ID_FRAGMENT}(?:\s*[,;]\s*{_WORK_ID_FRAGMENT})+)\s*\]",
+    re.IGNORECASE,
+)
 
 
 _TABLE_SEPARATOR = re.compile(r"^\|(?:\s*:?-{2,}:?\s*\|)+\s*$")
@@ -7140,8 +7263,13 @@ def _thread_numbering(session: Session, run_id: int) -> dict[str, int]:
         .where(ChatMessageRow.run_id == run_id, ChatMessageRow.role != "tool")
         .order_by(ChatMessageRow.id)
     ):
-        for match in re.finditer(r"\[(W\d+)", content or ""):
-            numbers.setdefault(match.group(1), len(numbers) + 1)
+        for match in re.finditer(
+            rf"\[({_WORK_ID_FRAGMENT})",
+            content or "",
+            re.IGNORECASE,
+        ):
+            work_id = _normalize_work_id(match.group(1))
+            numbers.setdefault(work_id, len(numbers) + 1)
     return numbers
 
 
@@ -8136,7 +8264,7 @@ def answer_question(
             decision = {
                 "action": "tool",
                 "tool": "cite",
-                "work_id": id_match.group(0) if id_match else "",
+                "work_id": _normalize_work_id(id_match.group(0)) if id_match else "",
                 "reason": "the user asked for a citation format",
             }
         if (
@@ -8214,7 +8342,11 @@ def answer_question(
             and (not decision or decision.get("tool") != "save_paper")
         ):
             id_match = _WORK_ID_IN.search(question)
-            target_id = id_match.group(0) if id_match else _latest_reader_work_id(session, run.id)
+            target_id = (
+                _normalize_work_id(id_match.group(0))
+                if id_match
+                else _latest_reader_work_id(session, run.id)
+            )
             if not target_id and len(stored_doc_work_ids) == 1:
                 target_id = stored_doc_work_ids[0]
             if not target_id and len(works + extra_works) == 1:
@@ -9791,7 +9923,10 @@ def answer_question(
         )
         cited_ids = [
             wid
-            for wid in dict.fromkeys(_ID_PATTERN.findall(answer_text + " " + table_text))
+            for wid in dict.fromkeys(
+                _normalize_work_id(value)
+                for value in _ID_PATTERN.findall(answer_text + " " + table_text)
+            )
             if wid in by_id
         ]
         citations = [Citation(id=wid, title=by_id[wid].title) for wid in cited_ids]
@@ -9808,7 +9943,13 @@ def answer_question(
             ).strip(),
             language=response_language,
         )
-        cited_ids = [wid for wid in dict.fromkeys(_ID_PATTERN.findall(answer_text)) if wid in by_id]
+        cited_ids = [
+            wid
+            for wid in dict.fromkeys(
+                _normalize_work_id(value) for value in _ID_PATTERN.findall(answer_text)
+            )
+            if wid in by_id
+        ]
         citations = [Citation(id=wid, title=by_id[wid].title) for wid in cited_ids]
 
     if not answer_text.strip() and extracted_tables:
@@ -9968,9 +10109,9 @@ def chat_history(
 SUMMARY_SYSTEM = (
     "You are the SixSentences_ research assistant. A systematic literature "
     "search just finished; write the closing message to the researcher. Rules: "
-    "(1) Ground every claim about a paper in the provided list and cite its id "
-    "in square brackets, e.g. [W2741809807]. One id per bracket pair: write "
-    "[W1] [W2], never [W1, W2]. "
+    "(1) Ground every claim about a paper in the provided list and cite its exact id "
+    "in square brackets, e.g. [W2741809807] or [pubmed:12345678]. One id per "
+    "bracket pair: write [W1] [pubmed:12345678], never combine ids in one pair. "
     "(2) Treat only works labelled CONFIRMED as confirmed evidence. Works "
     "labelled PROVISIONAL, UNSURE or UNSCREENED may be mentioned only with that label and "
     "must never support a definitive finding. Be honest about weaknesses: "
@@ -10168,7 +10309,13 @@ def summarize_completed_run(
         for work in (rw.work for rw in ranked)
         if (work.id in confirmed_ids or work.id in provisional_ids or work.id in unscreened_ids)
     }
-    cited = [wid for wid in dict.fromkeys(_ID_PATTERN.findall(summary_text)) if wid in by_id]
+    cited = [
+        wid
+        for wid in dict.fromkeys(
+            _normalize_work_id(value) for value in _ID_PATTERN.findall(summary_text)
+        )
+        if wid in by_id
+    ]
     session.add(
         ChatMessageRow(
             org_id=run.org_id,

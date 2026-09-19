@@ -123,7 +123,12 @@ def test_pipeline_moves_harvested_papers_into_academic_arm(
         records = session.scalars(
             select(SourceRecordRow).where(SourceRecordRow.run_id == run.id)
         ).all()
-        assert any(r.work_id == "W900" and r.source == "websearch" for r in records)
+        assert any(
+            r.work_id == "W900"
+            and r.source == "websearch-harvest"
+            and r.corpus_version == "web-search + api.openalex.org"
+            for r in records
+        )
         # the resolved paper is no longer listed as grey literature; the blog is
         grey = session.scalars(select(WebSourceRow).where(WebSourceRow.run_id == run.id)).all()
         assert [g.domain for g in grey] == ["blog.example.com"]

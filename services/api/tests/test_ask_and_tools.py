@@ -1260,6 +1260,55 @@ def test_ask_mode_returns_grounded_chat_answer(
     assert streamed == "Direct answer with evidence [W1]. A full search digs deeper."
 
 
+def test_ask_mode_preserves_and_verifies_pubmed_citations(
+    corpus: DuckDBCorpus, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sixsentences_server.config import get_settings
+
+    monkeypatch.setenv("SIX_WEBSEARCH_API_KEY", "")
+    get_settings.cache_clear()
+    monkeypatch.setattr(
+        "sixsentences_server.api.app._build_pool",
+        lambda settings: mock_pool(
+            _handler_answering("The trial reports an effect [pubmed:12345678].")
+        ),
+    )
+    monkeypatch.setattr(
+        "sixsentences_server.pipeline.ask._quick_search",
+        lambda question, primary_query, **kwargs: (
+            [
+                WorkRecord(
+                    id="pubmed:12345678",
+                    title="A PubMed trial",
+                    abstract="The intervention produced a measurable effect.",
+                    year=2024,
+                    source="pubmed",
+                    pmid="12345678",
+                )
+            ],
+            "pubmed",
+        ),
+    )
+    client = _authed(
+        create_app(),
+        email="pubmed-citation@example.org",
+        org="PubMed citation",
+    )
+    project = client.post("/projects", json={"name": "PubMed"}).json()
+
+    response = client.post(
+        f"/projects/{project['id']}/runs",
+        json={"question": "What did the trial report?", "mode": "ask"},
+    )
+
+    assert response.status_code == 202
+    run = client.get(f"/runs/{response.json()['id']}").json()
+    assert run["status"] == "completed"
+    chat = client.get(f"/runs/{run['id']}/chat").json()
+    assert chat[-1]["citations"] == ["pubmed:12345678"]
+    assert chat[-1]["payload"]["claims"]["checked"] == 1
+
+
 def test_ask_mode_keeps_answer_when_claim_verifier_is_unavailable(
     corpus: DuckDBCorpus, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -3459,7 +3508,8 @@ def test_the_planner_reads_intent_where_keywords_fail(
     assert searched_queries[0] == '"infrastructure as code" AND security'
     assert len(searched_queries) == 2
     assert len(set(searched_queries)) == 2
-    assert len(web_calls) == 1
+    assert len(web_calls) == 2
+    assert len(set(web_calls)) == 2
     assert "iac" in web_calls[0].casefold()
     assert "security" in web_calls[0].casefold()
     assert web_calls[0] != "IaC security current practice"
@@ -3537,7 +3587,9 @@ def test_explicit_official_sources_survive_a_planner_web_search_miss(
         },
     ).json()["id"]
     assert client.get(f"/runs/{run_id}").json()["status"] == "completed"
-    assert web_calls == ["Terraform official documentation infrastructure as code"]
+    assert len(web_calls) == 2
+    assert web_calls[0] == "Terraform official documentation infrastructure as code"
+    assert len(set(web_calls)) == 2
     planned = next(
         event
         for event in client.get(f"/runs/{run_id}/events").json()

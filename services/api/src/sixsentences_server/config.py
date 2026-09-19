@@ -7,6 +7,7 @@ search and never receives shared or private workspace content.
 """
 
 import os
+import re
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -17,6 +18,7 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+_PUBMED_CONTACT_EMAIL = re.compile(r"^[^@\s]+@[^@\s.]+(?:\.[^@\s.]+)+$")
 
 
 def _load_local_env() -> None:
@@ -57,6 +59,14 @@ class Settings(BaseSettings):
     rate_limit_backend: Literal["memory", "database"] = "memory"
     openalex_api_key: str = ""
     openalex_mailto: str = ""
+    # Native PubMed retrieval is an explicit deployment opt-in. The contact
+    # email identifies the E-utilities client to NCBI; the optional API key
+    # raises the documented request-rate allowance but never leaves the
+    # server. Keeping the switch separate prevents a configured credential
+    # from enabling new external query egress by accident.
+    pubmed_enabled: bool = False
+    pubmed_email: str = ""
+    pubmed_api_key: str = ""
     # Optional GROBID service for structured PDF extraction (empty -> pypdf).
     grobid_url: str = ""
     # Web search normally reuses the OpenRouter key below and pins requests to
@@ -176,6 +186,18 @@ class Settings(BaseSettings):
     def websearch_enabled(self) -> bool:
         """Whether reviewed OpenRouter/Sonar grey-literature egress is enabled."""
         return bool(self.websearch_openrouter_api_key and self.websearch_data_processing_confirmed)
+
+    @property
+    def pubmed_ready(self) -> bool:
+        """Whether the deployment may send scholarly queries to PubMed."""
+
+        email = self.pubmed_email.strip()
+        api_key = self.pubmed_api_key.strip()
+        return bool(
+            self.pubmed_enabled
+            and _PUBMED_CONTACT_EMAIL.fullmatch(email)
+            and not any(character.isspace() for character in api_key)
+        )
 
     @property
     def gemini_enabled(self) -> bool:

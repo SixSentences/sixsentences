@@ -18,8 +18,8 @@ extraction use only endpoints and credentials supplied by the operator.
 - for internet deployment, one DNS name pointing to the host and inbound TCP
   ports 80/443 plus UDP 443;
 - an SMTP account before enabling public registration; and
-- reviewed processor terms and participant information before enabling any
-  external model, web-search or spoken-interview processing.
+- reviewed privacy information and provider terms before enabling any external
+  PubMed, model, web-search or spoken-interview processing.
 
 ## Quick start
 
@@ -148,6 +148,14 @@ All external features are off when their credentials are empty.
 - `SIX_SMTP_*` configures transactional mail. Public registration additionally
   requires email verification and a non-example sender.
 - `SIX_OPENALEX_*` identifies scholarly-metadata requests.
+- `SIX_PUBMED_ENABLED=true` plus a valid contact `SIX_PUBMED_EMAIL` enables
+  the optional native PubMed arm; `SIX_PUBMED_API_KEY` is optional and remains
+  server-side. The browser sees only a boolean capability from `/models`.
+  Enabling it sends the generated scholarly query, including year filters, to
+  NCBI but sends no SixSentences account, workspace, project or protocol ID.
+  Disclose that external query transfer in the deployment privacy information
+  and make NCBI's [Disclaimer and Copyright notice](https://www.ncbi.nlm.nih.gov/home/about/policies/)
+  visible before rollout.
 - `SIX_OPENROUTER_*`, `SIX_WEBSEARCH_*`, `SIX_LLM_ROUTING` and the local budget
   configure optional model/search processing. Use a credential-free HTTPS base
   URL and archive the applicable processor assessment first.
@@ -158,6 +166,8 @@ All external features are off when their credentials are empty.
 
 Never put provider credentials in `NEXT_PUBLIC_*` values. Browser-visible build
 arguments contain origins, versions and an optional public OAuth client ID only.
+The full provider, provenance and rollout boundary is documented in
+[Native multi-source retrieval](../../docs/NATIVE-MULTISOURCE-RETRIEVAL.md).
 
 ## Browser Capture
 

@@ -8,17 +8,30 @@ def _safe(value: Any) -> str:
     return " ".join(str(value or "").replace("\r", " ").replace("\n", " ").split())
 
 
+def _is_book_chapter(record: dict[str, Any]) -> bool:
+    kind = re.sub(r"[\s_]+", "-", _safe(record.get("reference_type")).casefold())
+    return kind in {
+        "book-chapter",
+        "book-section",
+        "bookchapter",
+        "booksection",
+        "chapter",
+        "incollection",
+    }
+
+
 def records_to_ris(records: list[dict[str, Any]]) -> str:
     blocks: list[str] = []
     for record in records:
-        lines = ["TY  - JOUR"]
+        book_chapter = _is_book_chapter(record)
+        lines = [f"TY  - {'CHAP' if book_chapter else 'JOUR'}"]
         for author in record.get("authors") or []:
             lines.append(f"AU  - {_safe(author)}")
         lines.append(f"TI  - {_safe(record.get('title'))}")
         if record.get("year"):
             lines.append(f"PY  - {record['year']}")
         if record.get("venue"):
-            lines.append(f"JO  - {_safe(record['venue'])}")
+            lines.append(f"{'T2' if book_chapter else 'JO'}  - {_safe(record['venue'])}")
         if record.get("abstract"):
             lines.append(f"AB  - {_safe(record['abstract'])}")
         if record.get("doi"):
@@ -43,12 +56,14 @@ def records_to_ris(records: list[dict[str, Any]]) -> str:
 def records_to_endnote(records: list[dict[str, Any]]) -> str:
     blocks: list[str] = []
     for record in records:
-        lines = ["%0 Journal Article", f"%T {_safe(record.get('title'))}"]
+        book_chapter = _is_book_chapter(record)
+        reference_type = "Book Section" if book_chapter else "Journal Article"
+        lines = [f"%0 {reference_type}", f"%T {_safe(record.get('title'))}"]
         lines.extend(f"%A {_safe(author)}" for author in record.get("authors") or [])
         if record.get("year"):
             lines.append(f"%D {record['year']}")
         if record.get("venue"):
-            lines.append(f"%J {_safe(record['venue'])}")
+            lines.append(f"%{'B' if book_chapter else 'J'} {_safe(record['venue'])}")
         if record.get("abstract"):
             lines.append(f"%X {_safe(record['abstract'])}")
         if record.get("doi"):
@@ -66,6 +81,7 @@ def records_to_bibtex(records: list[dict[str, Any]]) -> str:
     entries: list[str] = []
     used: set[str] = set()
     for index, record in enumerate(records, start=1):
+        book_chapter = _is_book_chapter(record)
         raw_key = _safe(record.get("citation_key")) or f"sixsentences{index}"
         stem = re.sub(r"[^A-Za-z0-9:_-]", "", raw_key) or f"sixsentences{index}"
         key = stem
@@ -79,7 +95,7 @@ def records_to_bibtex(records: list[dict[str, Any]]) -> str:
             fields.append(("author", " and ".join(_safe(a) for a in record["authors"])))
         for source, target in (
             ("year", "year"),
-            ("venue", "journal"),
+            ("venue", "booktitle" if book_chapter else "journal"),
             ("doi", "doi"),
             ("url", "url"),
             ("abstract", "abstract"),
@@ -93,5 +109,6 @@ def records_to_bibtex(records: list[dict[str, Any]]) -> str:
         if record.get("notes"):
             fields.append(("note", " | ".join(_safe(n) for n in record["notes"])))
         body = ",\n".join(f"  {name} = {{{value}}}" for name, value in fields)
-        entries.append(f"@article{{{key},\n{body}\n}}")
+        entry_type = "incollection" if book_chapter else "article"
+        entries.append(f"@{entry_type}{{{key},\n{body}\n}}")
     return "\n\n".join(entries) + ("\n" if entries else "")

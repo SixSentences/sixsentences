@@ -193,6 +193,35 @@ def test_snowball_collects_references_and_citing_works(corpus: DuckDBCorpus) -> 
     assert quiet.forward_returned == 0
 
 
+def test_snowball_never_sends_pubmed_ids_to_openalex(corpus: DuckDBCorpus) -> None:
+    from sixsentences_server.core.models import WorkRecord
+    from sixsentences_server.pipeline.snowball import collect_snowball_candidates
+
+    filters: list[str] = []
+
+    class FakeClient:
+        def iter_works(self, oa_filter: str, *, limit: int) -> list[WorkRecord]:
+            del limit
+            filters.append(oa_filter)
+            return []
+
+    harvest = collect_snowball_candidates(
+        [
+            WorkRecord(id="pubmed:123", pmid="123", title="PubMed-only seed"),
+            WorkRecord(id="W42", title="OpenAlex seed"),
+        ],
+        known_ids={"pubmed:123", "W42"},
+        known_dois=set(),
+        known_titles=set(),
+        corpus=corpus,
+        client=FakeClient(),
+    )
+
+    assert filters == ["cites:W42"]
+    assert harvest.forward_seeded == 1
+    assert harvest.forward_skipped_unsupported == 1
+
+
 def test_reference_import_parsers() -> None:
     from sixsentences_server.connectors.refimport import parse_bibtex, parse_ris
 

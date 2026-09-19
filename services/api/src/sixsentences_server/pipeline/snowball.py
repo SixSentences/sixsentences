@@ -8,6 +8,7 @@ Every candidate still passes the frozen protocol's screening; snowballing
 never smuggles anything into the review, it only widens identification.
 """
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -16,6 +17,7 @@ from sixsentences_server.pipeline.dedup import _normalize_title
 
 _ID_BATCH = 40  # openalex_id:a|b|… OR-batch size (URL-length safety)
 _CITES_BATCH = 20  # cites:a|b|… seeds per forward request
+_OPENALEX_WORK_ID = re.compile(r"W[1-9][0-9]*")
 
 
 class _CitationClient(Protocol):
@@ -28,6 +30,8 @@ class SnowballHarvest:
     backward_refs: int = 0  # distinct referenced ids across the seeds
     backward_resolved: int = 0  # of which resolved to a record (corpus or live)
     forward_returned: int = 0  # citing works returned by the live index
+    forward_seeded: int = 0  # seeds with a valid OpenAlex provider identity
+    forward_skipped_unsupported: int = 0  # PubMed/import/local-only seed ids
     skipped_known: int = 0  # already identified by the search
     skipped_filters: int = 0  # outside the protocol's year window
 
@@ -81,7 +85,9 @@ def collect_snowball_candidates(
         harvest.backward_resolved += len(resolved)
         for record in resolved.values():
             accept(record)
-        missing = [ref for ref in ref_ids if ref not in resolved]
+        missing = [
+            ref for ref in ref_ids if ref not in resolved and _OPENALEX_WORK_ID.fullmatch(ref)
+        ]
         if client is not None and missing:
             for start in range(0, len(missing), _ID_BATCH):
                 batch = missing[start : start + _ID_BATCH]
@@ -90,12 +96,15 @@ def collect_snowball_candidates(
                     accept(record)
 
     # forward: works citing the includes (top-cited first, capped)
-    if client is not None and seeds and forward_cap > 0:
+    forward_seeds = [seed for seed in seeds if _OPENALEX_WORK_ID.fullmatch(seed.id)]
+    harvest.forward_seeded = len(forward_seeds)
+    harvest.forward_skipped_unsupported = len(seeds) - len(forward_seeds)
+    if client is not None and forward_seeds and forward_cap > 0:
         remaining = forward_cap
-        for start in range(0, len(seeds), _CITES_BATCH):
+        for start in range(0, len(forward_seeds), _CITES_BATCH):
             if remaining <= 0:
                 break
-            seed_batch = seeds[start : start + _CITES_BATCH]
+            seed_batch = forward_seeds[start : start + _CITES_BATCH]
             citing = list(
                 client.iter_works(
                     "cites:" + "|".join(seed.id for seed in seed_batch),

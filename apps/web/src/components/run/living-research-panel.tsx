@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { useModels } from "@/hooks/queries";
 import { api } from "@/lib/api";
 import { formatDate, formatNumber } from "@/lib/format";
 import type { LivingResearchWorkspace } from "@/lib/types";
@@ -36,10 +37,9 @@ import { cn } from "@/lib/utils";
 
 const SOURCE_LABELS: Record<string, string> = {
   openalex: "OpenAlex",
+  pubmed: "PubMed",
   citations: "Citation graph",
   retractions: "Retractions",
-  web: "Web sources",
-  imports: "Reference imports",
 };
 
 function sameMonitorSettings(
@@ -58,6 +58,7 @@ function sameMonitorSettings(
 export default function LivingResearchPanel({ runId }: { runId: number }) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { data: modelCatalog, isPending: modelCatalogPending } = useModels();
   const { data, isLoading } = useQuery({
     queryKey: ["living-workspace", runId],
     queryFn: () => api.livingWorkspace(runId),
@@ -74,12 +75,29 @@ export default function LivingResearchPanel({ runId }: { runId: number }) {
   const openImpacts = data?.impacts.length ?? 0;
   const dirty = Boolean(draft);
   const persistedEnabled = Boolean(data?.enabled);
+  const pubmedAvailable =
+    modelCatalog?.runtime_capabilities?.pubmed === true;
+  const pubmedSelected = settings?.watch_sources.includes("pubmed") === true;
+  const pubmedCapabilityPending = pubmedSelected && modelCatalogPending;
+  const pubmedUnavailable =
+    pubmedSelected && !modelCatalogPending && !pubmedAvailable;
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ["living-workspace", runId] });
   const save = useMutation({
     mutationFn: () => {
       if (!settings) throw new Error("Living settings are unavailable.");
+      if (
+        settings.enabled &&
+        settings.watch_sources.includes("pubmed") &&
+        !pubmedAvailable
+      ) {
+        throw new Error(
+          modelCatalogPending
+            ? "PubMed availability is still being checked."
+            : "PubMed is not available on this deployment.",
+        );
+      }
       return api.updateLivingSettings(runId, {
         enabled: settings.enabled,
         cadence: settings.cadence,
@@ -220,32 +238,45 @@ export default function LivingResearchPanel({ runId }: { runId: number }) {
           <div>
             <p className="text-[0.6875rem] font-medium">Watched sources</p>
             <div className="mt-1.5 flex flex-wrap gap-1">
-              {Object.entries(SOURCE_LABELS).map(([source, label]) => {
-                const active = settings.watch_sources.includes(source);
-                return (
-                  <button
-                    key={source}
-                    type="button"
-                    onClick={() => toggleSource(source)}
-                    className={cn(
-                      "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2 py-2 text-[0.6875rem] transition-colors",
-                      active
-                        ? "border-moss/30 bg-accent/45 text-foreground"
-                        : "border-border text-muted-foreground hover:border-moss/25",
-                    )}
-                  >
-                    <span
+              {Object.entries(SOURCE_LABELS)
+                .filter(
+                  ([source]) =>
+                    source !== "pubmed" || pubmedAvailable || pubmedSelected,
+                )
+                .map(([source, label]) => {
+                  const active = settings.watch_sources.includes(source);
+                  const unavailable =
+                    source === "pubmed" &&
+                    !modelCatalogPending &&
+                    !pubmedAvailable;
+                  return (
+                    <button
+                      key={source}
+                      type="button"
+                      onClick={() => {
+                        if (!unavailable || active) toggleSource(source);
+                      }}
+                      disabled={unavailable && !active}
                       className={cn(
-                        "grid size-3.5 place-items-center rounded-full border",
-                        active ? "border-moss bg-moss-surface text-ivory" : "border-border",
+                        "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2 py-2 text-[0.6875rem] transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                        active
+                          ? "border-moss/30 bg-accent/45 text-foreground"
+                          : "border-border text-muted-foreground hover:border-moss/25",
                       )}
                     >
-                      {active && <Check className="size-2" />}
-                    </span>
-                    {label}
-                  </button>
-                );
-              })}
+                      <span
+                        className={cn(
+                          "grid size-3.5 place-items-center rounded-full border",
+                          active ? "border-moss bg-moss-surface text-ivory" : "border-border",
+                        )}
+                      >
+                        {active && <Check className="size-2" />}
+                      </span>
+                      {label}
+                      {unavailable ? " · unavailable" : ""}
+                    </button>
+                  );
+                })}
             </div>
           </div>
 
@@ -266,7 +297,12 @@ export default function LivingResearchPanel({ runId }: { runId: number }) {
 
           <Button
             className="rounded-full lg:min-w-32"
-            disabled={!draft || save.isPending}
+            disabled={
+              !draft ||
+              save.isPending ||
+              (settings.enabled && pubmedCapabilityPending) ||
+              (settings.enabled && pubmedUnavailable)
+            }
             onClick={() => save.mutate()}
           >
             {save.isPending && <Loader2 className="size-3.5 animate-spin" />}
@@ -338,7 +374,13 @@ export default function LivingResearchPanel({ runId }: { runId: number }) {
                 variant="outline"
                 size="sm"
                 className="h-8 rounded-full"
-                disabled={!persistedEnabled || dirty || refresh.isPending}
+                disabled={
+                  !persistedEnabled ||
+                  dirty ||
+                  refresh.isPending ||
+                  pubmedCapabilityPending ||
+                  pubmedUnavailable
+                }
                 onClick={() => refresh.mutate("full")}
               >
                 Full refresh
@@ -346,7 +388,13 @@ export default function LivingResearchPanel({ runId }: { runId: number }) {
               <Button
                 size="sm"
                 className="h-8 rounded-full"
-                disabled={!persistedEnabled || dirty || refresh.isPending}
+                disabled={
+                  !persistedEnabled ||
+                  dirty ||
+                  refresh.isPending ||
+                  pubmedCapabilityPending ||
+                  pubmedUnavailable
+                }
                 onClick={() => refresh.mutate("delta")}
               >
                 {refresh.isPending ? (

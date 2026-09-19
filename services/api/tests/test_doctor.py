@@ -54,19 +54,48 @@ def test_no_configured_secret_reaches_the_output(
     monkeypatch.setenv("SIX_SMTP_PASSWORD", "mail-password-canary")
     monkeypatch.setenv("SIX_GEMINI_API_KEY", "gemini-key-canary")
     monkeypatch.setenv("SIX_GEMINI_DATA_PROCESSING_CONFIRMED", "true")
+    monkeypatch.setenv("SIX_PUBMED_ENABLED", "true")
+    monkeypatch.setenv("SIX_PUBMED_EMAIL", "pubmed-contact-canary@example.org")
+    monkeypatch.setenv("SIX_PUBMED_API_KEY", "pubmed-key-canary")
     init_db()
 
     rendered = " ".join(f"{check.name} {check.detail}" for check in run_doctor(Settings()))
 
-    for canary in ("mail-user-canary", "mail-password-canary", "gemini-key-canary"):
+    for canary in (
+        "mail-user-canary",
+        "mail-password-canary",
+        "gemini-key-canary",
+        "pubmed-contact-canary",
+        "pubmed-key-canary",
+    ):
         assert canary not in rendered
     # The enabled feature is still reported, just without its credential.
     assert "speech" in rendered
 
     # The machine-readable form is pasted into issues just as often.
     emitted = CliRunner().invoke(app, ["doctor", "--json"]).stdout
-    for canary in ("mail-user-canary", "mail-password-canary", "gemini-key-canary"):
+    for canary in (
+        "mail-user-canary",
+        "mail-password-canary",
+        "gemini-key-canary",
+        "pubmed-contact-canary",
+        "pubmed-key-canary",
+    ):
         assert canary not in emitted
+
+
+def test_pubmed_doctor_is_off_ready_or_failed_without_network_access() -> None:
+    disabled = Settings(pubmed_enabled=False)
+    ready = Settings(pubmed_enabled=True, pubmed_email="operator@example.org")
+    invalid = Settings(pubmed_enabled=True, pubmed_email="invalid contact@example.org")
+
+    disabled_check = next(check for check in run_doctor(disabled) if check.name == "PubMed")
+    ready_check = next(check for check in run_doctor(ready) if check.name == "PubMed")
+    invalid_check = next(check for check in run_doctor(invalid) if check.name == "PubMed")
+
+    assert disabled_check.state == "off"
+    assert ready_check.state == "ok"
+    assert invalid_check.state == "failed"
 
 
 def test_json_output_is_the_whole_of_stdout(settings: Settings) -> None:

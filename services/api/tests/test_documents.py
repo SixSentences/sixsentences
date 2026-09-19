@@ -1171,6 +1171,13 @@ def test_tidy_citations_enforces_bare_brackets() -> None:
         == "This holds [W0171152944670] (p. 1) firmly."
     )
     assert _tidy_citations("Both agree [W1, W2].") == "Both agree [W1] [W2]."
+    assert (
+        _tidy_citations("Both agree [pubmed:12345678, W2].") == "Both agree [pubmed:12345678] [W2]."
+    )
+    assert (
+        _tidy_citations("The trial reports this [pubmed:12345678, p. 4].")
+        == "The trial reports this [pubmed:12345678] (p. 4)."
+    )
     assert _tidy_citations("See [W12, S. 4] there.") == "See [W12] (p. 4) there."
     assert _tidy_citations("Plain [W99] stays.") == "Plain [W99] stays."
 

@@ -20,6 +20,32 @@ def test_to_zotero_items_maps_fields() -> None:
     assert item["tags"] == [{"tag": "SixSentences"}]
 
 
+def test_to_zotero_items_labels_pubmed_identity() -> None:
+    work = WorkRecord(id="pubmed:123", pmid="123", title="A biomedical study")
+    item = to_zotero_items([work])[0]
+    assert item["extra"] == "PubMed PMID: 123"
+    assert item["url"] == "https://pubmed.ncbi.nlm.nih.gov/123/"
+    assert "OpenAlex" not in item["extra"]
+
+
+def test_to_zotero_items_maps_book_chapter_as_book_section() -> None:
+    work = WorkRecord(
+        id="pubmed:987",
+        pmid="987",
+        title="A chapter about evidence synthesis",
+        work_type="book-chapter",
+        venue="Handbook of Research Methods",
+        pages="101-118",
+        publisher="Research Press",
+    )
+    item = to_zotero_items([work])[0]
+    assert item["itemType"] == "bookSection"
+    assert item["bookTitle"] == "Handbook of Research Methods"
+    assert "publicationTitle" not in item
+    assert item["pages"] == "101-118"
+    assert item["publisher"] == "Research Press"
+
+
 def test_client_sends_key_and_reports_counts() -> None:
     seen: list[httpx.Request] = []
 

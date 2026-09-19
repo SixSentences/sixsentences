@@ -108,6 +108,9 @@ class SelfHostDeploymentTests(unittest.TestCase):
             self.assertNotEqual(
                 values["POSTGRES_PASSWORD"], values["SIX_ERASURE_LEDGER_HMAC_KEY"]
             )
+            self.assertEqual(values["SIX_PUBMED_ENABLED"], "false")
+            self.assertEqual(values["SIX_PUBMED_EMAIL"], "")
+            self.assertEqual(values["SIX_PUBMED_API_KEY"], "")
             second = subprocess.run(command, check=False, capture_output=True, text=True)
             self.assertNotEqual(second.returncode, 0)
 
@@ -277,6 +280,52 @@ class SelfHostDeploymentTests(unittest.TestCase):
         source = (COMMUNITY / "preflight.sh").read_text(encoding="utf-8")
         self.assertIn("Docker Compose 2.33.1 or newer", source)
         self.assertIn("COMPOSE_MAJOR == 2 && COMPOSE_MINOR < 33", source)
+
+    def test_pubmed_is_explicitly_disabled_and_server_only_by_default(self) -> None:
+        compose = COMPOSE.read_text(encoding="utf-8")
+        example = (ROOT / ".env.selfhost.example").read_text(encoding="utf-8")
+        preflight = (COMMUNITY / "preflight.sh").read_text(encoding="utf-8")
+
+        self.assertIn("SIX_PUBMED_ENABLED: ${SIX_PUBMED_ENABLED:-false}", compose)
+        self.assertIn("SIX_PUBMED_EMAIL: ${SIX_PUBMED_EMAIL:-}", compose)
+        self.assertIn("SIX_PUBMED_API_KEY: ${SIX_PUBMED_API_KEY:-}", compose)
+        self.assertIn("SIX_PUBMED_ENABLED=false", example)
+        self.assertNotIn("NEXT_PUBLIC_PUBMED", compose)
+        self.assertIn("PubMed retrieval requires an NCBI contact email", preflight)
+
+    def test_preflight_rejects_invalid_pubmed_contact_without_echoing_it(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "deployment.env"
+            initialized = subprocess.run(
+                [
+                    "bash",
+                    str(COMMUNITY / "init-env.sh"),
+                    "--local",
+                    "--output",
+                    str(target),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(initialized.returncode, 0, initialized.stderr)
+            source = target.read_text(encoding="utf-8")
+            source = source.replace("SIX_PUBMED_ENABLED=false", "SIX_PUBMED_ENABLED=true")
+            source = source.replace("SIX_PUBMED_EMAIL=", "SIX_PUBMED_EMAIL=private-invalid-token")
+            target.write_text(source, encoding="utf-8")
+            target.chmod(0o600)
+
+            result = subprocess.run(
+                ["bash", str(COMMUNITY / "preflight.sh"), str(target)],
+                cwd=ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("valid contact email address", result.stderr)
+            self.assertNotIn("private-invalid-token", result.stderr)
 
 
 if __name__ == "__main__":

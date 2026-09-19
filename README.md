@@ -164,6 +164,13 @@ operator. Billing, checkout, subscriptions, hosted-service administration, the
 production deployment, and the marketing website are intentionally not part of
 this repository.
 
+Native multi-source discovery currently adds a feature-flagged PubMed arm to
+the shared review pipeline. It keeps provider-specific query, failure and
+provenance records while deduplicating candidates into one screening set. The
+feature is off by default; see the
+[architecture, privacy boundary and rollout checklist](docs/NATIVE-MULTISOURCE-RETRIEVAL.md)
+before enabling it.
+
 | Community source | Hosted SixSentences |
 | --- | --- |
 | Run and modify the research workspace on infrastructure you control | Managed at [app.sixsentences.com](https://app.sixsentences.com) |

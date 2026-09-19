@@ -58,6 +58,7 @@ from sixsentences_server.chat.service import (
     _full_text_block,
     _library_inventory_request,
     _multi_paper_followup_query,
+    _normalize_work_id,
     _read_paper_step,
     _render_web_findings,
     _research_tool_call_limits,
@@ -103,12 +104,7 @@ from sixsentences_server.core.entitlements import (
 )
 from sixsentences_server.core.evidence_type import filter_primary_research
 from sixsentences_server.core.locale import response_language_instruction
-from sixsentences_server.core.models import (
-    ReviewProtocol,
-    RunStatus,
-    StageName,
-    WorkRecord,
-)
+from sixsentences_server.core.models import ReviewProtocol, RunStatus, StageName, WorkRecord
 from sixsentences_server.core.plans import Capability
 from sixsentences_server.core.protocol import _heuristic_query
 from sixsentences_server.core.state import mark_failed, set_status
@@ -126,6 +122,7 @@ from sixsentences_server.pipeline.run import (
 )
 from sixsentences_server.querylang.parser import parse_query
 from sixsentences_server.ranking.scorer import rank_works
+from sixsentences_server.reporting.exports import source_record_url
 from sixsentences_server.verification.claims import verify_answer
 from sixsentences_server.verification.nli import LLMEntailmentChecker
 
@@ -133,7 +130,7 @@ MAX_COMPARISON_PAPERS = 50
 ASK_DEFAULT_SOURCES = 24
 ASK_MAX_SOURCES = 100
 ABSTRACT_CHARS = 500
-_ID_PATTERN = re.compile(r"W\d+")
+_ID_PATTERN = re.compile(r"(?:W\d+|pubmed:[1-9]\d{0,11})", re.IGNORECASE)
 # with an attached document the question is about THAT document: the live web
 # only joins in when the user actually asks for it
 _WEB_WISH = re.compile(
@@ -373,8 +370,9 @@ ASK_SYSTEM = (
     "\n"
     "CITATIONS - a non-negotiable contract\n"
     "Cite every claim drawn from a paper with its id alone in square "
-    "brackets, e.g. [W2741809807]. One id per bracket pair, NOTHING else "
-    "inside (no page numbers, no commas): write [W1] [W2], never [W1, W2] "
+    "brackets, e.g. [W2741809807] or [pubmed:12345678]. One id per bracket "
+    "pair, NOTHING else inside (no page numbers, no commas): write [W1] "
+    "[pubmed:12345678], never [W1, pubmed:12345678] "
     "or [W1, p. 3]. Cite web findings by their domain, e.g. [nist.gov]. "
     "Square brackets are ONLY for source ids - never for page labels or "
     "invented markers; name pages in the sentence itself.\n"
@@ -2058,7 +2056,7 @@ def execute_ask(session: Session, run: Run, *, pool: LLMPool | None) -> None:
         )
         if comparison_table is not None:
             included_ids = [
-                match.group(0)
+                _normalize_work_id(match.group(0))
                 for row in comparison_table["rows"]
                 if row
                 for match in [_ID_PATTERN.search(str(row[0]))]
@@ -2120,7 +2118,7 @@ def execute_ask(session: Session, run: Run, *, pool: LLMPool | None) -> None:
                     "cited_by_count": record.cited_by_count,
                     "authors": record.authors[:6],
                     "abstract": (record.abstract or "")[:2400],
-                    "url": record.oa_url or f"https://openalex.org/{record.id}",
+                    "url": source_record_url(record),
                 }
                 for record in comparison_works
             ],
@@ -2751,7 +2749,13 @@ def execute_ask(session: Session, run: Run, *, pool: LLMPool | None) -> None:
     if wants_citation:  # the card is the single source of citation truth
         answer_text = _strip_selfmade_citations(answer_text)
     by_id = {w.id for w in works}
-    cited = [wid for wid in dict.fromkeys(_ID_PATTERN.findall(answer_text)) if wid in by_id]
+    cited = [
+        work_id
+        for work_id in dict.fromkeys(
+            _normalize_work_id(value) for value in _ID_PATTERN.findall(answer_text)
+        )
+        if work_id in by_id
+    ]
     answer_payload: dict[str, object] = {
         "kind": "ask_answer",
         "sources_considered": len(works),
