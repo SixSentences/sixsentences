@@ -79,7 +79,7 @@ class RateLimitBucket(Base):
     __tablename__ = "rate_limit_buckets"
     scope: Mapped[str] = mapped_column(String(64), primary_key=True)
     key_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
-    window_id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    window_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     count: Mapped[int] = mapped_column(default=1)
 
 
@@ -1790,7 +1790,7 @@ class WorkerReplicaRow(Base):
 
 
 class WorkRow(Base):
-    """Works touched by runs (canonical id = OpenAlex id)."""
+    """Works touched by runs (canonical id = provider-stable source id)."""
 
     __tablename__ = "works"
     id: Mapped[str] = mapped_column(String(50), primary_key=True)

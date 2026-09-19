@@ -506,7 +506,7 @@ from sixsentences_server.jobs import (
     terminalize_extraction_action,
 )
 from sixsentences_server.knowledge.workspace import install_knowledge_workspace_routes
-from sixsentences_server.living.monitor import recheck_retractions
+from sixsentences_server.living.monitor import RetractionDelta, recheck_retractions
 from sixsentences_server.llm.base import (
     BudgetExceededError,
     BudgetGovernor,
@@ -562,6 +562,8 @@ from sixsentences_server.reporting.exports import (
     FORMATS,
     _citation_key,
     render,
+    source_identifier_note,
+    source_record_url,
     to_bibtex,
     works_for_run,
 )
@@ -3759,6 +3761,19 @@ def _require_web_search_runtime(requested: bool) -> None:
         )
 
 
+def _require_pubmed_runtime(requested: bool) -> None:
+    """Reject PubMed retrieval unless the deployment explicitly enables it."""
+
+    if requested and not get_settings().pubmed_ready:
+        raise HTTPException(
+            409,
+            {
+                "code": "pubmed_unavailable",
+                "message": "PubMed discovery is not available on this deployment.",
+            },
+        )
+
+
 def _require_public_web_search_scope(requested: bool, confirmed: bool) -> None:
     """Require an explicit per-run acknowledgement before web-search egress."""
     if requested and (not confirmed):
@@ -4004,6 +4019,14 @@ _GENERIC_RUN_FAILURE = "Something went wrong while running this search. Please t
 _CORPUS_UNAVAILABLE_MESSAGE = (
     "Scholarly search is still being prepared on this server. Please try again in a few minutes."
 )
+_PUBMED_RUNTIME_UNAVAILABLE_MESSAGE = (
+    "PubMed discovery became unavailable before this search could run. "
+    "Please retry after it is enabled again."
+)
+
+
+class _PubMedRuntimeUnavailableError(RuntimeError):
+    """Internal fail-closed signal for a requested PubMed search arm."""
 
 
 def _public_run_error(value: object) -> str | None:
@@ -4011,7 +4034,11 @@ def _public_run_error(value: object) -> str | None:
     raw = str(value or "").strip()
     if not raw:
         return None
-    if raw in {_GENERIC_RUN_FAILURE, _CORPUS_UNAVAILABLE_MESSAGE}:
+    if raw in {
+        _GENERIC_RUN_FAILURE,
+        _CORPUS_UNAVAILABLE_MESSAGE,
+        _PUBMED_RUNTIME_UNAVAILABLE_MESSAGE,
+    }:
         return raw
     return _GENERIC_RUN_FAILURE
 
@@ -5148,13 +5175,43 @@ class ClaimEvidencePatch(BaseModel):
     verified: bool | None = None
 
 
+_DEFAULT_LIVING_WATCH_SOURCES = ("openalex", "citations", "retractions")
+_LIVING_WATCH_SOURCES = frozenset((*_DEFAULT_LIVING_WATCH_SOURCES, "pubmed"))
+
+
+def _default_living_watch_sources(config: dict[str, Any]) -> list[str]:
+    """Preserve the baseline's explicitly enabled scholarly source arms."""
+
+    sources = list(_DEFAULT_LIVING_WATCH_SOURCES)
+    if config.get("pubmed"):
+        sources.append("pubmed")
+    return sources
+
+
+def _supported_living_watch_sources(
+    config: dict[str, Any],
+    requested: object,
+) -> list[str]:
+    """Drop legacy decorative sources while preserving a useful monitor."""
+
+    raw = requested if isinstance(requested, list) else []
+    sources = [
+        source
+        for source in dict.fromkeys(str(item) for item in raw)
+        if source in _LIVING_WATCH_SOURCES
+    ]
+    return sources or _default_living_watch_sources(config)
+
+
 class LivingSettingsUpdate(BaseModel):
     enabled: bool = True
     cadence: str = Field(default="monthly", pattern="^(weekly|monthly|quarterly|manual)$")
     auto_screen: bool = True
     notify: bool = True
     watch_sources: list[str] = Field(
-        default=["openalex", "citations", "retractions"], min_length=1, max_length=6
+        default_factory=lambda: list(_DEFAULT_LIVING_WATCH_SOURCES),
+        min_length=1,
+        max_length=6,
     )
 
 
@@ -5199,6 +5256,7 @@ class RunCreate(BaseModel):
     model: str = Field(default="auto", max_length=60)
     query: str | None = Field(default=None, max_length=4000)
     live: bool = False
+    pubmed: bool = False
     screen: bool = False
     review_method: str = Field(
         default="prisma", pattern="^(prisma|cochrane|jbi|campbell|kitchenham)$"
@@ -5207,8 +5265,8 @@ class RunCreate(BaseModel):
     screen_limit: int = Field(default=0, ge=0, le=100000)
     acquire: bool = False
     full_text: bool = False
-    year_from: int | None = None
-    year_to: int | None = None
+    year_from: int | None = Field(default=None, ge=1000, le=3000)
+    year_to: int | None = Field(default=None, ge=1000, le=3000)
     peer_reviewed_only: bool = False
     web_search: bool = False
     web_search_public_data_confirmed: bool = False
@@ -5222,6 +5280,20 @@ class RunCreate(BaseModel):
     import_batch_ids: list[int] = Field(default=[], max_length=10)
     parent_run_id: str | None = Field(default=None, max_length=40)
 
+    @model_validator(mode="after")
+    def validate_year_window(self) -> "RunCreate":
+        """Keep every database arm on the same valid publication window."""
+
+        if self.mode == "ask" and self.pubmed:
+            raise ValueError("pubmed is only available for search runs")
+        if (
+            self.year_from is not None
+            and self.year_to is not None
+            and self.year_from > self.year_to
+        ):
+            raise ValueError("year_from must not exceed year_to")
+        return self
+
 
 class UsageEstimateRequest(BaseModel):
     mode: str = Field(default="search", pattern="^(search|ask)$")
@@ -5229,6 +5301,7 @@ class UsageEstimateRequest(BaseModel):
     input_chars: int = Field(default=0, ge=0, le=100000)
     screen: bool = False
     live: bool = False
+    pubmed: bool = False
     snowball: bool = False
     semantic: bool = False
     acquire: bool = False
@@ -5240,6 +5313,14 @@ class UsageEstimateRequest(BaseModel):
     paper_limit: int = Field(default=0, ge=0, le=100000)
     screen_limit: int = Field(default=0, ge=0, le=100000)
     retrieval_limit: int = Field(default=100000, ge=1, le=100000)
+
+    @model_validator(mode="after")
+    def validate_mode_features(self) -> "UsageEstimateRequest":
+        """Keep estimates aligned with features the selected mode can run."""
+
+        if self.mode == "ask" and self.pubmed:
+            raise ValueError("pubmed is only available for search runs")
+        return self
 
 
 class DocumentCreate(BaseModel):
@@ -8838,6 +8919,10 @@ def create_app() -> FastAPI:
             "default_id": AUTO_ID,
             "routing_mode": "configured",
             "content_scope": "deployment_controlled",
+            "runtime_capabilities": {
+                "web_search": get_settings().websearch_enabled,
+                "pubmed": get_settings().pubmed_ready,
+            },
             "models": [_model_payload(model, unlocked=True) for model in available_chat_models()],
         }
 
@@ -8852,6 +8937,7 @@ def create_app() -> FastAPI:
     ) -> dict[str, Any]:
         """A pre-flight percentage, never a fixed public per-click price."""
         _require_web_search_runtime(body.web_search)
+        _require_pubmed_runtime(body.pubmed)
         with db_session() as session:
             org = session.get(Org, ctx.org_id)
             assert org is not None
@@ -8884,6 +8970,7 @@ def create_app() -> FastAPI:
             labels = [
                 (body.screen, "AI screening"),
                 (body.live, "live discovery"),
+                (body.pubmed, "PubMed discovery"),
                 (body.snowball, "citation snowballing"),
                 (body.semantic, "semantic sweep"),
                 (body.acquire or body.full_text, "full-text work"),
@@ -22386,17 +22473,26 @@ def create_app() -> FastAPI:
         body: RunCreate,
         background: BackgroundTasks,
         ctx: AuthContext,
+        *,
+        frozen_protocol: ReviewProtocol | None = None,
+        transaction_session: Session | None = None,
     ) -> dict[str, Any]:
         ask_mode = body.mode == "ask"
         requested_web_search = body.web_search or (
             ask_mode and explicit_web_research_request(body.question)
         )
         _require_web_search_runtime(requested_web_search)
+        _require_pubmed_runtime(body.pubmed and not ask_mode)
         _require_public_web_search_scope(
             requested_web_search, body.web_search_public_data_confirmed
         )
         git_revision = current_git_revision()
-        with db_session() as session:
+        session_scope = (
+            contextlib.nullcontext(transaction_session)
+            if transaction_session is not None
+            else db_session()
+        )
+        with session_scope as session:
             chat_model = _resolve_chat_model_for(session, ctx, body.model)
             project = None
             if project_id is not None:
@@ -22409,7 +22505,8 @@ def create_app() -> FastAPI:
                 plan = check_can_create_run(
                     session,
                     org,
-                    live=(body.live or body.snowball or body.semantic) and (not ask_mode),
+                    live=(body.live or body.pubmed or body.snowball or body.semantic)
+                    and (not ask_mode),
                     acquire=body.acquire and (not ask_mode),
                     full_text=body.full_text and (not ask_mode),
                     web_search=requested_web_search,
@@ -22430,6 +22527,7 @@ def create_app() -> FastAPI:
                         or (body.paper_limit > 0)
                         or (body.screen_limit > 0)
                         or (body.retrieval_limit != 100000)
+                        or body.pubmed
                         or body.canary_ids
                         or body.import_batch_ids
                     )
@@ -22535,6 +22633,7 @@ def create_app() -> FastAPI:
                     "git_revision": git_revision,
                     "query": body.query,
                     "live": body.live,
+                    "pubmed": body.pubmed,
                     "screen": body.screen,
                     "review_method": body.review_method,
                     "paper_limit": stored_paper_limit,
@@ -22575,44 +22674,51 @@ def create_app() -> FastAPI:
             _attach_documents(session, ctx, run.id, body.document_ids)
             run_id = run.id
             run_public_id = run.public_id
-        enqueue_job(
-            background,
-            _execute,
-            run_id,
-            query=body.query,
-            live=body.live,
-            screen=body.screen,
-            paper_limit=stored_paper_limit,
-            screen_limit=0,
-            acquire=body.acquire,
-            full_text=body.full_text,
-            year_from=body.year_from,
-            year_to=body.year_to,
-            peer_reviewed_only=body.peer_reviewed_only,
-            web_search=body.web_search,
-            snowball=body.snowball,
-            semantic=body.semantic,
-            retrieval_limit=retrieval_limit,
-            exhaustive=body.exhaustive,
-            canary_ids=body.canary_ids,
-            gate_protocol=body.gate_protocol,
-            import_batch_ids=body.import_batch_ids,
-            model=chat_model.id,
-            queue_org_id=ctx.org_id,
-        )
-        org_capacity_budget = capacity_budget_for_org(org, plan)
-        return {
-            "id": run_id,
-            "public_id": run_public_id,
-            "status": "pending",
-            "gated": body.gate_protocol,
-            "plan": plan.name,
-            "capacity_reserved_percent": round(
-                cost_action.reserved_credits / org_capacity_budget * 100, 1
+            # Run, capacity reservation and durable queue row become visible
+            # in one transaction, never as an orphaned pending run.
+            enqueue_job(
+                background,
+                _execute,
+                run_id,
+                query=body.query,
+                live=body.live,
+                pubmed=body.pubmed,
+                screen=body.screen,
+                paper_limit=stored_paper_limit,
+                screen_limit=0,
+                acquire=body.acquire,
+                full_text=body.full_text,
+                year_from=body.year_from,
+                year_to=body.year_to,
+                peer_reviewed_only=body.peer_reviewed_only,
+                web_search=body.web_search,
+                snowball=body.snowball,
+                semantic=body.semantic,
+                retrieval_limit=retrieval_limit,
+                exhaustive=body.exhaustive,
+                canary_ids=body.canary_ids,
+                gate_protocol=body.gate_protocol,
+                import_batch_ids=body.import_batch_ids,
+                model=chat_model.id,
+                frozen_protocol=(
+                    frozen_protocol.model_dump(mode="json") if frozen_protocol else None
+                ),
+                session=session,
+                queue_org_id=ctx.org_id,
             )
-            if org_capacity_budget
-            else None,
-        }
+            org_capacity_budget = capacity_budget_for_org(org, plan)
+            return {
+                "id": run_id,
+                "public_id": run_public_id,
+                "status": "pending",
+                "gated": body.gate_protocol,
+                "plan": plan.name,
+                "capacity_reserved_percent": round(
+                    cost_action.reserved_credits / org_capacity_budget * 100, 1
+                )
+                if org_capacity_budget
+                else None,
+            }
 
     @app.get("/runs/{run_id}")
     def get_run(run_id: str, ctx: AuthContext = Depends(require_auth)) -> dict[str, Any]:
@@ -23311,7 +23417,8 @@ def create_app() -> FastAPI:
             run = locked_run
             if run.status != "paused":
                 raise HTTPException(409, f"only a paused run can be resumed (is {run.status})")
-            _resume_config_without_unconfirmed_web_search(session, run)
+            config = _resume_config_without_unconfirmed_web_search(session, run)
+            _require_pubmed_runtime(bool(config.get("pubmed")))
             resolved_id = run.id
             control_request_id = control.clear(resolved_id, org_id=ctx.org_id, session=session)
             if control_request_id is None:
@@ -28794,8 +28901,8 @@ def create_app() -> FastAPI:
                     "citation_key": "",
                     "keywords": ["SixSentences"],
                     "categories": [],
-                    "notes": [f"OpenAlex: {work.id}"],
-                    "url": work.oa_url or work.pdf_url or "",
+                    "notes": [source_identifier_note(work)] if source_identifier_note(work) else [],
+                    "url": source_record_url(work),
                     "isbn": "",
                     "issn": "",
                     "attachments": [],
@@ -30330,6 +30437,10 @@ def create_app() -> FastAPI:
     ) -> dict[str, Any]:
         with db_session() as session:
             run = _owned_run(session, run_id, ctx)
+            locked_run = control.lock_run(session, run.id, org_id=ctx.org_id)
+            if locked_run is None:
+                raise HTTPException(404, "run not found")
+            run = locked_run
             if run.status != "awaiting_protocol_approval":
                 raise HTTPException(409, f"run is not awaiting approval (status={run.status})")
             row = session.get(ProtocolRow, run.protocol_id) if run.protocol_id else None
@@ -30347,6 +30458,7 @@ def create_app() -> FastAPI:
                     raise HTTPException(400, f"invalid query_string: {exc}") from exc
                 protocol.query_string = body.query_string
             config = _resume_config_without_unconfirmed_web_search(session, run)
+            _require_pubmed_runtime(bool(config.get("pubmed")))
             if config.get("web_search"):
                 _require_web_search_runtime(True)
                 _require_public_web_search_scope(True, body.web_search_public_data_confirmed)
@@ -30360,14 +30472,17 @@ def create_app() -> FastAPI:
                 run.config = config
             set_status(run, RunStatus.RUNNING)
             resolved_id = run.id
-        enqueue_job(
-            background,
-            _resume,
-            resolved_id,
-            protocol.model_dump(mode="json"),
-            config,
-            queue_org_id=ctx.org_id,
-        )
+            # State transition and durable outbox row are committed together;
+            # the row lock makes approval single-use under parallel requests.
+            enqueue_job(
+                background,
+                _resume,
+                resolved_id,
+                protocol.model_dump(mode="json"),
+                config,
+                session=session,
+                queue_org_id=ctx.org_id,
+            )
         return {"id": resolved_id, "status": "running"}
 
     @app.post("/runs/{run_id}/protocol/regenerate")
@@ -31150,19 +31265,24 @@ def create_app() -> FastAPI:
                     check_feature(org, "living_reviews")
                 except EntitlementError as exc:
                     raise _http_402(exc) from exc
-            current = dict((run.config or {}).get("living_monitor") or {})
+            config = dict(run.config or {})
+            current = dict(config.get("living_monitor") or {})
+            watch_sources = _supported_living_watch_sources(
+                config,
+                current.get("watch_sources") or _default_living_watch_sources(config),
+            )
             monitor = {
                 "cadence": current.get("cadence") or "monthly",
                 "auto_screen": current.get("auto_screen", True),
                 "notify": current.get("notify", True),
-                "watch_sources": current.get("watch_sources")
-                or ["openalex", "citations", "retractions"],
+                "watch_sources": watch_sources,
                 **{
                     key: value
                     for key, value in current.items()
-                    if key in {"last_checked_at", "last_refresh_run"}
+                    if key in {"active_refresh_run", "last_checked_at", "last_refresh_run"}
                 },
             }
+            _require_pubmed_runtime(body.enabled and "pubmed" in monitor["watch_sources"])
             run.config = {
                 **(run.config or {}),
                 "living": body.enabled,
@@ -31185,11 +31305,21 @@ def create_app() -> FastAPI:
                     check_feature(org, "living_reviews")
                 except EntitlementError as exc:
                     raise _http_402(exc) from exc
-            allowed_sources = {"openalex", "citations", "retractions", "web", "imports"}
-            sources = list(dict.fromkeys(body.watch_sources))
-            if any(source not in allowed_sources for source in sources):
+            config = dict(run.config or {})
+            previous = dict(config.get("living_monitor") or {})
+            sources_explicitly_set = "watch_sources" in body.model_fields_set
+            requested_sources = (
+                body.watch_sources
+                if sources_explicitly_set
+                else (previous.get("watch_sources") or _default_living_watch_sources(config))
+            )
+            sources = list(dict.fromkeys(requested_sources))
+            if sources_explicitly_set and any(
+                source not in _LIVING_WATCH_SOURCES for source in sources
+            ):
                 raise HTTPException(422, "unknown living-review source")
-            previous = dict((run.config or {}).get("living_monitor") or {})
+            sources = _supported_living_watch_sources(config, sources)
+            _require_pubmed_runtime(body.enabled and "pubmed" in sources)
             monitor = {
                 "cadence": body.cadence,
                 "auto_screen": body.auto_screen,
@@ -31198,7 +31328,7 @@ def create_app() -> FastAPI:
                 **{
                     key: value
                     for key, value in previous.items()
-                    if key in {"last_checked_at", "last_refresh_run"}
+                    if key in {"active_refresh_run", "last_checked_at", "last_refresh_run"}
                 },
             }
             run.config = {
@@ -31256,11 +31386,16 @@ def create_app() -> FastAPI:
             checks: list[dict[str, Any]] = []
             latest_added: set[str] = set()
             latest_removed: set[str] = set()
+            latest_completed_refresh: Run | None = None
             for child in child_runs[:12]:
                 child_identified, child_included = snapshot(child)
-                added_ids = child_included - base_included
-                removed_ids = base_included - child_included
-                if not checks:
+                child_completed = child.status == RunStatus.COMPLETED.value
+                # Inclusion deltas are terminal evidence. An incomplete child
+                # cannot make every baseline include appear removed.
+                added_ids = child_included - base_included if child_completed else set()
+                removed_ids = base_included - child_included if child_completed else set()
+                if child_completed and latest_completed_refresh is None:
+                    latest_completed_refresh = child
                     latest_added = added_ids
                     latest_removed = removed_ids
                 work_ids = added_ids | removed_ids
@@ -31300,8 +31435,23 @@ def create_app() -> FastAPI:
                         ],
                     }
                 )
-            retraction_delta = recheck_retractions(
-                session, run, load_retracted_dois(get_settings().data_dir)
+            effective_watch_sources = _supported_living_watch_sources(
+                config,
+                monitor.get("watch_sources") or _default_living_watch_sources(config),
+            )
+            watched_sources = set(effective_watch_sources)
+            retraction_delta = (
+                recheck_retractions(
+                    session,
+                    run,
+                    load_retracted_dois(get_settings().data_dir),
+                )
+                if "retractions" in watched_sources
+                else RetractionDelta(
+                    checked=0,
+                    retracted_now=[],
+                    newly_retracted=[],
+                )
             )
             affected_ids = latest_removed | set(retraction_delta.newly_retracted)
             claims: list[EvidenceClaimRow] = []
@@ -31380,12 +31530,25 @@ def create_app() -> FastAPI:
                 if writer.id in impacted_writer_ids
             )
             last_checked_raw = monitor.get("last_checked_at")
-            last_checked = (
-                datetime.fromisoformat(str(last_checked_raw))
-                if last_checked_raw
-                else child_runs[0].created_at
-                if child_runs
+            persisted_last_checked = (
+                datetime.fromisoformat(str(last_checked_raw)) if last_checked_raw else None
+            )
+            completed_last_checked = (
+                latest_completed_refresh.finished_at or latest_completed_refresh.created_at
+                if latest_completed_refresh is not None
                 else None
+            )
+            last_checked_candidates = [
+                value
+                for value in (persisted_last_checked, completed_last_checked)
+                if value is not None
+            ]
+            last_checked = max(
+                (
+                    value if value.tzinfo else value.replace(tzinfo=UTC)
+                    for value in last_checked_candidates
+                ),
+                default=None,
             )
             cadence_days = {"weekly": 7, "monthly": 30, "quarterly": 90, "manual": 0}
             next_check = (
@@ -31402,9 +31565,7 @@ def create_app() -> FastAPI:
                 "cadence": cadence,
                 "auto_screen": bool(monitor.get("auto_screen", True)),
                 "notify": bool(monitor.get("notify", True)),
-                "watch_sources": list(
-                    monitor.get("watch_sources") or ["openalex", "citations", "retractions"]
-                ),
+                "watch_sources": effective_watch_sources,
                 "last_checked_at": last_checked.isoformat() if last_checked else None,
                 "next_check_at": next_check,
                 "baseline": {
@@ -31428,6 +31589,10 @@ def create_app() -> FastAPI:
         """Start a versioned follow-up search; its delta remains tied to the baseline."""
         with db_session() as session:
             run = _owned_run(session, run_id, ctx)
+            locked_run = control.lock_run(session, run.id, org_id=ctx.org_id)
+            if locked_run is None:
+                raise HTTPException(404, "run not found")
+            run = locked_run
             if run.status != "completed":
                 raise HTTPException(409, "the baseline run must be completed first")
             org = session.get(Org, ctx.org_id)
@@ -31443,63 +31608,115 @@ def create_app() -> FastAPI:
             baseline_public_id = run.public_id
             question = run.question
             baseline_used_web_search = bool(config.get("web_search"))
-        refresh = RunCreate(
-            question=question,
-            mode="search",
-            model=str(config.get("model") or "auto"),
-            query=config.get("query"),
-            live=True,
-            screen=bool(config.get("screen", True)),
-            review_method=str(config.get("review_method") or "prisma"),
-            paper_limit=int(config.get("paper_limit") or config.get("screen_limit") or 0),
-            screen_limit=int(config.get("screen_limit") or 0),
-            acquire=bool(config.get("acquire")),
-            full_text=bool(config.get("full_text")),
-            year_from=config.get("year_from"),
-            year_to=config.get("year_to"),
-            peer_reviewed_only=bool(config.get("peer_reviewed_only")),
-            web_search=False,
-            snowball=bool(config.get("snowball")),
-            semantic=bool(config.get("semantic")),
-            retrieval_limit=int(config.get("retrieval_limit") or 100000),
-            exhaustive=bool(config.get("exhaustive", True)) if body.scope == "full" else False,
-            canary_ids=list(config.get("canary_ids") or []),
-            gate_protocol=False,
-            parent_run_id=baseline_public_id,
-        )
-        created = _create_run(project_id, refresh, background, ctx)
-        with db_session() as session:
-            baseline = _owned_run(session, baseline_public_id, ctx)
-            refresh_run = _owned_run(session, str(created["public_id"]), ctx)
-            if baseline_used_web_search:
-                refresh_run.config = {
-                    **dict(refresh_run.config or {}),
-                    "living_refresh_web_search_skipped": True,
-                }
-            monitor = dict((baseline.config or {}).get("living_monitor") or {})
-            monitor.update(
-                {
-                    "last_checked_at": datetime.now(UTC).isoformat(),
-                    "last_refresh_run": created["public_id"],
-                }
+            if run.protocol_id is None:
+                raise HTTPException(409, "the baseline run has no frozen protocol")
+            protocol_row = session.get(ProtocolRow, run.protocol_id)
+            if protocol_row is None or protocol_row.org_id != ctx.org_id:
+                raise HTTPException(409, "the baseline run has no frozen protocol")
+            baseline_protocol = ReviewProtocol.model_validate(protocol_row.payload)
+            monitor = dict(config.get("living_monitor") or {})
+            active_refresh_public_id = str(monitor.get("active_refresh_run") or "")
+            if active_refresh_public_id:
+                active_refresh = session.scalar(
+                    select(Run).where(
+                        Run.public_id == active_refresh_public_id,
+                        Run.org_id == ctx.org_id,
+                    )
+                )
+                if active_refresh is not None and not is_terminal(active_refresh.status):
+                    return {
+                        "id": active_refresh.id,
+                        "public_id": active_refresh.public_id,
+                        "status": active_refresh.status,
+                        "gated": False,
+                        "plan": plan_for_org(org).name,
+                        "baseline_run": run.public_id,
+                        "scope": str(
+                            (active_refresh.config or {}).get("living_refresh_scope") or body.scope
+                        ),
+                        "deduplicated": True,
+                    }
+            watched_sources = set(
+                _supported_living_watch_sources(
+                    config,
+                    monitor.get("watch_sources") or _default_living_watch_sources(config),
+                )
             )
-            baseline.config = {**(baseline.config or {}), "living_monitor": monitor}
+            refresh_uses_openalex = "openalex" in watched_sources
+            refresh_uses_pubmed = "pubmed" in watched_sources
+            refresh_auto_screen = bool(monitor.get("auto_screen", True))
+            refresh_uses_citations = "citations" in watched_sources and refresh_auto_screen
+            _require_pubmed_runtime(refresh_uses_pubmed)
+            refresh = RunCreate(
+                question=question,
+                mode="search",
+                model=str(config.get("model") or "auto"),
+                query=baseline_protocol.query_string,
+                live=refresh_uses_openalex,
+                pubmed=refresh_uses_pubmed,
+                screen=refresh_auto_screen,
+                review_method=str(config.get("review_method") or "prisma"),
+                paper_limit=int(config.get("paper_limit") or config.get("screen_limit") or 0),
+                screen_limit=int(config.get("screen_limit") or 0),
+                acquire=bool(config.get("acquire")),
+                full_text=bool(config.get("full_text")),
+                year_from=config.get("year_from"),
+                year_to=config.get("year_to"),
+                peer_reviewed_only=bool(config.get("peer_reviewed_only")),
+                # Unattended refreshes inherit no public web-search confirmation.
+                web_search=False,
+                snowball=refresh_uses_citations,
+                semantic=bool(config.get("semantic")) and refresh_uses_openalex,
+                retrieval_limit=int(config.get("retrieval_limit") or 100000),
+                exhaustive=(
+                    bool(config.get("exhaustive", True)) if body.scope == "full" else False
+                ),
+                canary_ids=list(config.get("canary_ids") or []),
+                gate_protocol=False,
+                parent_run_id=baseline_public_id,
+            )
+            created = _create_run(
+                project_id,
+                refresh,
+                background,
+                ctx,
+                frozen_protocol=baseline_protocol,
+                transaction_session=session,
+            )
+            refresh_run = _owned_run(session, str(created["public_id"]), ctx)
+            refresh_run.config = {
+                **dict(refresh_run.config or {}),
+                "living_refresh_baseline": baseline_public_id,
+                "living_refresh_scope": body.scope,
+                **({"living_refresh_web_search_skipped": True} if baseline_used_web_search else {}),
+            }
+            monitor["active_refresh_run"] = created["public_id"]
+            run.config = {**(run.config or {}), "living_monitor": monitor}
             session.add(
                 RunEvent(
-                    org_id=baseline.org_id,
-                    run_id=baseline.id,
+                    org_id=run.org_id,
+                    run_id=run.id,
                     stage="living",
                     event="living_refresh_started",
                     payload={
                         "refresh_run": created["public_id"],
                         "scope": body.scope,
+                        "auto_screen": refresh_auto_screen,
+                        "openalex": refresh_uses_openalex,
+                        "pubmed": refresh_uses_pubmed,
+                        "citations": refresh_uses_citations,
                         "web_search": "requires_fresh_confirmation"
                         if baseline_used_web_search
                         else "not_requested",
                     },
                 )
             )
-        return {**created, "baseline_run": baseline_public_id, "scope": body.scope}
+            return {
+                **created,
+                "baseline_run": baseline_public_id,
+                "scope": body.scope,
+                "deduplicated": False,
+            }
 
     @app.post("/runs/{run_id}/recheck")
     def recheck_run(run_id: str, ctx: AuthContext = Depends(require_auth)) -> dict[str, Any]:
@@ -32288,6 +32505,7 @@ def _public_run_config(config: dict[str, Any] | None) -> dict[str, Any]:
         "chat_model",
         "query",
         "live",
+        "pubmed",
         "screen",
         "review_method",
         "paper_limit",
@@ -32392,6 +32610,140 @@ def _recover_failed_run(session: Session, run_id: int, message: str) -> Run | No
     return run
 
 
+def _recover_pubmed_runtime_failure(
+    session: Session,
+    run_id: int,
+    action_id: str,
+) -> Run | None:
+    """Fail a requested PubMed arm instead of silently changing its protocol."""
+
+    run = _recover_failed_run(session, run_id, _PUBMED_RUNTIME_UNAVAILABLE_MESSAGE)
+    if run is None:
+        return None
+    session.add(
+        RunEvent(
+            org_id=run.org_id,
+            run_id=run.id,
+            stage=StageName.RETRIEVAL.value,
+            event="pubmed_search_blocked",
+            payload={"reason": "deployment_feature_disabled"},
+        )
+    )
+    if action_id:
+        finish_ai_action(session, action_id, status="failed")
+    return run
+
+
+def _block_pubmed_resume(
+    session: Session,
+    run_id: int,
+    *,
+    resume_status: RunStatus,
+) -> Run | None:
+    """Return a resume to its retryable state when the PubMed gate changed."""
+
+    run = session.scalar(
+        select(Run)
+        .where(Run.id == run_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if run is None or is_terminal(run.status):
+        return run
+    if run.status == RunStatus.RUNNING.value:
+        set_status(run, resume_status)
+    elif run.status != resume_status.value:
+        return run
+    run.finished_at = None
+    latest = session.scalar(
+        select(RunEvent)
+        .where(
+            RunEvent.run_id == run.id,
+            RunEvent.org_id == run.org_id,
+            RunEvent.event == "pubmed_resume_blocked",
+        )
+        .order_by(RunEvent.id.desc())
+        .limit(1)
+    )
+    if latest is None or (latest.payload or {}).get("resume_status") != resume_status.value:
+        session.add(
+            RunEvent(
+                org_id=run.org_id,
+                run_id=run.id,
+                stage=StageName.RETRIEVAL.value,
+                event="pubmed_resume_blocked",
+                payload={
+                    "reason": "deployment_feature_disabled",
+                    "resumable": True,
+                    "resume_status": resume_status.value,
+                },
+            )
+        )
+    return run
+
+
+def _record_living_refresh_completion(session: Session, refresh_run: Run) -> None:
+    """Advance a living monitor only after one child completed successfully."""
+
+    if refresh_run.status != RunStatus.COMPLETED.value:
+        return
+    baseline_public_id = str((refresh_run.config or {}).get("living_refresh_baseline") or "")
+    if not baseline_public_id:
+        return
+    baseline = session.scalar(
+        select(Run)
+        .where(
+            Run.public_id == baseline_public_id,
+            Run.org_id == refresh_run.org_id,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if baseline is None:
+        return
+    monitor = dict((baseline.config or {}).get("living_monitor") or {})
+    completed_at = refresh_run.finished_at or datetime.now(UTC)
+    completed_at = completed_at if completed_at.tzinfo else completed_at.replace(tzinfo=UTC)
+    previous_raw = monitor.get("last_checked_at")
+    previous_checked = datetime.fromisoformat(str(previous_raw)) if previous_raw else None
+    if previous_checked is not None and previous_checked.tzinfo is None:
+        previous_checked = previous_checked.replace(tzinfo=UTC)
+    if monitor.get("active_refresh_run") == refresh_run.public_id:
+        monitor.pop("active_refresh_run", None)
+    # A delayed retry of an older child must not move the successful-check
+    # cursor backwards after a newer refresh has already completed.
+    if previous_checked is None or completed_at >= previous_checked:
+        monitor.update(
+            {
+                "last_checked_at": completed_at.isoformat(),
+                "last_refresh_run": refresh_run.public_id,
+            }
+        )
+    baseline.config = {
+        **dict(baseline.config or {}),
+        "living_monitor": monitor,
+    }
+    refresh_config = dict(refresh_run.config or {})
+    already_recorded = bool(refresh_config.get("living_refresh_completion_recorded_at"))
+    if not already_recorded:
+        session.add(
+            RunEvent(
+                org_id=baseline.org_id,
+                run_id=baseline.id,
+                stage="living",
+                event="living_refresh_completed",
+                payload={
+                    "refresh_run": refresh_run.public_id,
+                    "completed_at": completed_at.isoformat(),
+                },
+            )
+        )
+        refresh_run.config = {
+            **refresh_config,
+            "living_refresh_completion_recorded_at": completed_at.isoformat(),
+        }
+
+
 @contextlib.contextmanager
 def _scoped_action_pool(
     session: Session,
@@ -32491,6 +32843,7 @@ def _execute(
     *,
     query: str | None,
     live: bool,
+    pubmed: bool = False,
     screen: bool,
     paper_limit: int,
     screen_limit: int,
@@ -32508,12 +32861,16 @@ def _execute(
     gate_protocol: bool = False,
     import_batch_ids: list[int] | None = None,
     model: str = AUTO_ID,
+    frozen_protocol: dict[str, Any] | None = None,
 ) -> None:
     settings = get_settings()
     corpus = DuckDBCorpus(settings.corpus_dir)
     with db_session() as session:
         run = session.get(Run, run_id)
-        if run is None or is_terminal(run.status):
+        if run is None:
+            return
+        if is_terminal(run.status):
+            _record_living_refresh_completion(session, run)
             return
         org = session.get(Org, run.org_id)
         assert org is not None
@@ -32534,6 +32891,8 @@ def _execute(
         imported, imported_meta = _load_import_batches(session, run.org_id, import_batch_ids or [])
         effective_web_search = bool(web_search and _confirmed_persisted_web_search(run.config))
         try:
+            if pubmed and not settings.pubmed_ready:
+                raise _PubMedRuntimeUnavailableError
             execute_run(
                 session,
                 run,
@@ -32543,6 +32902,7 @@ def _execute(
                 imported=imported,
                 imported_meta=imported_meta,
                 live=live,
+                pubmed=pubmed,
                 screen=screen,
                 paper_limit=paper_limit,
                 screen_limit=screen_limit,
@@ -32559,7 +32919,18 @@ def _execute(
                 exhaustive=exhaustive,
                 canary_ids=canary_ids,
                 gate_protocol=gate_protocol,
+                approved_protocol=(
+                    ReviewProtocol.model_validate(frozen_protocol)
+                    if frozen_protocol is not None
+                    else None
+                ),
+                approved_protocol_source=(
+                    "living_baseline" if frozen_protocol is not None else "human"
+                ),
             )
+            _record_living_refresh_completion(session, run)
+        except _PubMedRuntimeUnavailableError:
+            _recover_pubmed_runtime_failure(session, run_id, action_id)
         except CorpusNotSyncedError:
             run = _recover_failed_run(session, run_id, _CORPUS_UNAVAILABLE_MESSAGE)
             if action_id and run is not None:
@@ -34665,7 +35036,15 @@ def _resume(run_id: int, approved_protocol: dict[str, Any], config: dict[str, An
     corpus = DuckDBCorpus(settings.corpus_dir)
     with db_session() as session:
         run = session.get(Run, run_id)
-        if run is None or is_terminal(run.status):
+        if run is None or run.status != RunStatus.RUNNING.value:
+            return
+        resume_pubmed = bool((run.config or {}).get("pubmed"))
+        if resume_pubmed and not settings.pubmed_ready:
+            _block_pubmed_resume(
+                session,
+                run_id,
+                resume_status=RunStatus.AWAITING_PROTOCOL_APPROVAL,
+            )
             return
         org = session.get(Org, run.org_id)
         assert org is not None
@@ -34711,6 +35090,7 @@ def _resume(run_id: int, approved_protocol: dict[str, Any], config: dict[str, An
                 pool=pool,
                 approved_protocol=approved,
                 live=bool(config.get("live", False)),
+                pubmed=resume_pubmed,
                 screen=bool(config.get("screen", False)),
                 paper_limit=int(config.get("paper_limit") or 0),
                 screen_limit=int(config.get("screen_limit") or 0),
@@ -34726,6 +35106,7 @@ def _resume(run_id: int, approved_protocol: dict[str, Any], config: dict[str, An
                 imported=imported,
                 imported_meta=imported_meta,
             )
+            _record_living_refresh_completion(session, run)
         except CorpusNotSyncedError as exc:
             logging.getLogger(__name__).warning(
                 "gated search run %s has no active corpus: %s", run_id, exc
@@ -34762,6 +35143,13 @@ def _resume_paused(run_id: int, *, control_request_id: int | None = None) -> Non
         proto = session.get(ProtocolRow, run.protocol_id) if run.protocol_id else None
         protocol = ReviewProtocol.model_validate(proto.payload) if proto else None
         cfg = _resume_config_without_unconfirmed_web_search(session, run)
+        if cfg.get("pubmed") and not settings.pubmed_ready:
+            _block_pubmed_resume(
+                session,
+                run_id,
+                resume_status=RunStatus.PAUSED,
+            )
+            return
         org = session.get(Org, run.org_id)
         assert org is not None
         action_id = str(cfg.get("cost_action_id") or "")
@@ -34804,6 +35192,7 @@ def _resume_paused(run_id: int, *, control_request_id: int | None = None) -> Non
                 approved_protocol=protocol,
                 query_override=cfg.get("query"),
                 live=bool(cfg.get("live", False)),
+                pubmed=bool(cfg.get("pubmed")),
                 screen=bool(cfg.get("screen", False)),
                 paper_limit=int(cfg.get("paper_limit") or 0),
                 screen_limit=int(cfg.get("screen_limit") or 0),
@@ -34819,7 +35208,9 @@ def _resume_paused(run_id: int, *, control_request_id: int | None = None) -> Non
                 snowball=bool(cfg.get("snowball", False)),
                 snowball_rounds=int(cfg.get("snowball_rounds", 2)),
                 semantic=bool(cfg.get("semantic", False)),
+                resume_from_checkpoint=True,
             )
+            _record_living_refresh_completion(session, run)
         except CorpusNotSyncedError as exc:
             logging.getLogger(__name__).warning(
                 "paused search run %s has no active corpus: %s", run_id, exc

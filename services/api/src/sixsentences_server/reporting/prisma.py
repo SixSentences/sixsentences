@@ -122,11 +122,7 @@ def render_flow_svg(counts: PrismaCounts) -> str:
         rows.append(
             (
                 "Retrieval",
-                (
-                    counts.reports_sought_for_retrieval,
-                    "reports sought (open access)",
-                    "main",
-                ),
+                (counts.reports_sought_for_retrieval, "reports sought (open access)", "main"),
                 (counts.reports_not_retrieved, "not retrieved (no OA copy)"),
             )
         )
@@ -134,11 +130,7 @@ def render_flow_svg(counts: PrismaCounts) -> str:
         rows.append(
             (
                 "Eligibility",
-                (
-                    counts.reports_assessed_for_eligibility,
-                    "assessed on full text",
-                    "main",
-                ),
+                (counts.reports_assessed_for_eligibility, "assessed on full text", "main"),
                 (counts.reports_excluded_fulltext, "excluded on full text"),
             )
         )
@@ -202,6 +194,8 @@ def render_search_appendix(executions: list[SearchExecution]) -> str:
                     f"  date run:          {ex.date_run.isoformat()}",
                     f"  query (verbatim):  {ex.query_verbatim}",
                     f"  limits:            {'; '.join(ex.limits) or 'none'}",
+                    f"  status:            {ex.status}",
+                    *([f"  failure reason:    {ex.failure_reason}"] if ex.failure_reason else []),
                     f"  records returned:  {ex.records_returned}",
                     f"  deduplication:     {ex.deduplication_method}",
                 ]

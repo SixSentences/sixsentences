@@ -278,6 +278,29 @@ def test_exact_source_reference_is_pinned_only_within_the_current_run(
     assert service._context_works(None, 7, "Explain W9999", size=1) == [preferred]
 
 
+def test_exact_pubmed_reference_is_pinned_within_the_current_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    preferred = WorkRecord(id="W10", title="Terraform overview")
+    referenced = WorkRecord(
+        id="pubmed:12345678",
+        pmid="12345678",
+        source="pubmed",
+        title="Clinical state evidence",
+    )
+    monkeypatch.setattr(service, "works_for_run", lambda *_args: [preferred, referenced])
+    monkeypatch.setattr(
+        service,
+        "rank_works",
+        lambda *_args, **_kwargs: [
+            SimpleNamespace(work=preferred, score=100.0),
+            SimpleNamespace(work=referenced, score=0.0),
+        ],
+    )
+
+    assert service._context_works(None, 7, "Explain PubMed:12345678 again", size=1) == [referenced]
+
+
 def test_generic_web_followup_still_needs_an_explicit_public_query(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

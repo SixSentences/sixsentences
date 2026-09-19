@@ -3,8 +3,8 @@
  *
  * Design language mirrors the app: pine cover with the SixSentences_ wordmark
  * in a built-in PDF serif, ivory interior pages, moss accents, mono details.
- * Citations like [W2741809807] in the synthesized sections are rewritten to
- * numbered references that resolve in the included-studies list.
+ * Provider-stable citations in synthesized sections are rewritten to numbered
+ * references that resolve in the included-studies list.
  *
  * This module is imported dynamically from the report button so the renderer
  * never enters the main bundle.
@@ -13,6 +13,7 @@
 import {
   Document,
   Font,
+  Link,
   Page,
   StyleSheet,
   Text,
@@ -22,6 +23,10 @@ import {
 import type { Style } from "@react-pdf/stylesheet";
 
 import type { RunReport } from "@/lib/types";
+import {
+  normalizeScholarlyWorkId,
+  scholarlyWorkUrl,
+} from "@/lib/scholarly-work";
 import { reportPdfProvenance } from "@/lib/ai-media-provenance";
 
 const PINE = "#0c1d19";
@@ -137,8 +142,12 @@ const styles = StyleSheet.create({
   citation: { color: MOSS, fontFamily: "Courier", fontSize: 8 },
 });
 
-const CITATION = /\[(W\d+(?:\s*,\s*W\d+)*)\]/g;
-const WORK_ID = /W\d+/g;
+const WORK_ID_SOURCE = String.raw`(?:W\d+|pubmed:[1-9]\d{0,11})`;
+const CITATION = new RegExp(
+  String.raw`\[(${WORK_ID_SOURCE}(?:\s*,\s*${WORK_ID_SOURCE})*)\]`,
+  "gi",
+);
+const WORK_ID = new RegExp(WORK_ID_SOURCE, "gi");
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -150,7 +159,7 @@ function formatDate(iso: string | null | undefined): string {
   });
 }
 
-/** Replace [W…] ids with numbered citations resolving to the reference list. */
+/** Replace provider-stable work ids with numbered reference-list citations. */
 function CitedBody({
   text,
   numbering,
@@ -166,6 +175,7 @@ function CitedBody({
       {parts.map((part, index) => {
         if (index % 2 === 0) return <Text key={index}>{part}</Text>;
         const numbers = (part.match(WORK_ID) ?? [])
+          .map(normalizeScholarlyWorkId)
           .map((id) => numbering.get(id))
           .filter((n): n is number => typeof n === "number");
         return (
@@ -216,10 +226,25 @@ function authorLine(work: RunReport["included"][number]): string {
   return names ? `${names}${etAl}` : "Unknown authors";
 }
 
+function ReferenceTitle({ work }: { work: RunReport["included"][number] }) {
+  const href = scholarlyWorkUrl(work.id, work.doi);
+  const style = [styles.body, { fontFamily: "Helvetica-Bold" }] as Style[];
+  return href ? (
+    <Link src={href} style={[...style, { color: MOSS, textDecoration: "none" }]}>
+      {work.title}
+    </Link>
+  ) : (
+    <Text style={style}>{work.title}</Text>
+  );
+}
+
 export function ReportDoc({ report }: { report: RunReport }) {
   const prisma = report.prisma;
   const numbering = new Map<string, number>(
-    report.included.map((work, index) => [work.id, index + 1]),
+    report.included.map((work, index) => [
+      normalizeScholarlyWorkId(work.id),
+      index + 1,
+    ]),
   );
   const generated = formatDate(report.run.finished_at ?? report.run.created_at);
   const sections = report.sections;
@@ -448,9 +473,7 @@ export function ReportDoc({ report }: { report: RunReport }) {
               <View key={work.id} style={styles.refItem} minPresenceAhead={40}>
                 <Text style={styles.refNumber}>[{index + 1}]</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.body, { fontFamily: "Helvetica-Bold" }]}>
-                    {work.title}
-                  </Text>
+                  <ReferenceTitle work={work} />
                   <Text style={[styles.body, styles.muted, { fontSize: 8.5 }]}>
                     {authorLine(work)}
                     {work.year ? ` (${work.year})` : ""}

@@ -28,6 +28,7 @@ function loadTs(path, dependencies = {}) {
 }
 
 const provenance = loadTs("src/lib/ai-media-provenance.ts");
+const scholarlyWork = loadTs("src/lib/scholarly-work.ts");
 const pdfRenderer = {
   ...renderer,
   Font: {
@@ -40,6 +41,7 @@ const pdfRenderer = {
 };
 const dependencies = {
   "@/lib/ai-media-provenance": provenance,
+  "@/lib/scholarly-work": scholarlyWork,
   "@react-pdf/renderer": pdfRenderer,
   "@/lib/format": { formatClock: (ms) => `0:${String(Math.floor(ms / 1000)).padStart(2, "0")}` },
 };

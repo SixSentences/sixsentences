@@ -5,7 +5,13 @@ import json
 import pytest
 
 from sixsentences_server.core.models import WorkRecord
-from sixsentences_server.reporting.exports import render, to_bibtex, to_csl_json, to_ris
+from sixsentences_server.reporting.exports import (
+    render,
+    source_record_url,
+    to_bibtex,
+    to_csl_json,
+    to_ris,
+)
 
 W1 = WorkRecord(
     id="W1",
@@ -28,6 +34,60 @@ def test_bibtex_entry_structure_and_escaping() -> None:
     assert "journal = {NeurIPS}" in out
     assert "doi = {10.1/abc}" in out
     assert "note = {OpenAlex:W1}" in out  # traceable back to the corpus id
+
+
+def test_bibtex_labels_pubmed_identity_without_claiming_openalex() -> None:
+    work = WorkRecord(id="pubmed:12345678", pmid="12345678", title="Biomedical study")
+    out = to_bibtex([work])
+    assert "note = {PubMed PMID: 12345678}" in out
+    assert "OpenAlex" not in out
+
+
+def test_source_record_url_resolves_supported_provider_identities() -> None:
+    pubmed = WorkRecord(id="pubmed:12345678", pmid="12345678", title="Biomedical study")
+    openalex = WorkRecord(id="W2741809807", title="OpenAlex study")
+    upload = WorkRecord(id="upload:private", title="Private upload")
+    assert source_record_url(pubmed) == "https://pubmed.ncbi.nlm.nih.gov/12345678/"
+    assert source_record_url(openalex) == "https://openalex.org/W2741809807"
+    assert source_record_url(upload) == ""
+
+
+def test_ris_and_csl_keep_pubmed_identity_resolvable() -> None:
+    work = WorkRecord(id="pubmed:12345678", pmid="12345678", title="Biomedical study")
+    ris = to_ris([work])
+    csl = json.loads(to_csl_json([work]))[0]
+    assert "ID  - pubmed:12345678" in ris
+    assert "UR  - https://pubmed.ncbi.nlm.nih.gov/12345678/" in ris
+    assert csl["URL"] == "https://pubmed.ncbi.nlm.nih.gov/12345678/"
+    assert csl["note"] == "PubMed PMID: 12345678"
+
+
+def test_book_chapter_uses_chapter_types_and_container_fields() -> None:
+    work = WorkRecord(
+        id="pubmed:987",
+        pmid="987",
+        title="A chapter about evidence synthesis",
+        authors=["Ada Researcher"],
+        year=2025,
+        venue="Handbook of Research Methods",
+        work_type="book-chapter",
+        volume="2",
+        pages="101-118",
+        publisher="Research Press",
+    )
+    bibtex = to_bibtex([work])
+    ris = to_ris([work])
+    csl = json.loads(to_csl_json([work]))[0]
+    assert bibtex.startswith("@incollection{")
+    assert "booktitle = {Handbook of Research Methods}" in bibtex
+    assert "journal =" not in bibtex
+    assert ris.startswith("TY  - CHAP")
+    assert "T2  - Handbook of Research Methods" in ris
+    assert "JO  -" not in ris
+    assert csl["type"] == "chapter"
+    assert csl["container-title"] == "Handbook of Research Methods"
+    assert csl["page"] == "101-118"
+    assert csl["publisher"] == "Research Press"
 
 
 def test_bibtex_keys_are_unique_on_collision() -> None:

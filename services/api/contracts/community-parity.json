@@ -30,7 +30,7 @@
   },
   "open_web": {
     "source_path": "apps/web/src/lib/api.ts",
-    "source_sha256": "7bb70a7a92aa659cd2318fdf07551c11bfac486100dc6d9962ab1c139ed713f6",
+    "source_sha256": "8bf88ac63fdb3981a1652f6c4635a9bf1ea7e5322d27bb1636fce60019ee5edc",
     "central_http_operations": 334,
     "central_methods": {
       "DELETE": 36,

@@ -2,8 +2,8 @@
 
 Pure formatters over `WorkRecord` lists (unit-testable without a DB), plus one
 helper that loads the works of a persisted run for the CLI/API. Every exported
-entry carries the canonical OpenAlex id so a citation always traces back to a
-resolvable corpus record (VISION.md #1).
+entry carries its canonical provider identity so a citation always traces back
+to a resolvable source record (VISION.md #1).
 """
 
 import json
@@ -14,7 +14,6 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from sixsentences_server.acquisition.upload import is_verified_work_id
 from sixsentences_server.core.db import (
     BrowserCapturedPaperMetadataRow,
     DocumentRow,
@@ -31,6 +30,16 @@ from sixsentences_server.screening.evidence import final_decisions
 
 _LATEX_SPECIALS = {"&": r"\&", "%": r"\%", "$": r"\$", "#": r"\#", "_": r"\_"}
 _NON_KEY = re.compile(r"[^a-z0-9]+")
+_OPENALEX_ID = re.compile(r"W[1-9]\d*")
+_PUBMED_ID = re.compile(r"pubmed:([1-9]\d{0,11})", re.IGNORECASE)
+_BOOK_CHAPTER_TYPES = {
+    "book-chapter",
+    "book-section",
+    "bookchapter",
+    "booksection",
+    "chapter",
+    "incollection",
+}
 
 
 def _ascii(text: str) -> str:
@@ -74,6 +83,38 @@ def _citation_key(work: WorkRecord, used: set[str]) -> str:
     return key
 
 
+def source_identifier_note(work: WorkRecord, *, compact: bool = False) -> str:
+    """Return an accurate human-readable provider identity for one work."""
+
+    if match := _PUBMED_ID.fullmatch(work.id):
+        return f"PubMed PMID: {work.pmid or match.group(1)}"
+    if _OPENALEX_ID.fullmatch(work.id):
+        separator = "" if compact else " "
+        return f"OpenAlex:{separator}{work.id}"
+    return ""
+
+
+def source_record_url(work: WorkRecord) -> str:
+    """Return the best public record URL without inventing provider identity."""
+
+    if work.oa_url:
+        return work.oa_url
+    if work.pdf_url:
+        return work.pdf_url
+    if match := _PUBMED_ID.fullmatch(work.id):
+        return f"https://pubmed.ncbi.nlm.nih.gov/{work.pmid or match.group(1)}/"
+    if _OPENALEX_ID.fullmatch(work.id):
+        return f"https://openalex.org/{work.id}"
+    return ""
+
+
+def is_book_chapter(work: WorkRecord) -> bool:
+    """Return whether a normalized provider type represents a chapter in a book."""
+
+    kind = re.sub(r"[\s_]+", "-", (work.work_type or "").strip().casefold())
+    return kind in _BOOK_CHAPTER_TYPES
+
+
 # --- formatters ------------------------------------------------------------
 
 
@@ -82,30 +123,45 @@ def to_bibtex(works: list[WorkRecord]) -> str:
     entries: list[str] = []
     for work in works:
         key = _citation_key(work, used)
+        book_chapter = is_book_chapter(work)
         fields: list[tuple[str, str]] = [("title", _bibtex_escape(work.title))]
         if work.authors:
             fields.append(("author", " and ".join(_bibtex_escape(a) for a in work.authors)))
         if work.year:
             fields.append(("year", str(work.year)))
         if work.venue:
-            fields.append(("journal", _bibtex_escape(work.venue)))
+            fields.append(("booktitle" if book_chapter else "journal", _bibtex_escape(work.venue)))
+        for field_name, value in (
+            ("volume", work.volume),
+            ("number", work.issue),
+            ("pages", work.pages),
+            ("publisher", work.publisher),
+            ("language", work.language),
+            ("issn", work.issn),
+        ):
+            if value:
+                fields.append((field_name, _bibtex_escape(str(value))))
         if work.doi:
             fields.append(("doi", work.doi))
-        if is_verified_work_id(work.id):
-            # only a REAL index id may claim provenance; an upload's synthetic
-            # id must never pretend the record exists there
-            fields.append(("note", f"OpenAlex:{work.id}"))
+        if record_url := source_record_url(work):
+            fields.append(("url", _bibtex_escape(record_url)))
+        if identifier_note := source_identifier_note(work, compact=True):
+            # Only a real provider identity may claim provenance; an upload's
+            # synthetic id must never pretend the record exists in an index.
+            fields.append(("note", identifier_note))
         if work.is_retracted:
             fields.append(("annotation", "RETRACTED"))
         body = ",\n".join(f"  {name} = {{{value}}}" for name, value in fields)
-        entries.append(f"@article{{{key},\n{body}\n}}")
+        entry_type = "incollection" if book_chapter else "article"
+        entries.append(f"@{entry_type}{{{key},\n{body}\n}}")
     return "\n\n".join(entries) + ("\n" if entries else "")
 
 
 def to_ris(works: list[WorkRecord]) -> str:
     blocks: list[str] = []
     for work in works:
-        lines = ["TY  - JOUR"]
+        book_chapter = is_book_chapter(work)
+        lines = [f"TY  - {'CHAP' if book_chapter else 'JOUR'}"]
         for author in work.authors:
             family, given = _family_given(author)
             lines.append(f"AU  - {family}, {given}" if given else f"AU  - {family}")
@@ -113,11 +169,21 @@ def to_ris(works: list[WorkRecord]) -> str:
         if work.year:
             lines.append(f"PY  - {work.year}")
         if work.venue:
-            lines.append(f"JO  - {work.venue}")
+            lines.append(f"{'T2' if book_chapter else 'JO'}  - {work.venue}")
+        if work.volume:
+            lines.append(f"VL  - {work.volume}")
+        if work.issue:
+            lines.append(f"IS  - {work.issue}")
+        if work.pages:
+            lines.append(f"SP  - {work.pages}")
+        if work.publisher:
+            lines.append(f"PB  - {work.publisher}")
         if work.doi:
             lines.append(f"DO  - {work.doi}")
-        if is_verified_work_id(work.id):
+        if source_identifier_note(work):
             lines.append(f"ID  - {work.id}")
+        if record_url := source_record_url(work):
+            lines.append(f"UR  - {record_url}")
         lines.append("ER  - ")
         blocks.append("\n".join(lines))
     return "\n".join(blocks) + ("\n" if blocks else "")
@@ -128,7 +194,7 @@ def to_csl_json(works: list[WorkRecord]) -> str:
     for work in works:
         item: dict[str, object] = {
             "id": work.id,
-            "type": "article-journal",
+            "type": "chapter" if is_book_chapter(work) else "article-journal",
             "title": work.title,
         }
         if work.authors:
@@ -140,10 +206,26 @@ def to_csl_json(works: list[WorkRecord]) -> str:
             item["issued"] = {"date-parts": [[work.year]]}
         if work.venue:
             item["container-title"] = work.venue
+        if work.volume:
+            item["volume"] = work.volume
+        if work.issue:
+            item["issue"] = work.issue
+        if work.pages:
+            item["page"] = work.pages
+        if work.publisher:
+            item["publisher"] = work.publisher
+        if work.language:
+            item["language"] = work.language
+        if work.issn:
+            item["ISSN"] = work.issn
         if work.doi:
             item["DOI"] = work.doi
+        if record_url := source_record_url(work):
+            item["URL"] = record_url
         if work.is_retracted:
             item["note"] = "RETRACTED"
+        elif identifier_note := source_identifier_note(work):
+            item["note"] = identifier_note
         items.append(item)
     return json.dumps(items, indent=2, ensure_ascii=False)
 

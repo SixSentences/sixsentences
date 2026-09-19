@@ -89,6 +89,10 @@ import {
   suggestPublicWebSearchQuery,
   validPublicWebSearchQuery,
 } from "@/lib/public-web-search-query";
+import {
+  normalizeScholarlyWorkId,
+  scholarlyWorkUrl,
+} from "@/lib/scholarly-work";
 import { useRouter } from "next/navigation";
 import type {
   ChatAnswer,
@@ -103,15 +107,19 @@ import type {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-// models cite works as [W123] (sometimes [W1, W2] or [W1 page 3], despite
-// the prompt), invent page anchors like [Seite 1, erstes Highlight], and
+// Models cite provider-neutral work ids such as [W123] or [pubmed:123]
+// (sometimes several ids or a page inside one bracket, despite the prompt),
+// invent page anchors like [Seite 1, erstes Highlight], and
 // cite web findings by URL-bound [web:...] keys (legacy [domain.tld]);
 // all render as chips — unmatched
 // brackets would fall through as raw text
-const CITATION_PATTERN =
-  /\[((?:W\d+(?:\s*[,;]\s*W\d+)*(?:[\s,;]*(?:pages?|pp\.?|p\.?|seite|s\.?)\s*\d+(?:\s*[-–]\s*\d+)?)?)|(?:(?:seite|pages?|pp\.?|p\.?|s\.?)\s*\d+(?:\s*[-–]\s*\d+)?[^\]]{0,48})|(?:web:[a-f0-9]{16})|(?:[a-z0-9][a-z0-9.-]*\.[a-z]{2,}))\]/gi;
-const WORK_ID = /W\d+/g;
-const LOOKS_LIKE_WORKS = /^W\d/;
+const WORK_ID_SOURCE = String.raw`(?:W\d+|pubmed:[1-9]\d{0,11})`;
+const CITATION_PATTERN = new RegExp(
+  String.raw`\[((?:${WORK_ID_SOURCE}(?:\s*[,;]\s*${WORK_ID_SOURCE})*(?:[\s,;]*(?:pages?|pp\.?|p\.?|seite|s\.?)\s*\d+(?:\s*[-–]\s*\d+)?)?)|(?:(?:seite|pages?|pp\.?|p\.?|s\.?)\s*\d+(?:\s*[-–]\s*\d+)?[^\]]{0,48})|(?:web:[a-f0-9]{16})|(?:[a-z0-9][a-z0-9.-]*\.[a-z]{2,}))\]`,
+  "gi",
+);
+const WORK_ID = new RegExp(WORK_ID_SOURCE, "gi");
+const LOOKS_LIKE_WORKS = new RegExp(`^${WORK_ID_SOURCE}`, "i");
 const LOOKS_LIKE_DOMAIN = /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i;
 const LOOKS_LIKE_WEB_SOURCE = /^web:[a-f0-9]{16}$/i;
 const BRACKET_PAGE = /(?:pages?|pp\.?|p\.?|seite|s\.?)\s*(\d+(?:\s*[-–]\s*\d+)?)/i;
@@ -1386,7 +1394,7 @@ function CitedProse({
             </span>
           );
         }
-        const ids = part.match(WORK_ID) ?? [];
+        const ids = (part.match(WORK_ID) ?? []).map(normalizeScholarlyWorkId);
         const page = BRACKET_PAGE.exec(part)?.[1];
         return (
           <span key={index}>
@@ -1417,7 +1425,7 @@ function CitedProse({
                       </button>
                     ) : (
                       <a
-                        href={`https://openalex.org/${id}`}
+                        href={scholarlyWorkUrl(id) ?? undefined}
                         target="_blank"
                         rel="noreferrer"
                         className={chipClass}
@@ -1953,7 +1961,7 @@ function ClaimVerificationCard({
             {evidence.map((item) => (
               <a
                 key={`${item.work_id}-${item.stance}`}
-                href={`https://openalex.org/${item.work_id}`}
+                href={scholarlyWorkUrl(item.work_id) ?? undefined}
                 target="_blank"
                 rel="noreferrer"
                 className="flex gap-3 px-4 py-3 transition-colors hover:bg-secondary/55"
@@ -2573,7 +2581,8 @@ function ToolMessage({
                 isWeb
                   ? result.url
                   : (result.publisher_url ??
-                    (result.id ? `https://openalex.org/${result.id}` : undefined)),
+                    scholarlyWorkUrl(result.id ?? "", result.doi) ??
+                    undefined),
               );
               const meta = isWeb
                 ? result.domain
@@ -3231,7 +3240,8 @@ export function ChatThread({
       if (message.role === "tool") continue;
       for (const match of message.content.matchAll(CITATION_PATTERN)) {
         if (!LOOKS_LIKE_WORKS.test(match[1])) continue;
-        for (const id of match[1].match(WORK_ID) ?? []) {
+        for (const rawId of match[1].match(WORK_ID) ?? []) {
+          const id = normalizeScholarlyWorkId(rawId);
           if (!map.has(id)) map.set(id, map.size + 1);
         }
       }

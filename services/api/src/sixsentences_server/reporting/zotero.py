@@ -8,6 +8,11 @@ from typing import Any
 import httpx
 
 from sixsentences_server.core.models import WorkRecord
+from sixsentences_server.reporting.exports import (
+    is_book_chapter,
+    source_identifier_note,
+    source_record_url,
+)
 
 ZOTERO_API = "https://api.zotero.org"
 _MAX_ITEMS = 50  # Zotero accepts up to 50 items per write
@@ -20,20 +25,32 @@ _COLLECTION_KEY = re.compile(r"[A-Za-z0-9]{0,32}")  # empty means "the whole lib
 
 
 def to_zotero_items(works: list[WorkRecord]) -> list[dict[str, Any]]:
-    return [
-        {
-            "itemType": "journalArticle",
-            "title": w.title,
-            "creators": [{"creatorType": "author", "name": a} for a in w.authors[:50]],
-            "date": str(w.year) if w.year else "",
-            "publicationTitle": w.venue or "",
-            "DOI": w.doi or "",
-            "url": w.oa_url or w.pdf_url or "",
-            "extra": f"OpenAlex: {w.id}",
+    items: list[dict[str, Any]] = []
+    for work in works:
+        book_chapter = is_book_chapter(work)
+        item: dict[str, Any] = {
+            "itemType": "bookSection" if book_chapter else "journalArticle",
+            "title": work.title,
+            "creators": [{"creatorType": "author", "name": author} for author in work.authors[:50]],
+            "date": str(work.year) if work.year else "",
+            "DOI": work.doi or "",
+            "url": source_record_url(work),
+            "extra": source_identifier_note(work),
             "tags": [{"tag": "SixSentences"}],
         }
-        for w in works
-    ]
+        item["bookTitle" if book_chapter else "publicationTitle"] = work.venue or ""
+        for field_name, value in (
+            ("volume", work.volume),
+            ("issue", work.issue if not book_chapter else None),
+            ("pages", work.pages),
+            ("publisher", work.publisher if book_chapter else None),
+            ("language", work.language),
+            ("ISSN", work.issn if not book_chapter else None),
+        ):
+            if value:
+                item[field_name] = value
+        items.append(item)
+    return items
 
 
 @dataclass

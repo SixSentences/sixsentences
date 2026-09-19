@@ -8,7 +8,7 @@ trail (run_events) can reconstruct any number in a report.
 from datetime import UTC, datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 def utcnow() -> datetime:
@@ -45,8 +45,8 @@ class ReviewProtocol(BaseModel):
     question: str
     inclusion_criteria: list[str] = Field(default_factory=list)
     exclusion_criteria: list[str] = Field(default_factory=list)
-    year_from: int | None = None
-    year_to: int | None = None
+    year_from: int | None = Field(default=None, ge=1000, le=3000)
+    year_to: int | None = Field(default=None, ge=1000, le=3000)
     languages: list[str] = Field(default_factory=lambda: ["en"])
     peer_reviewed_only: bool = False  # exclude preprints + non-article types
     query_string: str
@@ -59,11 +59,24 @@ class ReviewProtocol(BaseModel):
     synthesized_by: str = "heuristic"  # "heuristic" | model id
     version: int = 1
 
+    @model_validator(mode="after")
+    def validate_year_window(self) -> "ReviewProtocol":
+        """Reject an inverted publication window at the shared contract."""
+
+        if (
+            self.year_from is not None
+            and self.year_to is not None
+            and self.year_from > self.year_to
+        ):
+            raise ValueError("year_from must not exceed year_to")
+        return self
+
 
 class WorkRecord(BaseModel):
-    """Canonical work as stored in the corpus (one row per OpenAlex work)."""
+    """Canonical scholarly work normalized from a corpus or provider."""
 
-    id: str  # OpenAlex id, e.g. W2741809807
+    # Provider-stable canonical id, e.g. W2741809807 or pubmed:12345678.
+    id: str
     doi: str | None = None
     title: str
     abstract: str | None = None
@@ -170,4 +183,6 @@ class SearchExecution(BaseModel):
     limits: list[str] = Field(default_factory=list)
     date_run: datetime = Field(default_factory=utcnow)
     records_returned: int = 0
-    deduplication_method: str = "doi+openalex_id exact match"
+    deduplication_method: str = "doi+provider_id exact match; normalized-title fallback"
+    status: str = Field(default="completed", pattern="^(completed|partial|failed)$")
+    failure_reason: str | None = None

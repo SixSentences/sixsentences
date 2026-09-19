@@ -67,7 +67,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useProjects } from "@/hooks/queries";
+import { useModels, useProjects } from "@/hooks/queries";
 import { track } from "@/lib/analytics";
 import { api, fileToBase64 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -93,6 +93,7 @@ type Options = {
   screen: boolean;
   reviewMethod: NonNullable<RunConfig["review_method"]>;
   live: boolean;
+  pubmed: boolean;
   acquire: boolean;
   fullText: boolean;
   webSearch: boolean;
@@ -116,6 +117,7 @@ const DEFAULTS: Options = {
   screen: false,
   reviewMethod: "prisma",
   live: false,
+  pubmed: false,
   acquire: false,
   fullText: false,
   webSearch: false,
@@ -198,6 +200,7 @@ function optionsFromConfig(config: Partial<RunConfig>): Options {
     screen: Boolean(config.screen),
     reviewMethod: config.review_method ?? "prisma",
     live: Boolean(config.live),
+    pubmed: Boolean(config.pubmed),
     acquire: Boolean(config.acquire),
     fullText: Boolean(config.full_text),
     webSearch: Boolean(config.web_search),
@@ -315,13 +318,29 @@ export default function Composer({ autoFocus = true, seed = null }: ComposerProp
     queryFn: api.screeningMethods,
     staleTime: 60 * 60 * 1000,
   });
+  const { data: modelCatalog, isPending: modelCatalogPending } = useModels();
 
   useEffect(() => {
     if (autoFocus) textareaRef.current?.focus();
   }, [autoFocus]);
 
   const webSearchAvailable = true;
+  const pubmedAvailable =
+    modelCatalog?.runtime_capabilities?.pubmed === true;
+  const pubmedCapabilityPending = options.pubmed && modelCatalogPending;
   const effectiveWebSearch = webSearchAvailable && options.webSearch;
+  const effectivePubmed = pubmedAvailable && options.pubmed;
+
+  // Runtime capabilities are authoritative. A refinement from a deployment
+  // that supported PubMed must not retain a hidden selection after it is
+  // disabled, removed, or cannot be confirmed by the current deployment.
+  useEffect(() => {
+    if (!modelCatalogPending && !pubmedAvailable) {
+      setOptions((current) =>
+        current.pubmed ? { ...current, pubmed: false } : current,
+      );
+    }
+  }, [modelCatalogPending, pubmedAvailable]);
 
   // no options, no filters: the agent answers directly instead of running
   // the systematic pipeline
@@ -339,6 +358,7 @@ export default function Composer({ autoFocus = true, seed = null }: ComposerProp
   const activeWorkflowCount = [
     options.screen,
     options.live,
+    options.pubmed,
     options.snowball,
     options.semantic,
     options.acquire,
@@ -350,6 +370,7 @@ export default function Composer({ autoFocus = true, seed = null }: ComposerProp
   const askMode =
     !options.screen &&
     !options.live &&
+    !options.pubmed &&
     !options.acquire &&
     !options.fullText &&
     !effectiveWebSearch &&
@@ -446,6 +467,13 @@ export default function Composer({ autoFocus = true, seed = null }: ComposerProp
 
   const createRun = useMutation({
     mutationFn: async () => {
+      if (options.pubmed && !pubmedAvailable) {
+        throw new Error(
+          modelCatalogPending
+            ? "PubMed availability is still being checked. Please try again in a moment."
+            : "PubMed is not available on this deployment.",
+        );
+      }
       // file the run into the picked project (or the sidebar's active one);
       // with no pick it stays unfiled — a chat does not need a project
       const targetProject =
@@ -471,6 +499,7 @@ export default function Composer({ autoFocus = true, seed = null }: ComposerProp
         screen: options.screen,
         review_method: options.reviewMethod,
         live: options.live,
+        ...(pubmedAvailable && { pubmed: effectivePubmed }),
         acquire: options.acquire || options.fullText,
         full_text: options.fullText,
         web_search: effectiveWebSearch,
@@ -539,6 +568,7 @@ export default function Composer({ autoFocus = true, seed = null }: ComposerProp
     webSearchConfirmationRequired && !webSearchPublicDataConfirmed;
   const canSubmit =
     question.trim().length > 2 &&
+    !pubmedCapabilityPending &&
     !webSearchConfirmationMissing &&
     !createRun.isPending;
 
@@ -768,6 +798,17 @@ export default function Composer({ autoFocus = true, seed = null }: ComposerProp
           </div>
         )}
 
+        {pubmedCapabilityPending && (
+          <p
+            className="px-4 pb-3 text-sm text-muted-foreground"
+            role="status"
+          >
+            {isGerman
+              ? "PubMed-Verfügbarkeit wird geprüft…"
+              : "Checking PubMed availability…"}
+          </p>
+        )}
+
         {quickAnswerWebSearch && (
           <div
             data-testid="quick-answer-web-search-confirmation"
@@ -890,6 +931,19 @@ export default function Composer({ autoFocus = true, seed = null }: ComposerProp
                         onToggle={() => toggle("live")}
                         icon={<Radar className="size-3.5" />}
                       />
+                      {pubmedAvailable && (
+                        <WorkflowToggle
+                          label="PubMed"
+                          description={
+                            isGerman
+                              ? "Sendet die erzeugte wissenschaftliche Suchanfrage an die externe öffentliche Datenbank PubMed."
+                              : "Sends the generated scholarly query to the external public PubMed database."
+                          }
+                          active={options.pubmed}
+                          onToggle={() => toggle("pubmed")}
+                          icon={<Database className="size-3.5" />}
+                        />
+                      )}
                       <WorkflowToggle
                         label={isGerman ? "Semantische Suche" : "Semantic sweep"}
                         description={isGerman ? "Bedeutungsähnliche Treffer und Synonyme." : "Meaning-level matches and synonyms."}

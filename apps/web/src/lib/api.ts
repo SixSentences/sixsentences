@@ -2535,7 +2535,10 @@ export const api = {
   createRun: (projectId: number | null, body: RunCreateRequest) =>
     request<RunCreated>(
       projectId === null ? "/runs" : `/projects/${projectId}/runs`,
-      { method: "POST", body },
+      {
+        method: "POST",
+        body: { ...body, pubmed: body.pubmed === true },
+      },
     ),
   run: (id: RunRef) => request<RunDetail>(`/runs/${id}`),
   controlRoom: (id: RunRef) =>

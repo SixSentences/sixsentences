@@ -18,7 +18,11 @@ from sixsentences_server.core.credentials import (
     encrypt_credential,
 )
 from sixsentences_server.core.db import Org, ReferenceConnectorRow, User, db_session, init_db
-from sixsentences_server.reporting.citavi import records_to_endnote, records_to_ris
+from sixsentences_server.reporting.citavi import (
+    records_to_bibtex,
+    records_to_endnote,
+    records_to_ris,
+)
 from sixsentences_server.reporting.zotero import ZoteroClient
 
 
@@ -65,6 +69,26 @@ def test_citavi_formats_preserve_notes_keywords_and_attachments() -> None:
     reparsed = parse_endnote_tagged(enw)[0]
     assert reparsed["keywords"] == ["screening"]
     assert reparsed["notes"] == ["Read methods closely"]
+
+
+def test_citavi_formats_keep_book_chapter_reference_type() -> None:
+    record = {
+        "reference_type": "book-chapter",
+        "title": "A chapter about evidence synthesis",
+        "authors": ["Ada Researcher"],
+        "year": 2025,
+        "venue": "Handbook of Research Methods",
+        "citation_key": "researcher2025chapter",
+    }
+    ris = records_to_ris([record])
+    enw = records_to_endnote([record])
+    bibtex = records_to_bibtex([record])
+    assert ris.startswith("TY  - CHAP")
+    assert "T2  - Handbook of Research Methods" in ris
+    assert enw.startswith("%0 Book Section")
+    assert "%B Handbook of Research Methods" in enw
+    assert bibtex.startswith("@incollection{researcher2025chapter,")
+    assert "booktitle = {Handbook of Research Methods}" in bibtex
 
 
 def test_connector_items_sync_versions_and_deletions(settings) -> None:

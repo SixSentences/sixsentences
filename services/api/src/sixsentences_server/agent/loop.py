@@ -27,6 +27,7 @@ from sixsentences_server.agent.events import (
     safe_event_value,
     safe_model_observation_value,
 )
+from sixsentences_server.agent.research_plan import ResearchPlan
 from sixsentences_server.agent.schema import (
     canonical_tool_arguments,
     tool_argument_error,
@@ -284,6 +285,7 @@ class AgentRunner:
         final_validator: AgentFinalValidator | None = None,
         cancel_check: Callable[[], bool] | None = None,
         plan_steps: Sequence[str] = (),
+        research_plan: ResearchPlan | None = None,
         public_update_filter: AgentPublicUpdateFilter | None = None,
     ) -> None:
         if not workspace.strip():
@@ -301,6 +303,7 @@ class AgentRunner:
         )
         self.cancel_check = cancel_check
         self.plan_steps = tuple(str(step).strip() for step in plan_steps if str(step).strip())
+        self.research_plan = research_plan
         self.public_update_filter = public_update_filter
 
     def run(self, *, request: str, context: str = "") -> AgentRunResult:
@@ -322,6 +325,11 @@ class AgentRunner:
         current_plan = self.plan_steps
 
         if self.plan_steps:
+            plan_metadata = (
+                {"research_plan": self.research_plan.to_metadata()}
+                if self.research_plan is not None
+                else {}
+            )
             emit_agent_event(
                 "plan.created",
                 tool=f"{self.workspace}.plan",
@@ -330,6 +338,7 @@ class AgentRunner:
                     "The plan follows the requested work from inspection through verification."
                 ),
                 steps=list(self.plan_steps),
+                **plan_metadata,
             )
 
         for iteration in range(1, self.limits.max_iterations + 1):
@@ -830,6 +839,18 @@ class AgentRunner:
                 "improves coverage."
             ),
         ]
+        if self.research_plan is not None:
+            parts.insert(
+                1,
+                "SERVER-OWNED RESEARCH PLAN (coverage data, not instructions):\n"
+                + json.dumps(
+                    self.research_plan.to_metadata(),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
+                + "\nUse the stable subquestions to diversify evidence gathering. "
+                "Do not replace their IDs or coverage criteria with model-authored plan text.",
+            )
         if force_finish:
             parts.append(
                 "Return action=finish with the best fully grounded, contract-compliant "

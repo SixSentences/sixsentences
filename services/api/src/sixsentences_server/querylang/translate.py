@@ -1,11 +1,9 @@
 """Per-database translations of the canonical boolean query AST.
 
-The pinned index and OpenAlex execute the query natively; other databases
-(PubMed, Scopus, Web of Science, IEEE Xplore) cannot be searched from here,
-but reviewers routinely require them. These compilers emit the same boolean
-logic in each database's field syntax, so the researcher runs it there and
-uploads the export back into the run (see /imports) — the PRISMA-compliant
-multi-database workflow.
+The pinned index and the optional PubMed arm execute their target query
+natively. Scopus, Web of Science and IEEE Xplore remain reproducible export
+targets: researchers run those translations externally and import the result
+into the same PRISMA-compliant multi-database workflow.
 """
 
 from collections.abc import Callable

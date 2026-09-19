@@ -94,6 +94,50 @@ def test_public_openapi_corrects_stream_and_binary_contracts(corpus: DuckDBCorpu
     }
 
 
+def test_models_exposes_secret_free_pubmed_runtime_capability(
+    corpus: DuckDBCorpus, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SIX_PUBMED_ENABLED", "1")
+    monkeypatch.setenv("SIX_PUBMED_EMAIL", "operator-private@example.org")
+    monkeypatch.setenv("SIX_PUBMED_API_KEY", "must-not-be-public")
+    get_settings.cache_clear()
+    client = _authed(create_app(), email="pubmed-models@lab.org", org="PubMed Models")
+
+    response = client.get("/models")
+
+    assert response.status_code == 200
+    assert response.json()["runtime_capabilities"]["pubmed"] is True
+    assert "operator-private@example.org" not in response.text
+    assert "must-not-be-public" not in response.text
+    get_settings.cache_clear()
+
+
+@pytest.mark.parametrize(
+    ("email", "api_key"),
+    [
+        ("invalid contact@example.org", ""),
+        ("operator@example.org", "invalid key"),
+    ],
+)
+def test_models_rejects_constructor_incompatible_pubmed_configuration(
+    corpus: DuckDBCorpus,
+    monkeypatch: pytest.MonkeyPatch,
+    email: str,
+    api_key: str,
+) -> None:
+    monkeypatch.setenv("SIX_PUBMED_ENABLED", "1")
+    monkeypatch.setenv("SIX_PUBMED_EMAIL", email)
+    monkeypatch.setenv("SIX_PUBMED_API_KEY", api_key)
+    get_settings.cache_clear()
+    client = _authed(create_app(), email="pubmed-invalid@lab.org", org="PubMed Invalid")
+
+    response = client.get("/models")
+
+    assert response.status_code == 200
+    assert response.json()["runtime_capabilities"]["pubmed"] is False
+    get_settings.cache_clear()
+
+
 def test_readiness_protects_emergency_disk_reserve(
     corpus: DuckDBCorpus, settings: Settings
 ) -> None:
@@ -935,6 +979,95 @@ def test_protocol_gate_pauses_then_resumes(corpus: DuckDBCorpus) -> None:
     assert "protocol_gate_opened" in events and "protocol_approved" in events
 
 
+def test_search_creation_rolls_back_if_durable_enqueue_fails(
+    corpus: DuckDBCorpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A queue failure must not expose an orphan run or capacity hold."""
+    import sixsentences_server.api.app as app_module
+    from sixsentences_server.core.db import CapacityReservationRow
+
+    client = _authed(create_app(), email="queue-rollback@lab.org", org="Queue Rollback")
+    project = client.post("/projects", json={"name": "atomic search"}).json()
+    org_id = client.get("/auth/me").json()["org_id"]
+    with db_session() as session:
+        runs_before = int(
+            session.scalar(select(func.count()).select_from(Run).where(Run.org_id == org_id)) or 0
+        )
+        reservations_before = int(
+            session.scalar(
+                select(func.count())
+                .select_from(CapacityReservationRow)
+                .where(CapacityReservationRow.org_id == org_id)
+            )
+            or 0
+        )
+
+    def failing_enqueue(*args: object, **kwargs: object) -> int:
+        assert kwargs.get("session") is not None
+        raise RuntimeError("synthetic queue failure")
+
+    monkeypatch.setattr(app_module, "enqueue_job", failing_enqueue)
+    with pytest.raises(RuntimeError, match="synthetic queue failure"):
+        client.post(
+            f"/projects/{project['id']}/runs",
+            json={"question": "atomic?", "query": "transformer"},
+        )
+
+    with db_session() as session:
+        assert (
+            session.scalar(select(func.count()).select_from(Run).where(Run.org_id == org_id))
+            == runs_before
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(CapacityReservationRow)
+                .where(CapacityReservationRow.org_id == org_id)
+            )
+            == reservations_before
+        )
+
+
+def test_protocol_approval_rolls_back_if_durable_enqueue_fails(
+    corpus: DuckDBCorpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Approval and its resume outbox row are one atomic transition."""
+    import sixsentences_server.api.app as app_module
+
+    client = _authed(
+        create_app(),
+        email="approval-rollback@lab.org",
+        org="Approval Rollback",
+    )
+    project = client.post("/projects", json={"name": "approval"}).json()
+    created = client.post(
+        f"/projects/{project['id']}/runs",
+        json={
+            "question": "Which transformer studies qualify?",
+            "query": "transformer",
+            "gate_protocol": True,
+        },
+    )
+    assert created.status_code == 202, created.text
+    run_id = created.json()["id"]
+    assert client.get(f"/runs/{run_id}").json()["status"] == "awaiting_protocol_approval"
+
+    def failing_enqueue(*args: object, **kwargs: object) -> int:
+        assert kwargs.get("session") is not None
+        raise RuntimeError("synthetic approval queue failure")
+
+    monkeypatch.setattr(app_module, "enqueue_job", failing_enqueue)
+    with pytest.raises(RuntimeError, match="synthetic approval queue failure"):
+        client.post(f"/runs/{run_id}/protocol/approve", json={})
+
+    with db_session() as session:
+        run = session.get(Run, run_id)
+        assert run is not None
+        assert run.status == "awaiting_protocol_approval"
+
+
 @pytest.mark.parametrize(
     ("edit_field", "edited_criteria"),
     [
@@ -1488,6 +1621,241 @@ def test_unavailable_web_search_fails_before_run_or_capacity_charge(
     get_settings.cache_clear()
 
 
+def test_unavailable_pubmed_fails_before_run_or_capacity_charge(
+    corpus: DuckDBCorpus, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SIX_PUBMED_ENABLED", "0")
+    monkeypatch.setenv("SIX_PUBMED_EMAIL", "")
+    get_settings.cache_clear()
+    client = _authed(create_app(), email="pubmed-gate@lab.org", org="PubMed Gate")
+    project = client.post("/projects", json={"name": "pubmed gate"}).json()
+    org_id = client.get("/auth/me").json()["org_id"]
+    from sixsentences_server.core.db import CreditEventRow
+
+    with db_session() as session:
+        runs_before = session.scalar(select(func.count(Run.id)).where(Run.org_id == org_id))
+        charges_before = session.scalar(
+            select(func.count(CreditEventRow.id)).where(CreditEventRow.org_id == org_id)
+        )
+    response = client.post(
+        f"/projects/{project['id']}/runs",
+        json={"question": "screening interventions", "pubmed": True},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "pubmed_unavailable"
+    assert (
+        client.post("/usage/estimate", json={"mode": "search", "pubmed": True}).status_code == 409
+    )
+    with db_session() as session:
+        assert session.scalar(select(func.count(Run.id)).where(Run.org_id == org_id)) == runs_before
+        assert (
+            session.scalar(
+                select(func.count(CreditEventRow.id)).where(CreditEventRow.org_id == org_id)
+            )
+            == charges_before
+        )
+    get_settings.cache_clear()
+
+
+def test_quick_answer_rejects_pubmed_consistently_with_usage_estimate(
+    corpus: DuckDBCorpus,
+) -> None:
+    client = _authed(create_app(), email="pubmed-ask@lab.org", org="PubMed Ask")
+
+    created = client.post(
+        "/runs",
+        json={"mode": "ask", "question": "Summarize the evidence", "pubmed": True},
+    )
+    estimated = client.post(
+        "/usage/estimate",
+        json={"mode": "ask", "pubmed": True},
+    )
+
+    assert created.status_code == 422
+    assert estimated.status_code == 422
+    assert "only available for search runs" in created.text
+    assert "only available for search runs" in estimated.text
+
+
+def test_pubmed_resume_paths_fail_closed_when_runtime_is_disabled(
+    corpus: DuckDBCorpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A requested database arm cannot disappear from a resumed review."""
+    monkeypatch.setenv("SIX_PUBMED_ENABLED", "0")
+    monkeypatch.setenv("SIX_PUBMED_EMAIL", "")
+    get_settings.cache_clear()
+    client = _authed(create_app(), email="pubmed-resume@lab.org", org="PubMed Resume")
+    org_id = client.get("/auth/me").json()["org_id"]
+    protocol = ReviewProtocol(question="pubmed", query_string="pubmed")
+    with db_session() as session:
+        paused = Run(
+            org_id=org_id,
+            question="paused PubMed review",
+            status="paused",
+            config={"mode": "search", "pubmed": True},
+        )
+        gated = Run(
+            org_id=org_id,
+            question="gated PubMed review",
+            status="awaiting_protocol_approval",
+            config={"mode": "search", "pubmed": True},
+        )
+        session.add_all([paused, gated])
+        session.flush()
+        protocol_row = ProtocolRow(
+            org_id=org_id,
+            project_id=None,
+            payload=protocol.model_dump(mode="json"),
+            version=1,
+        )
+        session.add(protocol_row)
+        session.flush()
+        gated.protocol_id = protocol_row.id
+        paused_public_id = paused.public_id
+        gated_public_id = gated.public_id
+
+    paused_response = client.post(f"/runs/{paused_public_id}/resume")
+    gated_response = client.post(f"/runs/{gated_public_id}/protocol/approve", json={})
+
+    assert paused_response.status_code == 409
+    assert paused_response.json()["detail"]["code"] == "pubmed_unavailable"
+    assert gated_response.status_code == 409
+    assert gated_response.json()["detail"]["code"] == "pubmed_unavailable"
+    with db_session() as session:
+        paused = session.scalar(select(Run).where(Run.public_id == paused_public_id))
+        gated = session.scalar(select(Run).where(Run.public_id == gated_public_id))
+        assert paused is not None and paused.status == "paused"
+        assert gated is not None and gated.status == "awaiting_protocol_approval"
+    get_settings.cache_clear()
+
+
+def test_queued_pubmed_run_fails_closed_if_runtime_is_disabled_before_execution(
+    corpus: DuckDBCorpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A deployment change cannot silently mutate an accepted review."""
+    import sixsentences_server.api.app as app_module
+
+    monkeypatch.setenv("SIX_PUBMED_ENABLED", "0")
+    monkeypatch.setenv("SIX_PUBMED_EMAIL", "")
+    get_settings.cache_clear()
+    client = _authed(create_app(), email="pubmed-worker@lab.org", org="PubMed Worker")
+    org_id = client.get("/auth/me").json()["org_id"]
+    with db_session() as session:
+        run = Run(
+            org_id=org_id,
+            question="queued PubMed review",
+            status="pending",
+            config={"mode": "search", "pubmed": True},
+        )
+        session.add(run)
+        session.flush()
+        run_id = run.id
+
+    app_module._execute(
+        run_id,
+        query=None,
+        live=False,
+        pubmed=True,
+        screen=False,
+        paper_limit=0,
+        screen_limit=0,
+        exhaustive=True,
+    )
+
+    with db_session() as session:
+        run = session.get(Run, run_id)
+        assert run is not None
+        assert run.status == "failed"
+        assert run.config["pubmed"] is True
+        assert run.error is not None and "became unavailable" in run.error
+        blocked = session.scalars(
+            select(RunEvent).where(
+                RunEvent.run_id == run_id,
+                RunEvent.event == "pubmed_search_blocked",
+            )
+        ).all()
+        assert len(blocked) == 1
+    get_settings.cache_clear()
+
+
+def test_pubmed_resume_workers_return_to_resumable_state_if_flag_turns_off(
+    corpus: DuckDBCorpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A deployment race blocks egress without terminally failing a checkpoint."""
+    import sixsentences_server.api.app as app_module
+
+    monkeypatch.setenv("SIX_PUBMED_ENABLED", "0")
+    monkeypatch.setenv("SIX_PUBMED_EMAIL", "")
+    get_settings.cache_clear()
+    client = _authed(
+        create_app(),
+        email="pubmed-worker-resume@lab.org",
+        org="PubMed Worker Resume",
+    )
+    org_id = client.get("/auth/me").json()["org_id"]
+    protocol = ReviewProtocol(question="pubmed", query_string="pubmed")
+    with db_session() as session:
+        protocol_row = ProtocolRow(
+            org_id=org_id,
+            project_id=None,
+            payload=protocol.model_dump(mode="json"),
+            version=1,
+        )
+        session.add(protocol_row)
+        session.flush()
+        gated = Run(
+            org_id=org_id,
+            question="gated PubMed review",
+            status="running",
+            protocol_id=protocol_row.id,
+            config={"mode": "search", "pubmed": True},
+        )
+        paused = Run(
+            org_id=org_id,
+            question="paused PubMed review",
+            status="paused",
+            protocol_id=protocol_row.id,
+            config={"mode": "search", "pubmed": True},
+        )
+        session.add_all([gated, paused])
+        session.flush()
+        gated_id = gated.id
+        paused_id = paused.id
+
+    def forbidden_pipeline(*args: object, **kwargs: object) -> None:
+        pytest.fail("the disabled PubMed resume reached the research pipeline")
+
+    monkeypatch.setattr(app_module, "resume_run", forbidden_pipeline)
+    monkeypatch.setattr(app_module, "execute_run", forbidden_pipeline)
+    app_module._resume(gated_id, protocol.model_dump(mode="json"), {"pubmed": True})
+    app_module._resume_paused(paused_id)
+
+    with db_session() as session:
+        gated = session.get(Run, gated_id)
+        paused = session.get(Run, paused_id)
+        assert gated is not None and gated.status == "awaiting_protocol_approval"
+        assert paused is not None and paused.status == "paused"
+        assert gated.error is None and gated.finished_at is None
+        assert paused.error is None and paused.finished_at is None
+        blocked = session.scalars(
+            select(RunEvent).where(
+                RunEvent.run_id.in_([gated_id, paused_id]),
+                RunEvent.event == "pubmed_resume_blocked",
+            )
+        ).all()
+        assert {
+            (event.run_id, event.payload["resume_status"], event.payload["resumable"])
+            for event in blocked
+        } == {
+            (gated_id, "awaiting_protocol_approval", True),
+            (paused_id, "paused", True),
+        }
+    get_settings.cache_clear()
+
+
 def test_web_search_requires_explicit_public_data_confirmation_before_charge(
     corpus: DuckDBCorpus, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1715,6 +2083,18 @@ def test_living_refresh_does_not_inherit_web_search_confirmation(
         )
         session.add(baseline)
         session.flush()
+        protocol = ProtocolRow(
+            org_id=org_id,
+            project_id=None,
+            version=1,
+            payload=ReviewProtocol(
+                question=baseline.question,
+                query_string="living review",
+            ).model_dump(mode="json"),
+        )
+        session.add(protocol)
+        session.flush()
+        baseline.protocol_id = protocol.id
         baseline_public_id = baseline.public_id
     scheduled: list[tuple[object, ...]] = []
 

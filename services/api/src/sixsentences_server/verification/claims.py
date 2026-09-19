@@ -1,6 +1,6 @@
 """Decompose an answer into atomic claims and verify each against its evidence.
 
-A generated answer cites sources by id (e.g. ``[W123]``). Each sentence that
+A generated answer cites sources by id (e.g. ``[W123]`` or ``[pubmed:123]``). Each sentence that
 carries a citation is an evidence-backed claim; it is checked for entailment
 against the cited sources' text. Sentences without a citation are framing, not
 claims, and are skipped. The report says how many cited claims are actually
@@ -23,7 +23,7 @@ from sixsentences_server.verification.nli import (
 _SENTENCE = re.compile(r"[^.!?]+(?:[.!?]+(?:\s*CITATIONTOKEN\d+END)*|$)")
 _CLAIM_BLOCK = re.compile(r"\n[ \t]*\n|\n(?=[ \t]*(?:[-*+][ \t]+|\d+[.)][ \t]+))")
 _URL_TOKEN = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
-_ID_PATTERN = re.compile(r"W\d+")
+_ID_PATTERN = re.compile(r"(?:W\d+|pubmed:[1-9]\d{0,11})", re.IGNORECASE)
 _CITATION_TOKEN = re.compile(r"\[([^\[\]]+)\]")
 _MIN_CLAIM = 20  # ignore trivially short fragments
 _SYSTEM_ACTION_CLAIM = re.compile(
@@ -129,7 +129,8 @@ def verify_answer(
         if _SYSTEM_ACTION_CLAIM.search(claim):
             continue
         # Paper citations and opened web pages use the same bracket contract:
-        # ``[W123]`` for corpus works and ``[docs.example.org]`` for web
+        # ``[W123]``/``[pubmed:123]`` for scholarly works and
+        # ``[docs.example.org]`` for web
         # evidence. Only exact keys from the supplied evidence map enter the
         # verifier, so arbitrary bracket text can never masquerade as a source.
         tokens = [match.strip() for match in _CITATION_TOKEN.findall(claim)]

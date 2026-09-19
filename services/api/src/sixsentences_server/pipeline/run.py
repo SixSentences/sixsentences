@@ -39,6 +39,11 @@ from sixsentences_server.connectors.openalex import (
     OpenAlexError,
     OpenAlexSearchPage,
 )
+from sixsentences_server.connectors.pubmed import (
+    PubMedClient,
+    PubMedError,
+    PubMedRequestRateGate,
+)
 from sixsentences_server.connectors.retractions import load_retracted_dois
 from sixsentences_server.connectors.webharvest import harvest_works
 from sixsentences_server.connectors.websearch import (
@@ -78,14 +83,11 @@ from sixsentences_server.core.models import (
     WorkRecord,
 )
 from sixsentences_server.core.protocol import synthesize_protocol
+from sixsentences_server.core.ratelimit import DatabaseRateLimiter, RateLimiterUnavailable
 from sixsentences_server.core.state import set_status
 from sixsentences_server.corpus.duckdb_store import DuckDBCorpus
 from sixsentences_server.coverage.estimator import CoverageReport, estimate_completeness
-from sixsentences_server.integrity.report import (
-    IntegrityReport,
-    Severity,
-    assess_corpus,
-)
+from sixsentences_server.integrity.report import IntegrityReport, Severity, assess_corpus
 from sixsentences_server.integrity.venue import is_non_peer_reviewed, load_venue_lists
 from sixsentences_server.llm.base import BudgetExceededError, LLMUsage
 from sixsentences_server.llm.pool import LLMPool
@@ -96,11 +98,7 @@ from sixsentences_server.pipeline.calibration import (
     calibrate_hit_count,
     check_canaries,
 )
-from sixsentences_server.pipeline.dedup import (
-    _normalize_title,
-    dedup_by_title,
-    merge_same_study,
-)
+from sixsentences_server.pipeline.dedup import _normalize_title, dedup_by_title, merge_same_study
 from sixsentences_server.pipeline.expansion import (
     MAX_ROUNDS,
     NOVELTY_THRESHOLD,
@@ -111,6 +109,7 @@ from sixsentences_server.pipeline.snowball import collect_snowball_candidates
 from sixsentences_server.querylang.compile_duckdb import compile_duckdb
 from sixsentences_server.querylang.compile_openalex import compile_openalex
 from sixsentences_server.querylang.parser import parse_query
+from sixsentences_server.querylang.translate import translations
 from sixsentences_server.ranking.scorer import (
     DEFAULT_WEIGHTS,
     RankedWork,
@@ -136,6 +135,35 @@ from sixsentences_server.screening.reviewer import screen_stub
 POSTGRES_WORK_UPSERT_BATCH_SIZE = 5_000
 SQLITE_WORK_UPSERT_BATCH_SIZE = 100
 POSTGRES_SOURCE_LOOKUP_BATCH_SIZE = 10_000
+PUBMED_SHARED_UNKEYED_WINDOW_SECONDS = 0.5  # at most two requests/s, below NCBI's 3/s
+PUBMED_SHARED_KEYED_WINDOW_SECONDS = 0.125  # at most eight requests/s, below NCBI's 10/s
+
+
+def _pubmed_request_rate_gate(
+    *,
+    api_key: str,
+    database_backed: bool,
+) -> PubMedRequestRateGate | None:
+    """Coordinate NCBI egress across every production research worker."""
+
+    if not database_backed:
+        return None
+    keyed = bool(api_key.strip())
+    window_seconds = (
+        PUBMED_SHARED_KEYED_WINDOW_SECONDS if keyed else PUBMED_SHARED_UNKEYED_WINDOW_SECONDS
+    )
+    limiter = DatabaseRateLimiter(
+        scope="pubmed-egress-keyed-v1" if keyed else "pubmed-egress-unkeyed-v1",
+        max_hits=1,
+        window_seconds=window_seconds,
+    )
+    return PubMedRequestRateGate(
+        limiter,
+        window_seconds=window_seconds,
+        unavailable_error=RateLimiterUnavailable,
+    )
+
+
 SQLITE_SOURCE_LOOKUP_BATCH_SIZE = 500
 
 
@@ -188,6 +216,60 @@ def _upsert_work_values(session: Session, values: list[dict[str, Any]]) -> None:
         raise ValueError(f"unsupported work-upsert dialect: {dialect}")
 
 
+def _has_payload_value(value: Any) -> bool:
+    """Return whether a provider payload value contains useful metadata."""
+
+    return value is not None and value != "" and value != [] and value != {}
+
+
+def _merge_work_payload(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+    """Enrich persisted metadata without erasing values held by another source."""
+
+    merged = dict(existing)
+    for field_name, incoming_value in incoming.items():
+        existing_value = merged.get(field_name)
+        if field_name == "is_retracted":
+            merged[field_name] = bool(existing_value) or bool(incoming_value)
+        elif field_name == "cited_by_count":
+            merged[field_name] = max(int(existing_value or 0), int(incoming_value or 0))
+        elif not _has_payload_value(existing_value) and _has_payload_value(incoming_value):
+            merged[field_name] = incoming_value
+    return merged
+
+
+def _enrich_persisted_works(
+    session: Session,
+    records: dict[str, WorkRecord],
+) -> None:
+    """Apply non-destructive provider enrichment to existing canonical rows."""
+
+    if not records:
+        return
+    dialect = session.get_bind().dialect.name
+    batch_size = (
+        SQLITE_SOURCE_LOOKUP_BATCH_SIZE
+        if dialect == "sqlite"
+        else POSTGRES_SOURCE_LOOKUP_BATCH_SIZE
+    )
+    ordered_ids = sorted(records)
+    for offset in range(0, len(ordered_ids), batch_size):
+        rows = session.scalars(
+            select(WorkRow).where(WorkRow.id.in_(ordered_ids[offset : offset + batch_size]))
+        ).all()
+        for row in rows:
+            record = records[row.id]
+            if not (row.doi or "").strip() and record.doi:
+                row.doi = record.doi
+            if not (row.title or "").strip() and record.title:
+                row.title = record.title
+            if row.year is None and record.year is not None:
+                row.year = record.year
+            incoming_payload = record.model_dump(mode="json")
+            merged_payload = _merge_work_payload(dict(row.payload or {}), incoming_payload)
+            if merged_payload != row.payload:
+                row.payload = merged_payload
+
+
 def _existing_source_keys(
     session: Session,
     *,
@@ -217,15 +299,44 @@ def _existing_source_keys(
     return existing
 
 
-def _persist_run_sources(
+def _existing_source_versions(
     session: Session,
-    run: Run,
-    records: list[WorkRecord],
     *,
-    source: str | None,
-    corpus_version: str,
+    run_id: int,
+    record_ids: set[str],
+) -> set[tuple[str, str, str | None]]:
+    """Read append-only provenance identities without exceeding an ``IN`` limit."""
+
+    if not record_ids:
+        return set()
+    dialect = session.get_bind().dialect.name
+    batch_size = (
+        SQLITE_SOURCE_LOOKUP_BATCH_SIZE
+        if dialect == "sqlite"
+        else POSTGRES_SOURCE_LOOKUP_BATCH_SIZE
+    )
+    ordered_ids = sorted(record_ids)
+    existing: set[tuple[str, str, str | None]] = set()
+    for offset in range(0, len(ordered_ids), batch_size):
+        rows = session.execute(
+            select(
+                SourceRecordRow.work_id,
+                SourceRecordRow.source,
+                SourceRecordRow.corpus_version,
+            ).where(
+                SourceRecordRow.run_id == run_id,
+                SourceRecordRow.work_id.in_(ordered_ids[offset : offset + batch_size]),
+            )
+        ).all()
+        existing.update((str(row[0]), str(row[1]), row[2]) for row in rows)
+    return existing
+
+
+def _persist_works(
+    session: Session,
+    records: list[WorkRecord],
 ) -> None:
-    """Persist canonical works before provenance under strict foreign keys."""
+    """Persist and non-destructively enrich canonical works."""
 
     unique_records = {record.id: record for record in records}
     if not unique_records:
@@ -259,9 +370,27 @@ def _persist_run_sources(
             if record.id not in existing_ids
         )
     session.flush()
+    _enrich_persisted_works(session, unique_records)
+    session.flush()
+
+
+def _persist_run_sources(
+    session: Session,
+    run: Run,
+    records: list[WorkRecord],
+    *,
+    source: str,
+    corpus_version: str,
+) -> None:
+    """Append one exact source/version provenance fact for each canonical work."""
+
+    unique_records = {record.id: record for record in records}
+    if not unique_records:
+        return
+    _persist_works(session, list(unique_records.values()))
 
     record_ids = set(unique_records)
-    existing_sources = _existing_source_keys(
+    existing_sources = _existing_source_versions(
         session,
         run_id=run.id,
         record_ids=record_ids,
@@ -271,11 +400,11 @@ def _persist_run_sources(
             org_id=run.org_id,
             run_id=run.id,
             work_id=record_id,
-            source=source or unique_records[record_id].source,
+            source=source,
             corpus_version=corpus_version,
         )
         for record_id in record_ids
-        if (record_id, source or unique_records[record_id].source) not in existing_sources
+        if (record_id, source, corpus_version) not in existing_sources
     )
     session.flush()
 
@@ -534,6 +663,7 @@ SNOWBALL_ROUNDS = 1
 SNOWBALL_FORWARD_CAP = 200  # citing works fetched per round (top-cited first)
 SEMANTIC_SWEEP_CAP = 100  # meaning-ranked candidates per run (honestly capped)
 LIVE_RESULT_HARD_CAP = 5_000
+PUBMED_RESULT_HARD_CAP = 1_000
 LIVE_MIN_PAGES = 3
 LIVE_SATURATION_STREAK = 2
 LIVE_NOVELTY_THRESHOLD = 0.05
@@ -541,6 +671,175 @@ LIVE_RELEVANCE_SHARE_THRESHOLD = 0.05
 RELAXED_SWEEP_MIN_CORPUS_WORKS = 100_000
 RELAXED_SWEEP_PER_QUERY_CAP = 500
 RELAXED_SWEEP_TOTAL_NEW_CAP = 5_000
+
+
+def _merge_provider_record(existing: WorkRecord, incoming: WorkRecord) -> WorkRecord:
+    """Enrich one canonical work without replacing stronger source metadata."""
+
+    updates: dict[str, Any] = {}
+    for field_name in (
+        "doi",
+        "abstract",
+        "year",
+        "venue",
+        "work_type",
+        "pmid",
+        "pmcid",
+        "publication_date",
+        "volume",
+        "issue",
+        "pages",
+        "publisher",
+        "language",
+        "issn",
+    ):
+        if not getattr(existing, field_name) and getattr(incoming, field_name):
+            updates[field_name] = getattr(incoming, field_name)
+    if not existing.authors and incoming.authors:
+        updates["authors"] = incoming.authors
+    if incoming.cited_by_count > existing.cited_by_count:
+        updates["cited_by_count"] = incoming.cited_by_count
+    if incoming.is_retracted and not existing.is_retracted:
+        updates["is_retracted"] = True
+    return existing.model_copy(update=updates) if updates else existing
+
+
+def _canonical_work_id_map(
+    before_dedup: list[WorkRecord],
+    title_deduped: list[WorkRecord],
+    final_works: list[WorkRecord],
+    companion_pairs: list[tuple[WorkRecord, WorkRecord]],
+) -> dict[str, str]:
+    """Map every pre-dedup record id onto the final screening-set id."""
+
+    final_ids = {work.id for work in final_works}
+    companion_aliases = {dropped.id: kept.id for dropped, kept in companion_pairs}
+    final_by_doi = {
+        work.doi.strip().casefold(): work.id
+        for work in final_works
+        if work.doi and work.doi.strip()
+    }
+    final_by_pmid = {
+        work.pmid.strip(): work.id for work in final_works if work.pmid and work.pmid.strip()
+    }
+
+    def final_id_for(work: WorkRecord) -> str | None:
+        if work.id in final_ids:
+            return work.id
+        companion_id = companion_aliases.get(work.id)
+        if companion_id in final_ids:
+            return companion_id
+        doi = (work.doi or "").strip().casefold()
+        if doi and doi in final_by_doi:
+            return final_by_doi[doi]
+        pmid = (work.pmid or "").strip()
+        if pmid and pmid in final_by_pmid:
+            return final_by_pmid[pmid]
+        return None
+
+    intermediate_by_title = {
+        _normalize_title(work.title): work
+        for work in title_deduped
+        if len(_normalize_title(work.title)) >= 15
+    }
+    result: dict[str, str] = {}
+    for work in before_dedup:
+        final_id = final_id_for(work)
+        if final_id is None:
+            intermediate = intermediate_by_title.get(_normalize_title(work.title))
+            if intermediate is not None:
+                final_id = final_id_for(intermediate)
+        if final_id is not None:
+            result[work.id] = final_id
+    return result
+
+
+def _reconcile_run_source_records(
+    session: Session,
+    *,
+    run_id: int,
+    canonical_ids: dict[str, str],
+) -> None:
+    """Move already-persisted provenance from removed aliases to final works."""
+
+    rows = session.scalars(
+        select(SourceRecordRow).where(SourceRecordRow.run_id == run_id).order_by(SourceRecordRow.id)
+    ).all()
+    seen: dict[tuple[str, str, str | None], SourceRecordRow] = {}
+    for row in rows:
+        row.work_id = canonical_ids.get(row.work_id, row.work_id)
+        key = (row.work_id, row.source, row.corpus_version)
+        if key in seen:
+            session.delete(row)
+        else:
+            seen[key] = row
+    session.flush()
+
+
+def _merge_pubmed_records(
+    unique: dict[str, WorkRecord],
+    records: list[WorkRecord],
+    seen_dois: set[str],
+) -> tuple[int, list[WorkRecord]]:
+    """Merge PubMed results by DOI, PMID/provider id, then exact title and year.
+
+    The conservative title fallback is deliberately unavailable when either
+    year is unknown. That protects distinct papers with generic shared titles
+    while still folding provider mirrors that lack a cross-database id.
+    Returned records are the canonical works touched by this provider arm and
+    are used to persist per-source provenance.
+    """
+
+    doi_to_id = {
+        work.doi.strip().casefold(): work_id
+        for work_id, work in unique.items()
+        if work.doi and work.doi.strip()
+    }
+    pmid_to_id = {
+        work.pmid.strip(): work_id
+        for work_id, work in unique.items()
+        if work.pmid and work.pmid.strip()
+    }
+    title_year_to_id = {
+        (_normalize_title(work.title), work.year): work_id
+        for work_id, work in unique.items()
+        if work.year is not None and len(_normalize_title(work.title)) >= 15
+    }
+    touched: list[WorkRecord] = []
+    added = 0
+    for record in records:
+        doi = (record.doi or "").strip().casefold()
+        pmid = (record.pmid or "").strip()
+        title_key = _normalize_title(record.title)
+        existing_id = record.id if record.id in unique else None
+        if existing_id is None and doi:
+            existing_id = doi_to_id.get(doi)
+        if existing_id is None and pmid:
+            existing_id = pmid_to_id.get(pmid)
+        if existing_id is None and record.year is not None and len(title_key) >= 15:
+            existing_id = title_year_to_id.get((title_key, record.year))
+
+        if existing_id is not None:
+            canonical = _merge_provider_record(unique[existing_id], record)
+            unique[existing_id] = canonical
+        else:
+            canonical = record
+            existing_id = record.id
+            unique[existing_id] = record
+            added += 1
+
+        canonical_doi = (canonical.doi or "").strip().casefold()
+        if canonical_doi:
+            seen_dois.add(canonical_doi)
+            doi_to_id[canonical_doi] = existing_id
+        if canonical.pmid:
+            pmid_to_id[canonical.pmid.strip()] = existing_id
+        if canonical.year is not None:
+            normalized_title = _normalize_title(canonical.title)
+            if len(normalized_title) >= 15:
+                title_year_to_id[(normalized_title, canonical.year)] = existing_id
+        touched.append(canonical)
+    return added, touched
 
 
 def execute_run(
@@ -557,6 +856,9 @@ def execute_run(
     exhaustive: bool = True,
     retrieval_limit: int = 100_000,
     live_limit: int = LIVE_RESULT_HARD_CAP,
+    pubmed: bool = False,
+    pubmed_limit: int = PUBMED_RESULT_HARD_CAP,
+    pubmed_client: PubMedClient | None = None,
     year_from: int | None = None,  # publication-year window (overrides the protocol)
     year_to: int | None = None,
     peer_reviewed_only: bool = False,  # exclude preprints + non-article types
@@ -572,10 +874,12 @@ def execute_run(
     canary_ids: list[str] | None = None,  # known must-hit works to validate recall
     gate_protocol: bool = False,  # stop after synthesis for human approval
     approved_protocol: ReviewProtocol | None = None,  # resume past the gate
+    approved_protocol_source: str = "human",
     acquire: bool = False,  # seek OA full text for retained works (H1)
     acquirer: Acquirer | None = None,  # injected in tests; default = OA service
     full_text_screen: bool = False,  # second-pass eligibility on acquired full text
     document_store: DocumentStore | None = None,  # injected in tests; default = local store
+    resume_from_checkpoint: bool = False,
 ) -> RunResult:
     settings = get_settings()
     recorder = RunRecorder(session, run.org_id, run.id)
@@ -592,7 +896,7 @@ def execute_run(
         recorder.emit(
             StageName.PROTOCOL_SYNTHESIS,
             "protocol_approved",
-            {"query": protocol.query_string, "reviewer": "human"},
+            {"query": protocol.query_string, "reviewer": approved_protocol_source},
         )
     else:
         protocol = synthesize_protocol(run.question, pool)
@@ -633,10 +937,11 @@ def execute_run(
                 prisma=PrismaCounts(),
             )
 
-    # Stage 1: base query compilation (both targets, verbatim for PRISMA-S)
+    # Stage 1: base query compilation (all native targets, verbatim for PRISMA-S)
     base_ast = parse_query(protocol.query_string)
     duckdb_sql, duckdb_params = compile_duckdb(base_ast)
     openalex_query, oa_notes = compile_openalex(base_ast)
+    pubmed_query = translations(base_ast)["pubmed"]
     recorder.emit(
         StageName.QUERY_COMPILATION,
         "queries_compiled",
@@ -645,6 +950,7 @@ def execute_run(
             "target_corpus_sql": duckdb_sql,
             "target_corpus_params": duckdb_params,
             "target_openalex": openalex_query,
+            "target_pubmed": pubmed_query,
             "openalex_degradations": {
                 "dropped_wildcards": oa_notes.dropped_wildcards,
                 "dropped_fields": oa_notes.dropped_fields,
@@ -658,17 +964,102 @@ def execute_run(
 
     unique: dict[str, WorkRecord] = {}
     seen_dois: set[str] = set()
-    identified = 0
+    work_id_by_doi: dict[str, str] = {}
+    provenance_work_ids: dict[tuple[str, str], set[str]] = {}
+    prior_prisma = dict(run.prisma or {}) if resume_from_checkpoint else {}
+    identified = int(prior_prisma.get("records_identified") or 0)
     executions: list[SearchExecution] = []
     queries_executed: list[str] = []
+    if resume_from_checkpoint:
+        persisted_rows = (
+            session.scalars(
+                select(WorkRow)
+                .join(SourceRecordRow, SourceRecordRow.work_id == WorkRow.id)
+                .where(
+                    SourceRecordRow.run_id == run.id,
+                    SourceRecordRow.org_id == run.org_id,
+                )
+            )
+            .unique()
+            .all()
+        )
+        for row in persisted_rows:
+            record = WorkRecord.model_validate(row.payload)
+            unique[record.id] = record
+            if record.doi:
+                normalized_doi = record.doi.casefold()
+                seen_dois.add(normalized_doi)
+                work_id_by_doi[normalized_doi] = record.id
+        identified = max(identified, len(unique))
+        previous_searches = session.scalar(
+            select(RunEvent)
+            .where(
+                RunEvent.run_id == run.id,
+                RunEvent.org_id == run.org_id,
+                RunEvent.event == "search_executions",
+            )
+            .order_by(RunEvent.id.desc())
+            .limit(1)
+        )
+        if previous_searches is not None:
+            executions.extend(
+                SearchExecution.model_validate(item)
+                for item in (previous_searches.payload or {}).get("executions", [])
+            )
+            queries_executed.extend(
+                execution.query_verbatim
+                for execution in executions
+                if execution.source in {"sixsentences-corpus", "sixsentences-corpus/expansion"}
+            )
+    prior_query_count = len(queries_executed)
     # per-work capture frequency across corpus queries -> capture-recapture
     capture_counts: dict[str, int] = {}
     live_search_truncated = False
     live_search_stop_reason = "not_requested"
     live_search_returned = 0
+    pubmed_search_failed = False
+    pubmed_search_returned = 0
+    pubmed_provider_total = 0
+    pubmed_search_at_cap = False
     control_signal = ""
 
     year_note = _year_note(protocol.year_from, protocol.year_to)
+
+    def remember_provenance(
+        work_id: str,
+        *,
+        source: str,
+        source_version: str,
+    ) -> None:
+        provenance_work_ids.setdefault((source, source_version), set()).add(work_id)
+
+    def merge_source_record(
+        record: WorkRecord,
+        *,
+        source: str,
+        source_version: str,
+    ) -> bool:
+        """Merge one hit and retain the discovery arm even when DOI-deduplicated."""
+
+        doi = (record.doi or "").casefold()
+        canonical_id = record.id if record.id in unique else work_id_by_doi.get(doi)
+        if canonical_id is not None:
+            remember_provenance(
+                canonical_id,
+                source=source,
+                source_version=source_version,
+            )
+            return False
+        unique[record.id] = record
+        if doi:
+            seen_dois.add(doi)
+            work_id_by_doi[doi] = record.id
+        remember_provenance(
+            record.id,
+            source=source,
+            source_version=source_version,
+        )
+        return True
 
     def run_query(query_string: str, source_label: str) -> int:
         """Execute one query against the corpus; return count of NEW works."""
@@ -696,13 +1087,12 @@ def execute_run(
         new = 0
         for record in hits:
             capture_counts[record.id] = capture_counts.get(record.id, 0) + 1
-            doi = (record.doi or "").lower()
-            if record.id in unique or (doi and doi in seen_dois):
-                continue
-            unique[record.id] = record
-            if doi:
-                seen_dois.add(doi)
-            new += 1
+            if merge_source_record(
+                record,
+                source=source_label,
+                source_version=corpus_version.version,
+            ):
+                new += 1
         return new
 
     base_new = run_query(protocol.query_string, "sixsentences-corpus")
@@ -762,8 +1152,10 @@ def execute_run(
     # tokens. Small corpora do not need this extra scan.
     relaxed_returned = 0
     relaxed_new = 0
+    relaxed_occasions = 0
     if exhaustive and corpus_version.works >= RELAXED_SWEEP_MIN_CORPUS_WORKS:
-        for query_string in list(queries_executed):
+        current_queries = list(queries_executed[prior_query_count:])
+        for query_string in current_queries:
             control_signal = control.poll(run.id, org_id=run.org_id)
             if control_signal or relaxed_new >= RELAXED_SWEEP_TOTAL_NEW_CAP:
                 break
@@ -773,6 +1165,7 @@ def execute_run(
                 year_from=protocol.year_from,
                 year_to=protocol.year_to,
             )
+            relaxed_occasions += 1
             relaxed_returned += len(hits)
             identified += len(hits)
             executions.append(
@@ -791,20 +1184,19 @@ def execute_run(
             )
             for record in hits:
                 capture_counts[record.id] = capture_counts.get(record.id, 0) + 1
-                doi = (record.doi or "").lower()
-                if record.id in unique or (doi and doi in seen_dois):
-                    continue
-                unique[record.id] = record
-                if doi:
-                    seen_dois.add(doi)
-                relaxed_new += 1
+                if merge_source_record(
+                    record,
+                    source="sixsentences-corpus/lexical-relaxation",
+                    source_version=corpus_version.version,
+                ):
+                    relaxed_new += 1
                 if relaxed_new >= RELAXED_SWEEP_TOTAL_NEW_CAP:
                     break
         recorder.emit(
             StageName.RETRIEVAL,
             "lexical_relaxation_done",
             {
-                "queries": len(queries_executed),
+                "queries": relaxed_occasions,
                 "records_returned": relaxed_returned,
                 "new_unique": relaxed_new,
                 "new_unique_cap": RELAXED_SWEEP_TOTAL_NEW_CAP,
@@ -823,8 +1215,20 @@ def execute_run(
     )
 
     # capture-recapture: honest completeness estimate of the search strategy
-    coverage = estimate_completeness(capture_counts, len(queries_executed))
-    recorder.emit(StageName.RETRIEVAL, "coverage_estimated", coverage.model_dump())
+    base_query_count = len(queries_executed) - prior_query_count
+    coverage_query_count = base_query_count + relaxed_occasions
+    coverage = estimate_completeness(capture_counts, coverage_query_count)
+    recorder.emit(
+        StageName.RETRIEVAL,
+        "coverage_estimated",
+        {
+            **coverage.model_dump(),
+            "scope": "resume_attempt" if prior_query_count else "complete_run",
+            "prior_queries_excluded": prior_query_count,
+            "base_query_occasions": base_query_count,
+            "lexical_relaxation_occasions": relaxed_occasions,
+        },
+    )
 
     # optional live freshness layer
     if live:
@@ -858,13 +1262,12 @@ def execute_run(
                 page_new = 0
                 relevance_scores = [protocol_relevance(record, protocol) for record in page.records]
                 for record in page.records:
-                    doi = (record.doi or "").lower()
-                    if record.id in unique or (doi and doi in seen_dois):
-                        continue
-                    unique[record.id] = record
-                    if doi:
-                        seen_dois.add(doi)
-                    page_new += 1
+                    if merge_source_record(
+                        record,
+                        source="openalex-live",
+                        source_version="api.openalex.org",
+                    ):
+                        page_new += 1
 
                 page_returned = len(page.records)
                 live_search_returned += page_returned
@@ -980,6 +1383,148 @@ def execute_run(
                     },
                 )
 
+    # Optional native PubMed arm. It uses the same frozen Boolean AST and
+    # feeds every normalized record into the ordinary dedup, integrity,
+    # ranking and screening stages. Provider failure is explicit and does not
+    # masquerade as a successful zero-result search.
+    if pubmed and not control_signal:
+        pubmed_effective_query = PubMedClient.effective_query(
+            pubmed_query,
+            year_from=protocol.year_from,
+            year_to=protocol.year_to,
+        )
+        owns_pubmed_client = pubmed_client is None
+        pubmed_search_client = pubmed_client or PubMedClient(
+            email=settings.pubmed_email,
+            api_key=settings.pubmed_api_key,
+            request_rate_gate=_pubmed_request_rate_gate(
+                api_key=settings.pubmed_api_key,
+                database_backed=settings.rate_limit_backend == "database",
+            ),
+        )
+        pubmed_control_recorded = False
+        try:
+            control_signal = control.poll(run.id, org_id=run.org_id)
+            if control_signal:
+                recorder.emit(
+                    StageName.RETRIEVAL,
+                    "run_control",
+                    {
+                        "signal": control_signal,
+                        "checkpoint": "before_pubmed_search",
+                        "records_returned": 0,
+                    },
+                )
+                pubmed_control_recorded = True
+            else:
+                pubmed_result = pubmed_search_client.search_with_metadata(
+                    pubmed_query,
+                    limit=pubmed_limit,
+                    year_from=protocol.year_from,
+                    year_to=protocol.year_to,
+                )
+                pubmed_records = pubmed_result.records
+                pubmed_search_returned = len(pubmed_records)
+                pubmed_provider_total = pubmed_result.provider_total
+                identified += pubmed_search_returned
+                pubmed_search_at_cap = pubmed_result.truncated
+                pubmed_new_unique, pubmed_canonical_records = _merge_pubmed_records(
+                    unique,
+                    pubmed_records,
+                    seen_dois,
+                )
+                for record in pubmed_canonical_records:
+                    canonical_doi = (record.doi or "").casefold()
+                    if canonical_doi:
+                        work_id_by_doi[canonical_doi] = record.id
+                    remember_provenance(
+                        record.id,
+                        source="pubmed-live",
+                        source_version="eutils.ncbi.nlm.nih.gov",
+                    )
+                executions.append(
+                    SearchExecution(
+                        source="pubmed-live",
+                        platform="NCBI PubMed E-utilities",
+                        query_verbatim=pubmed_effective_query,
+                        limits=[f"result cap {pubmed_limit}"] + ([year_note] if year_note else []),
+                        records_returned=pubmed_search_returned,
+                        deduplication_method=(
+                            "doi+pmid+provider_id exact match; exact normalized title+year fallback"
+                        ),
+                    )
+                )
+                recorder.emit(
+                    StageName.RETRIEVAL,
+                    "pubmed_search_done",
+                    {
+                        "records_returned": pubmed_search_returned,
+                        "provider_total": pubmed_provider_total,
+                        "new_unique": pubmed_new_unique,
+                        "hard_cap": pubmed_limit,
+                        "at_cap": pubmed_search_at_cap,
+                        "query_verbatim": pubmed_effective_query,
+                        "note": (
+                            "PubMed candidates enter the same deduplication, "
+                            "integrity, ranking and screening path as corpus records."
+                        ),
+                    },
+                )
+        except PubMedError as exc:
+            pubmed_search_failed = True
+            permanent_rejection = (
+                exc.status_code is not None
+                and 400 <= exc.status_code < 500
+                and exc.status_code not in {408, 429}
+            )
+            failure_reason = (
+                "provider_request_rejected"
+                if permanent_rejection
+                else "provider_temporarily_unavailable"
+            )
+            executions.append(
+                SearchExecution(
+                    source="pubmed-live",
+                    platform="NCBI PubMed E-utilities",
+                    query_verbatim=pubmed_effective_query,
+                    limits=[f"result cap {pubmed_limit}"] + ([year_note] if year_note else []),
+                    records_returned=0,
+                    deduplication_method=(
+                        "doi+pmid+provider_id exact match; exact normalized title+year fallback"
+                    ),
+                    status="failed",
+                    failure_reason=failure_reason,
+                )
+            )
+            recorder.emit(
+                StageName.RETRIEVAL,
+                "pubmed_search_unavailable",
+                {
+                    "reason": failure_reason,
+                    "retryable": not permanent_rejection,
+                    "records_returned": 0,
+                    "fallback": "continuing with the available scholarly sources",
+                },
+            )
+        finally:
+            try:
+                latest_pubmed_signal = control.poll(run.id, org_id=run.org_id)
+                if latest_pubmed_signal:
+                    control_signal = latest_pubmed_signal
+                    if not pubmed_control_recorded:
+                        recorder.emit(
+                            StageName.RETRIEVAL,
+                            "run_control",
+                            {
+                                "signal": control_signal,
+                                "checkpoint": "after_pubmed_search",
+                                "records_returned": pubmed_search_returned,
+                            },
+                        )
+            finally:
+                if owns_pubmed_client:
+                    pubmed_search_client.close()
+
     # Stage 2a¼: semantic sweep — meaning-preserving paraphrases of the
     # RESEARCH QUESTION (LLM-proposed), each run as an OpenAlex relevance
     # search. Finds the synonym phrasings the boolean wording cannot reach;
@@ -1023,13 +1568,12 @@ def execute_run(
                 )
             )
             for record in hits:
-                doi = (record.doi or "").lower()
-                if record.id in unique or (doi and doi in seen_dois):
-                    continue
-                unique[record.id] = record
-                if doi:
-                    seen_dois.add(doi)
-                new_semantic += 1
+                if merge_source_record(
+                    record,
+                    source="semantic-sweep",
+                    source_version="api.openalex.org",
+                ):
+                    new_semantic += 1
         identified += semantic_returned
         recorder.emit(
             StageName.RETRIEVAL,
@@ -1052,13 +1596,12 @@ def execute_run(
     if imported:
         new_imported = 0
         for record in imported:
-            doi = (record.doi or "").lower()
-            if record.id in unique or (doi and doi in seen_dois):
-                continue
-            unique[record.id] = record
-            if doi:
-                seen_dois.add(doi)
-            new_imported += 1
+            if merge_source_record(
+                record,
+                source=record.source,
+                source_version="user-uploaded export",
+            ):
+                new_imported += 1
         identified += len(imported)
         for batch in imported_meta or []:
             executions.append(
@@ -1088,8 +1631,8 @@ def execute_run(
     # 2020 "identification via other methods" stream. What remains after the
     # harvest is genuine grey literature and stays a separate list.
     web_sources: list[WebSource] = []
-    other_identified = 0
-    citation_identified = 0
+    other_identified = int(prior_prisma.get("other_identified") or 0)
+    citation_identified = int(prior_prisma.get("citation_identified") or 0)
     if web_search and not control_signal:
         searcher = web_searcher
         if searcher is None and settings.websearch_enabled and pool is not None:
@@ -1126,15 +1669,14 @@ def execute_run(
                 harvest = harvest_works(found, oa_client)
                 new_from_web = 0
                 for record in harvest.works:
-                    doi = (record.doi or "").lower()
-                    if record.id in unique or (doi and doi in seen_dois):
-                        continue
-                    unique[record.id] = record
-                    if doi:
-                        seen_dois.add(doi)
-                    new_from_web += 1
+                    if merge_source_record(
+                        record,
+                        source="websearch-harvest",
+                        source_version="web-search + api.openalex.org",
+                    ):
+                        new_from_web += 1
                 identified += harvest.resolved
-                other_identified = harvest.resolved
+                other_identified += harvest.resolved
                 if harvest.resolved:
                     executions.append(
                         SearchExecution(
@@ -1202,8 +1744,15 @@ def execute_run(
     # same paper re-indexed under different ids (preprint/published/mirrors),
     # then fold companion REPORTS of the same study (PRISMA counts studies)
     id_unique = len(unique)
-    deduped, title_duplicates = dedup_by_title(list(unique.values()))
+    before_final_dedup = list(unique.values())
+    deduped, title_duplicates = dedup_by_title(before_final_dedup)
     merged_works, companion_pairs = merge_same_study(deduped)
+    canonical_ids = _canonical_work_id_map(
+        before_final_dedup,
+        deduped,
+        merged_works,
+        companion_pairs,
+    )
     unique = {work.id: work for work in merged_works}
     duplicates_removed = identified - len(unique)
     recorder.emit(
@@ -1236,15 +1785,24 @@ def execute_run(
         canary = check_canaries(set(unique), canary_ids)
         recorder.emit(StageName.QUERY_COMPILATION, "canary_check", canary.model_dump())
 
-    # Persist canonical parents before provenance. PostgreSQL enforces this
-    # immediately, and live retrieval can discover the same work concurrently.
-    _persist_run_sources(
+    # Persist canonical parents before provenance. Provenance itself is kept
+    # per retrieval arm and provider version; checkpoint-only records must not
+    # be relabelled as if the current snapshot returned them again.
+    _persist_works(session, list(unique.values()))
+    _reconcile_run_source_records(
         session,
-        run,
-        list(unique.values()),
-        source=None,
-        corpus_version=corpus_version.version,
+        run_id=run.id,
+        canonical_ids=canonical_ids,
     )
+    for (source_name, source_version), touched_ids in sorted(provenance_work_ids.items()):
+        final_ids = {canonical_ids[work_id] for work_id in touched_ids if work_id in canonical_ids}
+        _persist_run_sources(
+            session,
+            run,
+            [unique[work_id] for work_id in sorted(final_ids)],
+            source=source_name,
+            corpus_version=source_version,
+        )
 
     # Stage 3: integrity — retractions + zombie citations + tortured phrases
     retracted_dois = frozenset(load_retracted_dois(settings.data_dir))
@@ -1306,11 +1864,7 @@ def execute_run(
         recorder.emit(
             StageName.INTEGRITY,
             "peer_review_filter",
-            {
-                "excluded": len(dropped),
-                "excluded_ids": dropped[:50],
-                "kept": len(unique),
-            },
+            {"excluded": len(dropped), "excluded_ids": dropped[:50], "kept": len(unique)},
         )
 
     # Stage 4: ranking — decomposed multi-signal score (never a black box).
@@ -1584,6 +2138,10 @@ def execute_run(
                             "backward_refs": snowball_harvest.backward_refs,
                             "backward_resolved": snowball_harvest.backward_resolved,
                             "forward_returned": snowball_harvest.forward_returned,
+                            "forward_seeded": snowball_harvest.forward_seeded,
+                            "forward_skipped_unsupported": (
+                                snowball_harvest.forward_skipped_unsupported
+                            ),
                             "new_records": 0,
                             "live_forward": snowball_client is not None,
                             "note": "saturated — no unseen candidates",
@@ -1605,7 +2163,8 @@ def execute_run(
                         source=f"citation-snowball-round-{snowball_round}",
                         platform="pinned corpus + api.openalex.org",
                         query_verbatim=(
-                            f"references and citing works of {len(fresh)} included records"
+                            f"references of {len(fresh)} included records and citing works of "
+                            f"{snowball_harvest.forward_seeded} OpenAlex-addressable records"
                         ),
                         limits=[f"forward cap {SNOWBALL_FORWARD_CAP}"]
                         + ([year_note] if year_note else []),
@@ -1617,7 +2176,7 @@ def execute_run(
                     run,
                     snowball_harvest.records,
                     source="citation-snowball",
-                    corpus_version=corpus_version.version,
+                    corpus_version="pinned corpus + api.openalex.org",
                 )
                 # Re-rank the complete identified pool after every snowball
                 # harvest. A newly found paper can displace an earlier paper
@@ -1652,11 +2211,7 @@ def execute_run(
                     work = ranked_record.work
                     control_signal = control.poll(run.id, org_id=run.org_id)
                     if control_signal:
-                        recorder.emit(
-                            StageName.SNOWBALL,
-                            "run_control",
-                            {"signal": control_signal},
-                        )
+                        recorder.emit(StageName.SNOWBALL, "run_control", {"signal": control_signal})
                         break
                     if pool is None or not refs:
                         decision = screen_stub(work)
@@ -1755,6 +2310,10 @@ def execute_run(
                         "backward_refs": snowball_harvest.backward_refs,
                         "backward_resolved": snowball_harvest.backward_resolved,
                         "forward_returned": snowball_harvest.forward_returned,
+                        "forward_seeded": snowball_harvest.forward_seeded,
+                        "forward_skipped_unsupported": (
+                            snowball_harvest.forward_skipped_unsupported
+                        ),
                         "skipped_known": snowball_harvest.skipped_known,
                         "skipped_filters": snowball_harvest.skipped_filters,
                         "new_records": len(snowball_harvest.records),
@@ -1986,6 +2545,31 @@ def execute_run(
                     f"The live search retained {live_search_returned:,} records before "
                     f"the {live_limit:,}-record safety ceiling. "
                     "Additional matching records may exist outside this run."
+                ),
+            }
+        )
+    if pubmed_search_failed:
+        quality_warnings.append(
+            {
+                "code": "pubmed_provider_unavailable",
+                "severity": "warning",
+                "title": "PubMed retrieval was unavailable",
+                "detail": (
+                    "The review continued with the other configured scholarly sources. "
+                    "No failed PubMed request was recorded as an empty successful search."
+                ),
+            }
+        )
+    if pubmed_search_at_cap:
+        quality_warnings.append(
+            {
+                "code": "pubmed_results_at_cap",
+                "severity": "warning",
+                "title": "PubMed reached its configured result cap",
+                "detail": (
+                    f"PubMed reported {pubmed_provider_total:,} matching records; this "
+                    f"run retained {pubmed_search_returned:,} at the "
+                    f"{pubmed_limit:,}-record safety ceiling."
                 ),
             }
         )
@@ -2243,6 +2827,7 @@ def resume_run(
     approved_protocol: ReviewProtocol,
     pool: LLMPool | None = None,
     live: bool = False,
+    pubmed: bool = False,
     screen: bool = False,
     paper_limit: int = 0,
     screen_limit: int = 0,
@@ -2269,6 +2854,7 @@ def resume_run(
         corpus=corpus,
         pool=pool,
         live=live,
+        pubmed=pubmed,
         screen=screen,
         paper_limit=paper_limit,
         screen_limit=screen_limit,
