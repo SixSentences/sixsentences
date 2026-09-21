@@ -50,7 +50,7 @@ Changelog = "https://github.com/SixSentences/sixsentences/blob/main/CHANGELOG.md
 dev = [
     "mypy==2.3.1",
     "pytest==9.1.1",
-    "ruff==0.16.7",
+    "ruff==0.16.8",
 ]
 
 [build-system]
