@@ -33,7 +33,7 @@ from sixsentences.querylang.ast import to_display
 from sixsentences.querylang.compile_duckdb import compile_duckdb
 from sixsentences.querylang.compile_openalex import compile_openalex
 from sixsentences.querylang.parser import QueryParseError, parse_query
-from sixsentences.querylang.translate import translations
+from sixsentences.querylang.translate import translate
 from sixsentences.ranking.scorer import rank_works
 from sixsentences.reporting.prisma import render_flow_svg, render_flow_text
 
@@ -101,7 +101,7 @@ def _command_query(args: argparse.Namespace) -> None:
         sql, parameters = compile_duckdb(node)
         _emit(args, _json_text({"sql": sql, "parameters": parameters}))
     else:
-        _emit(args, translations(node)[args.target] + "\n")
+        _emit(args, translate(node, args.target) + "\n")
 
 
 def _command_corpus_build(args: argparse.Namespace) -> None:
@@ -255,7 +255,7 @@ def _parser() -> argparse.ArgumentParser:
     query.add_argument("query")
     query.add_argument(
         "--target",
-        choices=("display", "openalex", "duckdb", "pubmed", "scopus", "wos", "ieee"),
+        choices=("display", "openalex", "duckdb", "pubmed", "scopus", "wos", "ieee", "central"),
         default="display",
     )
     _add_output(query, "compiled query")
