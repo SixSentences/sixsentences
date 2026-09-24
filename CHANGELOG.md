@@ -26,6 +26,15 @@ equivalents for Python package metadata.
 - `sixsentences prisma --format svg --output PATH` now ends the file with a
   newline, like every other written result.
 
+### Fixed
+
+- Participant-facing screens now declare the language they are written in: the
+  participant information, the talk page, the voice and text interview screens,
+  and the terms re-acceptance and privacy-update notices carry `lang="de"` or
+  `lang="en"` from the study's or account's language. The document itself stays
+  `lang="en"`, so a German screen is no longer read aloud with English
+  pronunciation or offered for translation from English.
+
 ## [0.2.0-alpha.1] - 2026-09-14
 
 ### Added
