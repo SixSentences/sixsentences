@@ -256,11 +256,11 @@ export default function TalkPage() {
     return (
       <Frame>
         <Card>
-          <p className="text-[0.9375rem] font-medium text-pine">
+          <p lang="de" className="text-[0.9375rem] font-medium text-pine">
             Diese Einladung ist gerade nicht erreichbar.
           </p>
           <p className="mt-2 text-[0.8125rem] leading-relaxed text-muted-foreground">
-            Bitte prüfen Sie den Link oder versuchen Sie es später erneut. /
+            <span lang="de">Bitte prüfen Sie den Link oder versuchen Sie es später erneut.</span> /
             Please check the invitation link or try again later.
           </p>
         </Card>
@@ -289,7 +289,7 @@ export default function TalkPage() {
   }
 
   return (
-    <Frame>
+    <Frame lang={german ? "de" : "en"}>
       {step === "closed" && (
         <Card>
           <p className="text-[0.9375rem] font-medium text-pine">{info.title}</p>
@@ -585,7 +585,7 @@ export default function TalkPage() {
   );
 }
 
-function Frame({ children }: { children: React.ReactNode }) {
+function Frame({ children, lang }: { children: React.ReactNode; lang?: string }) {
   return (
     <div className="flex min-h-dvh flex-col items-center bg-ivory px-4 py-6 sm:px-5 sm:py-10">
       <div className="mb-6 flex w-full max-w-xl flex-wrap items-center justify-between gap-2 sm:mb-8">
@@ -596,7 +596,7 @@ function Frame({ children }: { children: React.ReactNode }) {
           <AudioLines className="size-3.5" /> AI interview · disclosed
         </span>
       </div>
-      <div className="flex w-full flex-1 flex-col items-center justify-center">
+      <div lang={lang} className="flex w-full flex-1 flex-col items-center justify-center">
         {children}
       </div>
       <PublicLegalFooter className="mt-6 w-full max-w-xl shrink-0" />

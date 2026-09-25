@@ -13,7 +13,7 @@ import { publicLegalUrl } from "@/lib/public-links";
 export function ParticipantNoticeContent({ notice }: { notice: ParticipantNotice }) {
   const de = notice.language === "de";
   return (
-    <section className="space-y-4 rounded-2xl border border-border bg-secondary/30 p-4 text-sm leading-relaxed">
+    <section lang={de ? "de" : "en"} className="space-y-4 rounded-2xl border border-border bg-secondary/30 p-4 text-sm leading-relaxed">
       <h2 className="font-medium">{de ? "Ihre Teilnahme im Überblick" : "Your participation at a glance"}</h2>
       {notice.core.map((line, index) => <p key={index} className="whitespace-pre-wrap break-words">{line}</p>)}
       <details className="border-t border-border pt-3">

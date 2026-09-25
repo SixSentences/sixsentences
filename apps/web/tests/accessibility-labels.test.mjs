@@ -139,3 +139,24 @@ test("auth pages share one rounded, flush viewport frame while long forms remain
     );
   }
 });
+
+test("participant and account surfaces declare the language their content is in", () => {
+  const read = (file) => readFileSync(join(process.cwd(), file), "utf8");
+  const lang = (flag) => new RegExp(`lang=\\{${flag} \\? "de" : "en"\\}`);
+
+  // The document stays lang="en"; German content is marked where it is rendered.
+  assert.match(read("src/app/layout.tsx"), /lang="en"/);
+  assert.match(read("src/components/participant-information.tsx"), new RegExp(`<section ${lang("de").source}`));
+  assert.match(read("src/components/voice/live-session.tsx"), lang("german"));
+  assert.match(read("src/components/voice/text-session.tsx"), lang("german"));
+
+  const talk = read("src/app/talk/[token]/page.tsx");
+  assert.match(talk, new RegExp(`<Frame ${lang("german").source}>`));
+  assert.match(talk, /<div lang=\{lang\} className="flex w-full flex-1/);
+  assert.match(talk, /<p lang="de"[^>]*>\s*Diese Einladung ist gerade nicht erreichbar\./);
+  assert.match(talk, /<span lang="de">Bitte prüfen Sie den Link/);
+
+  const legal = read("src/components/legal-reacceptance.tsx");
+  assert.match(legal, new RegExp(`<main ${lang("german").source}`));
+  assert.match(legal, new RegExp(`<aside ${lang("german").source}`));
+});

@@ -195,7 +195,7 @@ export default function TextSession({
   }
 
   return (
-    <div className="flex min-h-[70vh] flex-col rounded-3xl border border-border bg-card">
+    <div lang={german ? "de" : "en"} className="flex min-h-[70vh] flex-col rounded-3xl border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-5 py-3">
         <p className="font-mono text-[0.625rem] uppercase tracking-[0.18em] text-moss-soft">
           {german
