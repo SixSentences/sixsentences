@@ -790,7 +790,7 @@ export default function LiveSession({
   const orbScale = 1 + Math.min(0.35, level * 4);
 
   return (
-    <div className="fixed inset-0 z-50 bg-ivory p-2.5 md:p-3">
+    <div lang={german ? "de" : "en"} className="fixed inset-0 z-50 bg-ivory p-2.5 md:p-3">
       <div className="relative flex h-full flex-col overflow-hidden rounded-[22px] bg-pine md:rounded-[26px]">
         <HeroField className="absolute inset-0" />
         {/* legibility for the caption zone without boxing anything in */}

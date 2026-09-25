@@ -80,7 +80,7 @@ export function LegalReacceptance({
   }
 
   return (
-    <main className="min-h-dvh bg-background px-4 py-8 text-foreground sm:py-14">
+    <main lang={german ? "de" : "en"} className="min-h-dvh bg-background px-4 py-8 text-foreground sm:py-14">
       <section className="mx-auto w-full max-w-2xl rounded-[32px] border border-border bg-card p-6 sm:p-9">
         <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">{german ? "Dein Workspace" : "Your workspace"}</p>
         <h1 className="mt-3 font-serif text-3xl leading-tight">{german ? "Ein kurzer Blick auf die Bedingungen." : "A quick review of the terms."}</h1>
@@ -174,7 +174,7 @@ export function PrivacyUpdateNotice({ me, onPresented }: { me: Me; onPresented: 
     }
   }
   return (
-    <aside aria-label={german ? "Datenschutzhinweis" : "Privacy update"} className="fixed bottom-5 right-5 z-50 max-w-sm rounded-2xl border border-border bg-card p-5 shadow-lg max-sm:left-5">
+    <aside lang={german ? "de" : "en"} aria-label={german ? "Datenschutzhinweis" : "Privacy update"} className="fixed bottom-5 right-5 z-50 max-w-sm rounded-2xl border border-border bg-card p-5 shadow-lg max-sm:left-5">
       <p className="text-sm font-medium">{german ? "Aktualisierte Datenschutzhinweise" : "Updated privacy information"}</p>
       <p className="mt-2 text-xs leading-5 text-muted-foreground">{german ? "Der Betreiber dieser Instanz hat seine Datenschutzhinweise aktualisiert. Deine Nutzung bleibt verfügbar." : "The operator of this deployment updated its privacy information. Your workspace remains available."}</p>
       {privacyUrl ? <a href={privacyUrl} target="_blank" rel="noreferrer" className="mt-3 inline-block text-xs underline underline-offset-4">{german ? "Datenschutzhinweise ansehen" : "View privacy information"}</a> : null}
