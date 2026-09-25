@@ -412,7 +412,7 @@ jobs:
       - name: Reject credential-bearing URIs across reachable history
         run: python .github/scripts/check_history_credential_uris.py
       - name: Scan every reachable commit without credential verification
-        uses: trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c # v3.97.4
+        uses: trufflesecurity/trufflehog@f714bf454f350590f4a24c3ddb1aef02c35bf5b6 # v3.97.5
         with:
           path: ./
           base: ""
