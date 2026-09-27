@@ -162,6 +162,9 @@ All external features are off when their credentials are empty.
 - Spoken interviews require a server-side `SIX_GEMINI_API_KEY` plus both
   explicit confirmation switches. Those switches do not replace participant
   notice, consent, retention and transfer review.
+- `SIX_TYPESAFE_API_KEY` only configures the isolated TypeSafe Jev shadow
+  evaluator. It does not enable a product/API route or alter screening. Before
+  using it, follow the [public-data, legal and validation boundary](../../docs/JEV-SHADOW-EVALUATION.md).
 - `SIX_GROBID_URL` optionally selects an operator-controlled document parser.
 
 Never put provider credentials in `NEXT_PUBLIC_*` values. Browser-visible build

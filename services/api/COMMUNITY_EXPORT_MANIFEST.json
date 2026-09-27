@@ -1,10 +1,10 @@
 {
   "files": [
     {
-      "bytes": 1169,
+      "bytes": 1336,
       "mode": "0644",
       "path": ".env.example",
-      "sha256": "647b7ab117a65eeb5ea6d9eba14f10b0ff1f43df8e02dcedc89b6a5acfadeb02"
+      "sha256": "5335f0c867c0b9ede2089b0c4d97bc8b889450f3bce8018364039ee51a322c74"
     },
     {
       "bytes": 86,
@@ -331,16 +331,16 @@
       "sha256": "362c3f72b1ce478603a3e2797c97ff8e9d66b1db13f9b49d84e171244e82b892"
     },
     {
-      "bytes": 50068,
+      "bytes": 56170,
       "mode": "0644",
       "path": "src/sixsentences_server/cli.py",
-      "sha256": "286c94f8994ad124c1662564a37f3e094474ba74ed6e8f285aef84726710be47"
+      "sha256": "0d594c3f2710411668542049f11522782f2d8f79ed5572854731f2cd6d9d0e53"
     },
     {
-      "bytes": 15165,
+      "bytes": 15710,
       "mode": "0644",
       "path": "src/sixsentences_server/config.py",
-      "sha256": "ffb3933aec4dc8319de114dac1d77334c64dd02e03372e0045f5af628d1935a3"
+      "sha256": "3be2a9504d535f2c8e63b489b2b75c3d70d5bdc8794c9e472c6f71197ac1c956"
     },
     {
       "bytes": 0,
@@ -671,6 +671,12 @@
       "mode": "0644",
       "path": "src/sixsentences_server/evals/golden.py",
       "sha256": "361df591b1e66e0d0de5d2c0048d4eb7b49c213e87b167eb12797e563fe7c29a"
+    },
+    {
+      "bytes": 23508,
+      "mode": "0644",
+      "path": "src/sixsentences_server/evals/jev_shadow.py",
+      "sha256": "528973f6a209bf4d38405f48a0c65eb70ce78b3c031979a47a1c2030aa520c7b"
     },
     {
       "bytes": 2563,
@@ -1219,6 +1225,12 @@
       "sha256": "477be5f031c913a15374ba00032ef89a149723a54a6d05460339576f7bdcc018"
     },
     {
+      "bytes": 18854,
+      "mode": "0644",
+      "path": "src/sixsentences_server/screening/jev.py",
+      "sha256": "390c184121917eb92c8a63b2c0075ff774234fe93ca3bb8e626923adb29f452d"
+    },
+    {
       "bytes": 2102,
       "mode": "0644",
       "path": "src/sixsentences_server/screening/quote.py",
@@ -1405,10 +1417,10 @@
       "sha256": "34fa37f50169741b78f54aea648487709fc6482e53a6b1228d5e9557b6bafa24"
     },
     {
-      "bytes": 9015,
+      "bytes": 9066,
       "mode": "0644",
       "path": "tests/conftest.py",
-      "sha256": "361e1c6102a985055375fef94be891f369f0b57eb699f19b7a0b98d5d7d5602b"
+      "sha256": "dbca26ac1f340dd1fdc7ff1e03c9ee44a7c471a5639ae65f6665a95497aa0cff"
     },
     {
       "bytes": 15712,
@@ -1615,10 +1627,10 @@
       "sha256": "99c7e88b69814074a7946a5a4e7df15ca5c60660bb93d58af817a26f1bc53397"
     },
     {
-      "bytes": 2202,
+      "bytes": 2571,
       "mode": "0644",
       "path": "tests/test_community_boundary.py",
-      "sha256": "dc8528024ab8c2e3c14c92b3ba6055ba5a86bc14f599b19132ecdbc04c678ffb"
+      "sha256": "cc48f482c8bcfe4a1b47f544cd719db7a31e525181cdeb54f9dc83429aea522b"
     },
     {
       "bytes": 849,
@@ -1829,6 +1841,18 @@
       "mode": "0644",
       "path": "tests/test_interviews.py",
       "sha256": "29e6597afa3a386fc836eddee91bd85179c7fb46f8f9e40cede2ae78eb3d2998"
+    },
+    {
+      "bytes": 15084,
+      "mode": "0644",
+      "path": "tests/test_jev_screening.py",
+      "sha256": "c24ea2c7b1f27e12078190427d7d9c9a60b6c5abeed90b1ae7df2486afecee0f"
+    },
+    {
+      "bytes": 11720,
+      "mode": "0644",
+      "path": "tests/test_jev_shadow_evaluation.py",
+      "sha256": "5a8a4bafc8494074910403ebf747a83264d08c2aa44d81306635ce0e15e880f4"
     },
     {
       "bytes": 44401,

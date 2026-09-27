@@ -40,9 +40,9 @@
 
 <p align="center">
   <img
-    src="https://github.com/SixSentences/sixsentences/releases/download/v0.2.0-alpha.1/sixsentences-overview.gif"
-    width="720"
-    alt="SixSentences research workspace product overview"
+    src="docs/assets/sixsentences-thesis-overview.gif"
+    width="540"
+    alt="Thirty-second preview of the SixSentences research workspace"
   >
 </p>
 
@@ -170,6 +170,10 @@ provenance records while deduplicating candidates into one screening set. The
 feature is off by default; see the
 [architecture, privacy boundary and rollout checklist](docs/NATIVE-MULTISOURCE-RETRIEVAL.md)
 before enabling it.
+
+Experimental [TypeSafe Jev shadow evaluation](docs/JEV-SHADOW-EVALUATION.md)
+is also isolated behind an operator-only, public-bibliographic data boundary.
+It cannot affect screening decisions and exposes no product route.
 
 | Community source | Hosted SixSentences |
 | --- | --- |

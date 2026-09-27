@@ -14,8 +14,17 @@ def test_community_defaults_are_closed_and_neutral() -> None:
     assert settings.self_signup is False
     assert settings.gemini_enabled is False
     assert settings.websearch_enabled is False
+    assert settings.typesafe_jev_shadow_configured is False
     assert settings.app_url == "http://localhost:3000"
     assert not any(name.startswith("stripe_") for name in type(settings).model_fields)
+
+
+def test_typesafe_key_only_configures_operator_shadow_evaluation() -> None:
+    assert Settings(typesafe_api_key="  ", _env_file=None).typesafe_jev_shadow_configured is False
+    assert (
+        Settings(typesafe_api_key="operator-key", _env_file=None).typesafe_jev_shadow_configured
+        is True
+    )
 
 
 def test_community_profile_has_every_product_capability_and_no_prices() -> None:
