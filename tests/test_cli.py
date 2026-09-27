@@ -23,6 +23,21 @@ def test_query_command_emits_database_translation(capsys: object) -> None:
     assert output.strip() == "(terraform[ti] AND security[tiab])"
 
 
+def test_query_command_emits_central_translation(capsys: object) -> None:
+    assert main(["query", "title:evidence AND screening NOT animal*", "--target", "central"]) == 0
+    output = capsys.readouterr().out  # type: ignore[attr-defined]
+    assert output.strip() == "((evidence:ti AND screening:ti,ab,kw) NOT animal*:ti,ab,kw)"
+
+
+def test_a_query_one_database_cannot_express_still_translates_for_another(
+    capsys: object,
+) -> None:
+    assert main(["query", "Crohn's", "--target", "pubmed"]) == 0
+    assert capsys.readouterr().out.strip() == '"Crohn\'s"[tiab]'  # type: ignore[attr-defined]
+    assert main(["query", "Crohn's", "--target", "central"]) == 2
+    assert "Cochrane CENTRAL" in capsys.readouterr().err  # type: ignore[attr-defined]
+
+
 def test_corpus_commands_round_trip(tmp_path: Path, capsys: object) -> None:
     input_path = tmp_path / "works.jsonl"
     input_path.write_text(

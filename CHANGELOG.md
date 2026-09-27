@@ -18,6 +18,12 @@ equivalents for Python package metadata.
 - `six-community doctor --json` emits one object per check — `name`, `state` and
   `detail` — as the whole of standard output, so a deployment can be monitored
   rather than read. The exit code is unchanged in both modes.
+- `sixsentences query --target central` translates a query for Cochrane CENTRAL,
+  as searched in the Cochrane Library Search Manager. Every term carries a field
+  label (`:ti,ab,kw` when the query names no field), `NOT` is written between its
+  operands, and a literal the Search Manager would read as syntax is refused
+  rather than rewritten. A query CENTRAL cannot express still translates for the
+  other targets.
 
 ### Changed
 
