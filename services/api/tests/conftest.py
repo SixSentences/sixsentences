@@ -121,6 +121,7 @@ def _no_provider_keys(monkeypatch: pytest.MonkeyPatch) -> None:
         # developer key from disk on the next Settings() construction.
         monkeypatch.setenv(spec.key_env, "")
     monkeypatch.setenv("SIX_WEBSEARCH_API_KEY", "")
+    monkeypatch.setenv("SIX_TYPESAFE_API_KEY", "")
 
 
 @pytest.fixture()

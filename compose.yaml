@@ -84,6 +84,10 @@ services:
       SIX_ENFORCE_LEGAL_ACCEPTANCE: ${SIX_ENFORCE_LEGAL_ACCEPTANCE:-true}
       SIX_GOOGLE_OAUTH_CLIENT_ID: ${SIX_GOOGLE_OAUTH_CLIENT_ID:-}
       SIX_BROWSER_CAPTURE_REDIRECT_URIS: ${SIX_BROWSER_CAPTURE_REDIRECT_URIS:-}
+      # Available to an explicitly invoked operator CLI in this image only.
+      # No HTTP route reads or exposes this value; workers and migrations do
+      # not receive it.
+      SIX_TYPESAFE_API_KEY: ${SIX_TYPESAFE_API_KEY:-}
       SIX_ERASURE_LEDGER_PATH: /privacy/erasure-ledger.jsonl
       SIX_ERASURE_LEDGER_HMAC_KEY: ${SIX_ERASURE_LEDGER_HMAC_KEY:?run deploy/community/init-env.sh first}
     volumes:

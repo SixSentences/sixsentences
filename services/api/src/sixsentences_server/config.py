@@ -93,6 +93,11 @@ class Settings(BaseSettings):
     # to a Cloud Project with an operator-reviewed processing basis.
     gemini_api_key: str = ""
     gemini_data_processing_confirmed: bool = False
+    # TypeSafe Jev remains outside the product LLM pool. This credential is
+    # available only to an operator-run, public-bibliographic shadow evaluator;
+    # configuring it does not add or enable an API route. Each evaluation must
+    # still attest its exact outbound data boundary before any provider call.
+    typesafe_api_key: str = ""
     # Public spoken interviews retain an explicit release gate, independent
     # of private pilot testing. New sessions use the server-owned voice relay;
     # opening participation still requires processor and spoken UX approval.
@@ -210,6 +215,12 @@ class Settings(BaseSettings):
         """Return the direct Gemini key only after the data-processing gate."""
 
         return self.gemini_api_key.strip() if self.gemini_enabled else ""
+
+    @property
+    def typesafe_jev_shadow_configured(self) -> bool:
+        """Whether an operator configured the isolated Jev shadow evaluator."""
+
+        return bool(self.typesafe_api_key.strip())
 
     @property
     def public_gemini_live_enabled(self) -> bool:

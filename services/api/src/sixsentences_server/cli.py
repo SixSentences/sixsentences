@@ -776,6 +776,163 @@ def quality_evaluate(
         raise typer.Exit(1)
 
 
+@quality_app.command("jev-shadow")
+def quality_jev_shadow(
+    dataset: Path = typer.Option(..., "--dataset", exists=True, dir_okay=False),
+    out: Path = typer.Option(..., "--out", dir_okay=False),
+    budget_usd: float = typer.Option(..., "--budget-usd", min=0.001),
+    limit: int = typer.Option(..., "--limit", min=1, max=100_000),
+    minimum_confidence: float = typer.Option(
+        0.80,
+        "--minimum-confidence",
+        min=0.0,
+        max=1.0,
+    ),
+    confirm_provider_spend: bool = typer.Option(False, "--confirm-provider-spend"),
+    confirm_public_bibliographic_data: bool = typer.Option(
+        False,
+        "--confirm-public-bibliographic-data",
+    ),
+    fail_on_gate: bool = typer.Option(True, "--fail-on-gate/--no-fail-on-gate"),
+) -> None:
+    """Evaluate Jev as a non-authoritative shadow reviewer on pinned public data."""
+
+    import subprocess
+    from decimal import Decimal
+
+    from pydantic import ValidationError
+
+    from sixsentences_server.evals.jev_shadow import (
+        conservative_jev_reservation_usd,
+        load_jev_shadow_dataset,
+        run_jev_shadow_evaluation,
+        write_jev_shadow_report,
+    )
+    from sixsentences_server.screening.jev import JevClient, JevError
+
+    if not confirm_provider_spend:
+        typer.echo(
+            "refusing Jev provider calls without --confirm-provider-spend; "
+            f"the hard evaluation budget is ${budget_usd:.6f}",
+            err=True,
+        )
+        raise typer.Exit(2)
+    if not confirm_public_bibliographic_data:
+        typer.echo(
+            "refusing Jev egress without --confirm-public-bibliographic-data; "
+            "only public, non-sensitive titles, abstracts, and protocol criteria are permitted",
+            err=True,
+        )
+        raise typer.Exit(2)
+    if out.exists():
+        typer.echo(f"refusing to overwrite immutable Jev shadow artifact: {out}", err=True)
+        raise typer.Exit(2)
+    try:
+        loaded = load_jev_shadow_dataset(dataset)
+    except (OSError, ValueError, ValidationError) as exc:
+        # Pydantic errors can echo the rejected title, abstract, or criterion.
+        typer.echo("invalid Jev shadow dataset; check its schema and public-data boundary", err=True)
+        raise typer.Exit(2) from exc
+    if not loaded.metadata.license_verified:
+        typer.echo(
+            "refusing provider egress until the dataset license is independently verified",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    selected_count = min(limit, len(loaded.records))
+    budget = Decimal(str(budget_usd))
+    reservation = conservative_jev_reservation_usd(selected_count)
+    if budget < reservation:
+        typer.echo(
+            "refusing Jev calls: the hard budget is below the conservative "
+            f"64k-context reservation (${reservation:.6f} for {selected_count} calls)",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    settings = get_settings()
+    configured_revision = settings.release_git_revision.strip().lower()
+    if _runtime_revision_is_attested():
+        git_revision = configured_revision
+    else:
+        try:
+            dirty = subprocess.run(
+                ["git", "status", "--porcelain"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            ).stdout.strip()
+            git_revision = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            ).stdout.strip().lower()
+        except (OSError, subprocess.SubprocessError) as exc:
+            typer.echo(f"could not verify the Jev evaluation Git worktree: {exc}", err=True)
+            raise typer.Exit(2) from exc
+        if dirty:
+            typer.echo(
+                "Jev shadow evaluation requires a clean Git worktree or "
+                "SIX_RELEASE_GIT_REVISION attestation",
+                err=True,
+            )
+            raise typer.Exit(2)
+        if len(git_revision) != 40 or any(
+            character not in "0123456789abcdef" for character in git_revision
+        ):
+            typer.echo("could not resolve a full Git revision for Jev evaluation", err=True)
+            raise typer.Exit(2)
+
+    api_key = settings.typesafe_api_key.strip()
+    if not api_key:
+        typer.echo("SIX_TYPESAFE_API_KEY is required for Jev shadow evaluation", err=True)
+        raise typer.Exit(2)
+
+    # Retries are disabled so the 64k-per-record preflight remains a real hard
+    # ceiling. An interrupted experiment is rerun as a fresh immutable artifact.
+    client = JevClient(
+        api_key,
+        max_retries=0,
+    )
+
+    def progress(index: int, total: int, _record_id: str) -> None:
+        typer.echo(f"[{index}/{total}] Jev shadow record evaluated")
+
+    try:
+        report = run_jev_shadow_evaluation(
+            loaded,
+            client=client,
+            git_revision=git_revision,
+            budget_usd=budget,
+            limit=limit,
+            minimum_confidence=minimum_confidence,
+            on_progress=progress,
+        )
+        write_jev_shadow_report(out, report)
+    except (FileExistsError, JevError, ValueError) as exc:
+        # Keep arbitrary fixture metadata out of terminal logs on failure.
+        typer.echo("Jev shadow evaluation failed closed; no screening state changed", err=True)
+        raise typer.Exit(1) from exc
+
+    typer.echo(
+        f"wrote {report.evaluated_records} advisory-only Jev results to {out} "
+        f"(reserved ${report.conservative_reserved_usd:.6f})"
+    )
+    typer.echo(f"dataset digest: {report.dataset_digest}")
+    typer.echo(f"report digest: {report.digest}")
+    typer.echo("No screening decisions changed; no pipeline or database writes occurred.")
+    if report.gate_blockers:
+        typer.echo("quality gate incomplete: " + "; ".join(report.gate_blockers))
+    else:
+        typer.echo(f"shadow quality gate: {'PASS' if report.passed else 'FAIL'}")
+    if fail_on_gate and not report.passed:
+        raise typer.Exit(1)
+
+
 @quality_app.command("predict")
 def quality_predict(
     suite: Path = typer.Option(..., "--suite", exists=True, dir_okay=False),

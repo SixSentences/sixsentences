@@ -111,6 +111,7 @@ class SelfHostDeploymentTests(unittest.TestCase):
             self.assertEqual(values["SIX_PUBMED_ENABLED"], "false")
             self.assertEqual(values["SIX_PUBMED_EMAIL"], "")
             self.assertEqual(values["SIX_PUBMED_API_KEY"], "")
+            self.assertEqual(values["SIX_TYPESAFE_API_KEY"], "")
             second = subprocess.run(command, check=False, capture_output=True, text=True)
             self.assertNotEqual(second.returncode, 0)
 
@@ -292,6 +293,14 @@ class SelfHostDeploymentTests(unittest.TestCase):
         self.assertIn("SIX_PUBMED_ENABLED=false", example)
         self.assertNotIn("NEXT_PUBLIC_PUBMED", compose)
         self.assertIn("PubMed retrieval requires an NCBI contact email", preflight)
+
+    def test_typesafe_jev_key_is_server_only_and_empty_by_default(self) -> None:
+        compose = COMPOSE.read_text(encoding="utf-8")
+        example = (ROOT / ".env.selfhost.example").read_text(encoding="utf-8")
+
+        self.assertIn("SIX_TYPESAFE_API_KEY: ${SIX_TYPESAFE_API_KEY:-}", compose)
+        self.assertIn("SIX_TYPESAFE_API_KEY=", example)
+        self.assertNotIn("NEXT_PUBLIC_TYPESAFE", compose)
 
     def test_preflight_rejects_invalid_pubmed_contact_without_echoing_it(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
