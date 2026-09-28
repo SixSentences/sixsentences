@@ -7,6 +7,7 @@
  */
 
 import type { WriterSelection } from "@/lib/writer-selection";
+import type { PinboardState } from "@/lib/pinboard";
 import { PUBLIC_WEB_SEARCH_NOTICE_VERSION } from "@/lib/public-web-search-query";
 import {
   availabilityErrorKind,
@@ -1046,6 +1047,9 @@ async function streamSpecialistTurnEvents<T>(
 }
 
 export const api = {
+  pinboard: (signal?: AbortSignal) => request<PinboardState>("/auth/pinboard", { signal }),
+  updatePinboard: (body: PinboardState, signal?: AbortSignal) =>
+    request<PinboardState>("/auth/pinboard", { method: "PUT", body, signal }),
   browserCapturePair: (body: {
     code_challenge: string;
     state: string;

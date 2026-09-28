@@ -142,6 +142,20 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
+class PersonalPinboardRow(Base):
+    """One creator-private desk of notes, never used as implicit AI context."""
+
+    __tablename__ = "personal_pinboards"
+    __table_args__ = (CheckConstraint("revision >= 1", name="ck_pinboard_revision"),)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    org_id: Mapped[int] = mapped_column(ForeignKey("orgs.id"), index=True)
+    revision: Mapped[int] = mapped_column(default=1)
+    notes: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
 class UserLegalEventRow(Base):
     """Version-bound declarations and notices; never overwrite earlier events.
 

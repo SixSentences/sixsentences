@@ -74,5 +74,19 @@ pinned private source commit. `COMMUNITY_EXPORT_MANIFEST.json` binds the final,
 sanitized service files. The export scripts refuse an unexpected commit or a
 non-empty output directory. The machine-readable
 [`contracts/community-parity.json`](contracts/community-parity.json) reconstructs
-the exact Core-to-Community route boundary and pins both the central 334-route
-web contract and all 349 transports declared in `apps/web/src/lib/api.ts`.
+the exact Core-to-Community route boundary and pins both the central 336-route
+web contract and all 351 transports declared in `apps/web/src/lib/api.ts`.
+
+Personal pinboard notes are available through the session-only `/auth/pinboard`
+endpoint. They belong to their creator, including within a shared workspace, are
+included only in that person's export, and are removed by personal or workspace
+erasure. They are not sent to model providers as implicit context. The frontend
+supports revision-bound saves and explicit conflict resolution.
+
+The additive `20260928_0003` migration creates `personal_pinboards` after
+`20260919_0002`. Run the normal migration service before starting the updated
+API. It does not modify existing research records. Downgrading to
+`20260919_0002` drops only the new notes table and therefore loses its notes;
+export or back up those notes before any deliberate downgrade. The historical
+source-export manifest remains unchanged; the parity contract records these two
+new routes as additions to that baseline.

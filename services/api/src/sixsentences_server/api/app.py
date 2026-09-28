@@ -252,6 +252,7 @@ from sixsentences_server.core.db import (
     LLMCallRow,
     Org,
     PaperEnrichmentRow,
+    PersonalPinboardRow,
     Project,
     ProjectEventRow,
     ProjectTaskRow,
@@ -393,6 +394,12 @@ from sixsentences_server.core.models import (
 )
 from sixsentences_server.core.net import is_public_http_url
 from sixsentences_server.core.notifications import fire_run_event, is_safe_url
+from sixsentences_server.core.pinboard import (
+    PinboardConflictError,
+    PinboardState,
+    read_pinboard,
+    write_pinboard,
+)
 from sixsentences_server.core.plans import Capability, Plan
 from sixsentences_server.core.protocol import synthesize_protocol
 from sixsentences_server.core.ratelimit import (
@@ -2571,6 +2578,7 @@ def _specialist_chat_sse(
 
 
 _TENANT_PURGE_MODELS = (
+    PersonalPinboardRow,
     AgentEventRow,
     AgentTurnRow,
     AnalysisRecipeRow,
@@ -2659,6 +2667,7 @@ _TENANT_PURGE_MODELS = (
 )
 _TENANT_RETENTION_MODELS = ()
 _PERSONAL_EXPORT_MODELS = (
+    PersonalPinboardRow,
     UserLegalEventRow,
     BrainstormProjectDocumentSourceRow,
     BrainstormProjectDocumentRow,
@@ -2700,6 +2709,7 @@ _USER_REFERENCE_NULLIFY_COLUMNS = (
     WriterTemplateShareRow.created_by,
 )
 _USER_REFERENCE_DELETE_MODELS = (
+    PersonalPinboardRow,
     UserLegalEventRow,
     AgentTurnRow,
     AuthToken,
@@ -8520,6 +8530,37 @@ def create_app() -> FastAPI:
                     user.assistant_preferences
                 ),
             }
+
+    @app.get("/auth/pinboard", response_model=PinboardState)
+    def get_personal_pinboard(
+        response: Response,
+        ctx: AuthContext = Depends(require_session),
+    ) -> PinboardState:
+        """Retrieve personal notes; workspace ownership grants no access to others."""
+        response.headers["Cache-Control"] = "no-store"
+        with db_session() as session:
+            return read_pinboard(session, user_id=ctx.user_id, org_id=ctx.org_id)
+
+    @app.put("/auth/pinboard", response_model=PinboardState)
+    def save_personal_pinboard(
+        body: PinboardState,
+        response: Response,
+        ctx: AuthContext = Depends(require_session),
+    ) -> PinboardState:
+        """Save a revision-bound personal desk without invoking any AI provider."""
+        response.headers["Cache-Control"] = "no-store"
+        with db_session() as session:
+            try:
+                return write_pinboard(session, user_id=ctx.user_id, org_id=ctx.org_id, state=body)
+            except PinboardConflictError as exc:
+                raise HTTPException(
+                    409,
+                    {
+                        "code": "pinboard_conflict",
+                        "message": "Reload the current desk before saving.",
+                    },
+                    headers={"Cache-Control": "no-store"},
+                ) from exc
 
     @app.post("/auth/onboarded")
     def mark_onboarded(ctx: AuthContext = Depends(require_session)) -> dict[str, Any]:

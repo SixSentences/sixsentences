@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { LegalReacceptance, PrivacyUpdateNotice } from "@/components/legal-reacceptance";
 import { useAuth } from "@/lib/auth";
 import { ProjectProvider } from "@/lib/project-context";
+import { PinboardProvider } from "@/lib/use-pinboard";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { status, isResolving, me, refresh, signOut } = useAuth();
@@ -63,7 +64,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <ProjectProvider>
-      <AppShell>{children}</AppShell>
+      <PinboardProvider key={`${me?.org_id}:${me?.user_id}`}>
+        <AppShell>{children}</AppShell>
+      </PinboardProvider>
       {connectionNotice && <div className="fixed inset-x-4 top-4 z-50 mx-auto w-fit">{connectionNotice}</div>}
       {me && <PrivacyUpdateNotice me={me} onPresented={refresh} />}
     </ProjectProvider>

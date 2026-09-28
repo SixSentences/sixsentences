@@ -31,10 +31,10 @@
       "sha256": "e0bfeec4f11af50244091b2a1323faaeb056ef1e3ee5d4a94d91e40fb9706b2e"
     },
     {
-      "bytes": 3743,
+      "bytes": 4626,
       "mode": "0644",
       "path": "README.md",
-      "sha256": "fb6aa7e29bf14442aac57d59b1cc99907f096077cab58e16ed827ca41003db07"
+      "sha256": "d6770892b17e5a14635ea7ea5dc759af75951ed75a7d68dcae28220283a66eab"
     },
     {
       "bytes": 142910,
@@ -79,16 +79,22 @@
       "sha256": "1502b8d5beefa076ede56b74ae5e8924269bc39d2423c5a765cab9f55fedea32"
     },
     {
+      "bytes": 1337,
+      "mode": "0644",
+      "path": "alembic/versions/20260928_0003_personal_pinboards.py",
+      "sha256": "a879d7bc36a821ffa4135c071eb7adfcfac2657015e01fa182b9297396ea3b77"
+    },
+    {
       "bytes": 2113,
       "mode": "0644",
       "path": "compose.yaml",
       "sha256": "c5db33c93c2659fe8d466c488bce25b1e0c8151ba8429885fe84ba5b379f571a"
     },
     {
-      "bytes": 4521,
+      "bytes": 4581,
       "mode": "0644",
       "path": "contracts/community-parity.json",
-      "sha256": "b69fb1d05d53bb5c3f8fb23556a263d8e6e2d529977bd7a7d8e2640b795680a5"
+      "sha256": "c49c17f333e638e9b8ff95be21b9e57dccb6adb2c54c30286c71b47136d7b8bb"
     },
     {
       "bytes": 4281,
@@ -124,7 +130,7 @@
       "bytes": 13605,
       "mode": "0644",
       "path": "scripts/audit_community_export.py",
-      "sha256": "ac8ccfba8771b9c20da2e77946a76c1c3754792c0dd7701367f31cc5a7f5f445"
+      "sha256": "92e81521fc6bca275f7ffa0583c0b5de13450f06bbcb71aec1e87a66eff20b48"
     },
     {
       "bytes": 9906,
@@ -289,10 +295,10 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
-      "bytes": 1523923,
+      "bytes": 1525511,
       "mode": "0644",
       "path": "src/sixsentences_server/api/app.py",
-      "sha256": "3582c53b276ae4422d83fffc444732c6aa0b73d6b824cf2395e12130aadeecfd"
+      "sha256": "3eed893b2727fa151ea6d961b9da052b72081e1f06bb771f9a7f3ff828d7e44b"
     },
     {
       "bytes": 18781,
@@ -439,10 +445,10 @@
       "sha256": "48c240fd7da8f3c53b253bc1d4cc27cb7bce286f3e6d5f34a20fbad5d9a862f0"
     },
     {
-      "bytes": 124959,
+      "bytes": 125612,
       "mode": "0644",
       "path": "src/sixsentences_server/core/db.py",
-      "sha256": "bea27082c84d0b0d0d025fd20a28d964526a29de00d104e102f029bec5f0895a"
+      "sha256": "af0592417c2c7184b91d88b07c2c9cab29921567c7143933d9d50c91bdadfd13"
     },
     {
       "bytes": 71363,
@@ -521,6 +527,12 @@
       "mode": "0644",
       "path": "src/sixsentences_server/core/notifications.py",
       "sha256": "102a1853f3778a07ee203a88ef03088d0681b9173560cc4c19a5309d0f76338e"
+    },
+    {
+      "bytes": 3636,
+      "mode": "0644",
+      "path": "src/sixsentences_server/core/pinboard.py",
+      "sha256": "07be78c4e40d52ad1a47e3d65d647fb3fe624f9ae035010290de24e8f9e5f505"
     },
     {
       "bytes": 4941,
@@ -1639,10 +1651,10 @@
       "sha256": "0a3fb3be9727467f3e85e794a0a81aa665492affee948b5740c6f407ee0e7ff3"
     },
     {
-      "bytes": 4879,
+      "bytes": 5085,
       "mode": "0644",
       "path": "tests/test_community_contract_parity.py",
-      "sha256": "0ab7d97aa0068d8a319ce7df63c4266f2c46b1619a5d698aaf2ee547105a189f"
+      "sha256": "5e2d2e30780a80407e8ea27c1f4fe8f73d41ca7b5f602adab3966cdef7d1f51f"
     },
     {
       "bytes": 5462,
@@ -2009,6 +2021,12 @@
       "mode": "0644",
       "path": "tests/test_pdf_dependency_security.py",
       "sha256": "c57cffe10c16f2a0fa8803a9e533d34283183c22ba421090f3abbec41e942b1c"
+    },
+    {
+      "bytes": 10201,
+      "mode": "0644",
+      "path": "tests/test_pinboard.py",
+      "sha256": "4b6a6a7ce8467161fa8982b63ef85795136c8bb7a15e0d2ae3247ec6a8ef6b68"
     },
     {
       "bytes": 7456,

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-import NewChatCursorWave from "@/components/brand/new-chat-cursor-wave";
+import PersonalPinboard from "@/components/home/personal-pinboard";
+import boardStyles from "@/components/home/personal-pinboard.module.css";
 import Composer from "@/components/search/composer";
 import { useAuth } from "@/lib/auth";
 import { pickGermanGreeting, pickGreeting } from "@/lib/greetings";
@@ -55,10 +56,8 @@ export default function NewSearchPage() {
   }, []);
 
   return (
-    <div className="relative isolate flex min-h-0 flex-1 flex-col items-center justify-start overflow-x-hidden overflow-y-auto px-3 py-6 sm:px-5 sm:py-10 lg:justify-center lg:rounded-[calc(var(--radius)*1.8-1px)]">
-      <NewChatCursorWave />
-
-      <div className="relative z-10 w-full max-w-[52.5rem] lg:-translate-y-[4%]">
+    <div className={`${boardStyles.home} relative isolate flex min-h-0 flex-1 flex-col items-center justify-start overflow-x-hidden overflow-y-auto px-3 py-8 sm:px-5 sm:py-12 lg:rounded-[calc(var(--radius)*1.8-1px)]`}>
+      <div className="relative z-10 w-full max-w-[52.5rem]">
         <div className="rise rise-1 mb-5 flex flex-col items-center text-center sm:mb-8">
           <h1 className="font-display text-[clamp(2rem,9vw,3.2rem)] leading-tight text-foreground">
             {greeting ?? (isGerman ? "Frag die Literatur." : "Ask the literature.")}
@@ -74,6 +73,7 @@ export default function NewSearchPage() {
           <Composer seed={seed} />
         </div>
       </div>
+      <PersonalPinboard />
     </div>
   );
 }
