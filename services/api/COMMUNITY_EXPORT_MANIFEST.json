@@ -2023,10 +2023,10 @@
       "sha256": "c57cffe10c16f2a0fa8803a9e533d34283183c22ba421090f3abbec41e942b1c"
     },
     {
-      "bytes": 10201,
+      "bytes": 10971,
       "mode": "0644",
       "path": "tests/test_pinboard.py",
-      "sha256": "4b6a6a7ce8467161fa8982b63ef85795136c8bb7a15e0d2ae3247ec6a8ef6b68"
+      "sha256": "c4c4385e41b560a7186aa3829bc62a7bd0556f1fb521c0b638dc3b563b47e70f"
     },
     {
       "bytes": 7456,

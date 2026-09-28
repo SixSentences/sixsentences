@@ -2,6 +2,10 @@
 
 import io
 import json
+import logging
+import os
+import subprocess
+import sys
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -10,13 +14,10 @@ from uuid import uuid4
 
 import pytest
 import sqlalchemy as sa
-from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from alembic import command
 from sixsentences_server.api.app import create_app
-from sixsentences_server.config import get_settings
 from sixsentences_server.core.auth import add_member, authenticate, create_api_key, register
 from sixsentences_server.core.db import PersonalPinboardRow, User, db_session, init_db
 from sixsentences_server.core.pinboard import PinboardConflictError, PinboardState, write_pinboard
@@ -203,16 +204,30 @@ def test_concurrent_compare_and_swap_has_one_winner(
 
 def test_pinboard_migration_roundtrip_preserves_existing_rows(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Upgrade an existing schema and prove only the new table is removed on undo."""
+    service = Path(__file__).resolve().parents[1]
     url = f"sqlite:///{tmp_path / 'pinboard-migration.db'}"
-    monkeypatch.setenv("SIX_DATABASE_URL", url)
-    get_settings.cache_clear()
-    config = Config("alembic.ini")
+    environment = {**os.environ, "PYTHONPATH": str(service / "src"), "SIX_DATABASE_URL": url}
+    logger = logging.getLogger("sixsentences_server.api.app")
+    logger_state = (logger.disabled, logger.level, logger.propagate, tuple(logger.handlers))
+    root_handlers = tuple(logging.getLogger().handlers)
+
+    def migrate(action: str, revision: str) -> None:
+        # Alembic configures logging; a child process preserves pytest's capture
+        # handlers and application loggers for later security regression tests.
+        subprocess.run(
+            [sys.executable, "-m", "alembic", action, revision],
+            cwd=service,
+            env=environment,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
     engine = sa.create_engine(url)
     try:
-        command.upgrade(config, "20260919_0002")
+        migrate("upgrade", "20260919_0002")
         before = set(sa.inspect(engine).get_table_names())
         with engine.begin() as connection:
             connection.execute(
@@ -221,7 +236,7 @@ def test_pinboard_migration_roundtrip_preserves_existing_rows(
                     "VALUES (9001, 'Synthetic migration canary', 'community', CURRENT_TIMESTAMP)"
                 )
             )
-        command.upgrade(config, "20260928_0003")
+        migrate("upgrade", "20260928_0003")
         assert set(sa.inspect(engine).get_table_names()) == before | {"personal_pinboards"}
         assert {
             column["name"] for column in sa.inspect(engine).get_columns("personal_pinboards")
@@ -232,13 +247,19 @@ def test_pinboard_migration_roundtrip_preserves_existing_rows(
             "notes",
             "updated_at",
         }
-        command.downgrade(config, "20260919_0002")
+        migrate("downgrade", "20260919_0002")
         assert set(sa.inspect(engine).get_table_names()) == before
         with engine.connect() as connection:
             assert connection.execute(
                 sa.text("SELECT name FROM orgs WHERE id=9001")
             ).scalar_one() == ("Synthetic migration canary")
-        command.upgrade(config, "20260928_0003")
+        migrate("upgrade", "20260928_0003")
+        assert (
+            logger.disabled,
+            logger.level,
+            logger.propagate,
+            tuple(logger.handlers),
+        ) == logger_state
+        assert tuple(logging.getLogger().handlers) == root_handlers
     finally:
         engine.dispose()
-        get_settings.cache_clear()
