@@ -1,6 +1,6 @@
 # Personal pinboard
 
-The new-search homepage's background is a quiet dark-green pinboard. The original
+The new-search homepage's background is a quiet warm-charcoal pinboard. The original
 greeting and composer layout stays in front; there is no separate board section.
 Its notes never intercept the search input and are not implicit assistant context.
 The existing cursor-wave component remains reusable; the homepage uses the board.
