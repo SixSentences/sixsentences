@@ -255,20 +255,53 @@ function NoteEditor({ note, isNew, de, onClose, onSave, onDelete }: {
 }) {
   const [draft, setDraft] = useState(note);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const keepDraftButton = useRef<HTMLButtonElement>(null);
+  const textInput = useRef<HTMLTextAreaElement>(null);
   const opener = useRef(typeof document === "undefined" ? null : document.activeElement as HTMLElement | null);
   const textLength = Array.from(draft.text).length;
   const lang = de ? 1 : 0;
+  const dirty = draft.text !== note.text || draft.color !== note.color
+    || draft.shape !== note.shape || draft.rotation !== note.rotation;
+
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+  useEffect(() => {
+    if (confirmDiscard) keepDraftButton.current?.focus();
+  }, [confirmDiscard]);
+
+  const requestClose = () => {
+    if (dirty) setConfirmDiscard(true);
+    else onClose();
+  };
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog open onOpenChange={(open) => { if (!open) requestClose(); }}>
       <DialogContent className="sm:max-w-lg" onCloseAutoFocus={(event) => {
         event.preventDefault();
         if (opener.current?.isConnected) opener.current.focus();
       }}>
         <DialogTitle>{isNew ? (de ? "Einen Gedanken festhalten" : "Pin a thought") : (de ? "Deine Notiz" : "Your note")}</DialogTitle>
         <DialogDescription>{de ? "Eine Notiz für dich — unabhängig von deinen Chats und Projekten." : "A note for you — separate from your chats and projects."}</DialogDescription>
+        {confirmDiscard && <div className="grid gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3" role="alert">
+          <p>{de ? "Deine Änderungen sind noch nicht gespeichert. Wirklich verwerfen?" : "Your changes are not saved yet. Discard them?"}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button ref={keepDraftButton} type="button" variant="outline" onClick={() => {
+              setConfirmDiscard(false);
+              textInput.current?.focus();
+            }}>{de ? "Entwurf behalten" : "Keep editing"}</Button>
+            <Button type="button" variant="destructive" onClick={onClose}>{de ? "Änderungen verwerfen" : "Discard changes"}</Button>
+          </div>
+        </div>}
         <label className="grid gap-2 text-sm" htmlFor="pinboard-note-text">
           <span className="sr-only">{de ? "Notiztext" : "Note text"}</span>
-          <textarea id="pinboard-note-text" autoFocus value={draft.text} maxLength={PINBOARD_TEXT_LIMIT * 2} rows={6}
+          <textarea ref={textInput} id="pinboard-note-text" autoFocus value={draft.text} maxLength={PINBOARD_TEXT_LIMIT * 2} rows={6}
             aria-describedby="pinboard-text-length" aria-invalid={textLength > PINBOARD_TEXT_LIMIT}
             placeholder={de ? "Was möchtest du dir merken?" : "What would you like to remember?"}
             className={`min-h-36 w-full resize-y rounded-xl border border-black/10 p-4 text-[15px] leading-relaxed text-[#263b32] outline-none focus:ring-2 focus:ring-ring ${styles[draft.color]}`}
@@ -303,7 +336,7 @@ function NoteEditor({ note, isNew, de, onClose, onSave, onDelete }: {
             <Trash2 aria-hidden="true" />{confirmDelete ? (de ? "Löschen bestätigen" : "Confirm delete") : (de ? "Löschen" : "Delete")}
           </Button> : <span />}
           <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>{de ? "Abbrechen" : "Cancel"}</Button>
+            <Button type="button" variant="outline" onClick={requestClose}>{de ? "Abbrechen" : "Cancel"}</Button>
             <Button type="button" disabled={!draft.text.trim() || textLength > PINBOARD_TEXT_LIMIT} onClick={() => onSave(draft)}><Pin aria-hidden="true" />{isNew ? (de ? "Anpinnen" : "Pin note") : (de ? "Übernehmen" : "Apply changes")}</Button>
           </div>
         </div>

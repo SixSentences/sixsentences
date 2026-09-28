@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 import ts from "typescript";
 
 const source = readFileSync("src/lib/pinboard.ts", "utf8");
@@ -265,4 +266,148 @@ test("the composer has no implicit pinboard context or browser content storage",
   assert.doesNotMatch(source + provider, /localStorage\.(?:getItem|setItem)|sessionStorage\.(?:getItem|setItem)/);
   assert.match(provider, /six:auth-boundary/);
   assert.match(provider, /beforeunload/);
+});
+
+// Execute the real editor with a minimal hook/element harness, without a DOM or
+// browser storage. Dialog dismissal, state transitions, and listener cleanup are
+// exercised through the component's actual handlers rather than source patterns.
+function editorFixture(original = note(), isNew = false) {
+  const editorSource = readFileSync("src/components/home/personal-pinboard.tsx", "utf8");
+  const output = ts.transpileModule(`${editorSource.slice(editorSource.indexOf("function NoteEditor("))}\nexports.NoteEditor = NoteEditor;`, {
+    compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const hooks = [];
+  const listeners = new Set();
+  const pendingEffects = [];
+  const exports = {};
+  let cursor = 0;
+  let tree;
+  let closed = 0;
+  let saved;
+  const element = (type, props) => ({ type, props });
+  const context = {
+    exports,
+    require: (name) => {
+      assert.equal(name, "react/jsx-runtime");
+      return { jsx: element, jsxs: element };
+    },
+    useState(initial) {
+      const index = cursor++;
+      if (!(index in hooks)) hooks[index] = initial;
+      return [hooks[index], (next) => { hooks[index] = typeof next === "function" ? next(hooks[index]) : next; }];
+    },
+    useRef(initial) {
+      const index = cursor++;
+      return hooks[index] ??= { current: initial };
+    },
+    useEffect(callback, dependencies) {
+      const index = cursor++;
+      const previous = hooks[index];
+      if (!previous || dependencies.some((value, i) => !Object.is(value, previous.dependencies[i]))) {
+        pendingEffects.push(() => {
+          previous?.cleanup?.();
+          hooks[index] = { dependencies, cleanup: callback() };
+        });
+      }
+    },
+    window: {
+      addEventListener: (type, handler) => { assert.equal(type, "beforeunload"); listeners.add(handler); },
+      removeEventListener: (type, handler) => { assert.equal(type, "beforeunload"); listeners.delete(handler); },
+    },
+    Dialog: "Dialog", DialogContent: "DialogContent", DialogTitle: "DialogTitle", DialogDescription: "DialogDescription",
+    Button: "Button", Check: "Check", Trash2: "Trash2", Pin: "Pin", styles: {},
+    PINBOARD_TEXT_LIMIT: 2000, PINBOARD_COLORS: ["butter", "sage"], PINBOARD_SHAPES: ["note", "card"],
+    COLOR_LABELS: { butter: ["Butter", "Butter"], sage: ["Sage", "Salbei"] },
+    SHAPE_LABELS: { note: ["Sticky note", "Notiz"], card: ["Index card", "Karte"] },
+  };
+  runInNewContext(output, context);
+  const render = () => {
+    cursor = 0;
+    tree = exports.NoteEditor({ note: original, isNew, de: false, onClose: () => { closed++; }, onSave: (value) => { saved = value; }, onDelete: () => {} });
+    while (pendingEffects.length) pendingEffects.shift()();
+    return tree;
+  };
+  const find = (predicate, node = tree) => {
+    if (!node || typeof node !== "object") return undefined;
+    if (Array.isArray(node)) return node.map((child) => find(predicate, child)).find(Boolean);
+    return predicate(node) ? node : find(predicate, node.props?.children ?? null);
+  };
+  render();
+  return {
+    render, find,
+    get closed() { return closed; },
+    get saved() { return saved; },
+    get warningCount() { return listeners.size; },
+    button: (label) => find((node) => node.type === "Button" && node.props.children === label),
+    edit: (text) => { find((node) => node.type === "textarea").props.onChange({ target: { value: text } }); render(); },
+    dismiss: () => { tree.props.onOpenChange(false); render(); },
+    unload: () => {
+      const event = { prevented: false, returnValue: "initial", preventDefault() { this.prevented = true; } };
+      for (const listener of listeners) listener(event);
+      return event;
+    },
+    unmount: () => { for (const hook of hooks) hook?.cleanup?.(); },
+  };
+}
+
+test("dirty new and existing editor drafts survive dialog dismissal until explicit discard", () => {
+  for (const isNew of [false, true]) {
+    const editor = editorFixture(note(isNew ? "" : "Saved note"), isNew);
+    editor.edit("A private unfinished thought");
+    editor.dismiss(); // X, Escape, and backdrop share Dialog.onOpenChange.
+    assert.equal(editor.closed, 0);
+    assert.ok(editor.find((node) => node.props.role === "alert"));
+    editor.dismiss(); // Repeated Escape must not bypass the confirmation.
+    assert.equal(editor.closed, 0);
+    editor.button("Keep editing").props.onClick();
+    editor.render();
+    assert.equal(editor.find((node) => node.type === "textarea").props.value, "A private unfinished thought");
+    assert.equal(editor.find((node) => node.props.role === "alert"), undefined);
+    editor.button("Cancel").props.onClick();
+    editor.render();
+    assert.equal(editor.closed, 0);
+    editor.button("Discard changes").props.onClick();
+    assert.equal(editor.closed, 1);
+    assert.equal(editor.saved, undefined);
+    editor.unmount();
+    assert.equal(editor.warningCount, 0);
+  }
+});
+
+test("editor unload warns only for changed content and removes the listener on revert or unmount", () => {
+  const editor = editorFixture(note("Original"));
+  assert.equal(editor.unload().prevented, false);
+  editor.edit("Unsaved");
+  assert.equal(editor.warningCount, 1);
+  assert.equal(editor.unload().prevented, true);
+  assert.equal(editor.unload().returnValue, "");
+  editor.edit("Another change");
+  assert.equal(editor.warningCount, 1);
+  editor.edit("Original");
+  assert.equal(editor.warningCount, 0);
+  editor.dismiss();
+  assert.equal(editor.closed, 1);
+  editor.edit("Pending when auth boundary unmounts editor");
+  editor.unmount();
+  assert.equal(editor.warningCount, 0);
+});
+
+test("style-only editor changes are guarded and Apply still submits the retained draft", () => {
+  for (const change of [
+    (editor) => editor.find((node) => node.props["aria-label"] === "Sage").props.onClick(),
+    (editor) => editor.button("Index card").props.onClick(),
+    (editor) => editor.find((node) => node.props.id === "pinboard-rotation").props.onChange({ target: { value: "8" } }),
+  ]) {
+    const editor = editorFixture();
+    change(editor);
+    editor.render();
+    assert.equal(editor.unload().prevented, true);
+    editor.dismiss();
+    assert.equal(editor.closed, 0);
+    editor.find((node) => node.type === "Button" && Array.isArray(node.props.children)
+      && node.props.children.includes("Apply changes")).props.onClick();
+    assert.equal(editor.saved.text, note().text);
+    assert.notDeepEqual(editor.saved, note());
+    editor.unmount();
+  }
 });
