@@ -313,13 +313,14 @@ function editorFixture(original = note(), isNew = false, componentName = "NoteEd
       }
     },
     useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
+    useTheme: () => additionalProps.themeContext ?? { resolvedTheme: "light", setTheme() {} },
     window: {
       addEventListener: (type, handler) => { assert.equal(type, "beforeunload"); listeners.add(handler); },
       removeEventListener: (type, handler) => { assert.equal(type, "beforeunload"); listeners.delete(handler); },
     },
     Dialog: "Dialog", DialogContent: "DialogContent", DialogTitle: "DialogTitle", DialogDescription: "DialogDescription",
     Popover: "Popover", PopoverAnchor: "PopoverAnchor", PopoverContent: "PopoverContent", PopoverTrigger: "PopoverTrigger",
-    PinnedNote: "PinnedNote", NoteEditor: "NoteEditor", Button: "Button", Check: "Check", Trash2: "Trash2", Pin: "Pin",
+    BoardAppearance: "BoardAppearance", PinnedNote: "PinnedNote", NoteEditor: "NoteEditor", Button: "Button", Check: "Check", Trash2: "Trash2", Pin: "Pin", Sun: "Sun", Moon: "Moon",
     Plus: "Plus", Grip: "Grip", Pencil: "Pencil", RotateCcw: "RotateCcw", LoaderCircle: "LoaderCircle", styles: {},
     pinboardPoint, pinboardDragStarted, pinboardPosition, newPinboardNote, PINBOARD_LIMIT: 24,
     crypto: { randomUUID: () => "3d9d01c4-c0fb-4f2a-ae1e-f51365686958" },
@@ -391,6 +392,48 @@ test("a background click anchors the new note at the click and clamps canvas edg
   assert.deepEqual(pinboardPoint(NaN, Infinity, 100, 100), { x: 0, y: 0 });
   assert.equal(pinboardDragStarted(3, 3), false);
   assert.equal(pinboardDragStarted(3, 4), true);
+});
+
+test("visible appearance buttons respect the existing theme and change it only on explicit selection", () => {
+  const choices = [];
+  const themeContext = { resolvedTheme: "dark", setTheme: (value) => { choices.push(value); themeContext.resolvedTheme = value; } };
+  const appearance = editorFixture(note(), false, "BoardAppearance", { themeContext });
+  const light = () => appearance.find((node) => node.props["aria-label"] === "Use light appearance");
+  const dark = () => appearance.find((node) => node.props["aria-label"] === "Use dark appearance");
+  assert.equal(light().props.disabled, true);
+  assert.equal(dark().props["aria-pressed"], false);
+  appearance.render();
+  assert.equal(dark().props["aria-pressed"], true);
+  assert.equal(light().props.disabled, false);
+  assert.deepEqual(choices, []);
+  light().props.onClick();
+  appearance.render();
+  assert.deepEqual(choices, ["light"]);
+  assert.equal(light().props["aria-pressed"], true);
+  assert.equal(dark().props["aria-pressed"], false);
+  dark().props.onClick();
+  appearance.render();
+  assert.deepEqual(choices, ["light", "dark"]);
+  assert.equal(dark().props["aria-pressed"], true);
+  appearance.unmount();
+});
+
+test("both quiet board themes retain readable text contrast", () => {
+  const css = readFileSync("src/components/home/personal-pinboard.module.css", "utf8");
+  const luminance = (hex) => {
+    const rgb = hex.match(/[a-f\d]{2}/gi).map((value) => parseInt(value, 16) / 255)
+      .map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+    return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+  };
+  for (const block of [css.match(/\.home \{([^}]+)\}/s)[1], css.match(/:global\(\.dark\) \.home \{([^}]+)\}/s)[1]]) {
+    const colors = Object.fromEntries([...block.matchAll(/--board-([a-z-]+): #(\w{6});/g)].map((match) => [match[1], match[2]]));
+    const surface = luminance(colors.surface);
+    for (const key of ["text", "muted", "mode"]) {
+      const foreground = luminance(colors[key]);
+      const ratio = (Math.max(surface, foreground) + 0.05) / (Math.min(surface, foreground) + 0.05);
+      assert.ok(ratio >= 4.5, `${key} needs 4.5:1 contrast, got ${ratio}`);
+    }
+  }
 });
 
 test("left and right background clicks open a local creation popup, never child or drag clicks", async () => {

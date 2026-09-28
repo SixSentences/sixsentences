@@ -1,12 +1,15 @@
 # Personal pinboard
 
-The new-search homepage's background is a quiet warm-charcoal pinboard. The original
+The new-search homepage's background is a quiet, framed felt pinboard: warm stone
+in light mode and muted charcoal in dark mode. The original
 greeting and composer layout stays in front; there is no separate board section.
 Its notes never intercept the search input and are not implicit assistant context.
 The existing cursor-wave component remains reusable; the homepage uses the board.
 
 ## Interaction
 
+- The visible Sun/Moon control uses the existing application theme preference;
+  it does not introduce another setting or reset a saved/system theme on mount.
 - Pin up to 24 personal notes, each with at most 2,000 Unicode code points.
 - Choose one of five paper colours and three shapes; adjust the tilt.
 - Left- or right-click empty background to open a small creation popup. The new

@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, Grip, LoaderCircle, Pencil, Pin, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Check, Grip, LoaderCircle, Moon, Pencil, Pin, Plus, RotateCcw, Sun, Trash2 } from "lucide-react";
+import { useTheme } from "next-themes";
 import {
   useEffect, useRef, useState, useSyncExternalStore,
   type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent,
@@ -93,6 +94,7 @@ function Board({ session, de }: { session: PinboardSession; de: boolean }) {
 
   return (
     <>
+      <BoardAppearance de={de} />
       <section className={styles.board} aria-label={de ? "Deine private Pinnwand" : "Your private pinboard"} data-testid="personal-pinboard">
         <p id="pinboard-move-help" className="sr-only">{de
           ? "Freie Fläche anklicken, um eine Notiz anzupinnen. Notizen ziehen oder am Griff mit den Pfeiltasten bewegen; Umschalt bewegt weiter. Alle Notizen sind auch im Notizen-Menü erreichbar."
@@ -221,6 +223,30 @@ function Board({ session, de }: { session: PinboardSession; de: boolean }) {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function BoardAppearance({ de }: { de: boolean }) {
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  return (
+    <div className={styles.appearance}>
+      <div className={styles.themeSwitch} role="group" aria-label={de ? "Darstellung" : "Appearance"}>
+        <button type="button" disabled={!mounted} aria-pressed={mounted && resolvedTheme === "light"}
+          aria-label={de ? "Helle Darstellung verwenden" : "Use light appearance"}
+          title={de ? "Helle Darstellung" : "Light appearance"} onClick={() => setTheme("light")}>
+          <Sun size={15} aria-hidden="true" /><span className={styles.themeLabel}>{de ? "Hell" : "Light"}</span>
+        </button>
+        <button type="button" disabled={!mounted} aria-pressed={mounted && resolvedTheme === "dark"}
+          aria-label={de ? "Dunkle Darstellung verwenden" : "Use dark appearance"}
+          title={de ? "Dunkle Darstellung" : "Dark appearance"} onClick={() => setTheme("dark")}>
+          <Moon size={15} aria-hidden="true" /><span className={styles.themeLabel}>{de ? "Dunkel" : "Dark"}</span>
+        </button>
+      </div>
+      <p className={styles.boardHint}>{de ? "Klicken zum Anpinnen · Ziehen zum Anordnen" : "Click to pin · Drag to arrange"}</p>
+    </div>
   );
 }
 
