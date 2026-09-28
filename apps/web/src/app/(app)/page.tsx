@@ -56,13 +56,14 @@ export default function NewSearchPage() {
   }, []);
 
   return (
-    <div className={`${boardStyles.home} relative isolate flex min-h-0 flex-1 flex-col items-center justify-start overflow-x-hidden overflow-y-auto px-3 py-8 sm:px-5 sm:py-12 lg:rounded-[calc(var(--radius)*1.8-1px)]`}>
-      <div className="relative z-10 w-full max-w-[52.5rem]">
+    <div className={`${boardStyles.home} relative isolate flex min-h-0 flex-1 flex-col items-center justify-start overflow-x-hidden overflow-y-auto px-3 py-6 sm:px-5 sm:py-10 lg:justify-center lg:rounded-[calc(var(--radius)*1.8-1px)]`}>
+      <PersonalPinboard />
+      <div className="relative z-10 w-full max-w-[52.5rem] lg:-translate-y-[4%]" data-pinboard-foreground>
         <div className="rise rise-1 mb-5 flex flex-col items-center text-center sm:mb-8">
-          <h1 className="font-display text-[clamp(2rem,9vw,3.2rem)] leading-tight text-foreground">
+          <h1 className={`${boardStyles.greeting} font-display text-[clamp(2rem,9vw,3.2rem)] leading-tight`}>
             {greeting ?? (isGerman ? "Frag die Literatur." : "Ask the literature.")}
           </h1>
-          <p className="mt-2 max-w-md text-pretty text-[0.875rem] leading-relaxed text-muted-foreground sm:text-[0.9375rem]">
+          <p className={`${boardStyles.intro} mt-2 max-w-md text-pretty text-[0.875rem] leading-relaxed sm:text-[0.9375rem]`}>
             {isGerman
               ? "Stell deine Forschungsfrage, entdecke relevante Literatur und prüfe Antworten anhand ihrer Quellen."
               : "Ask a research question, discover relevant literature and check answers against their sources."}
@@ -73,7 +74,6 @@ export default function NewSearchPage() {
           <Composer seed={seed} />
         </div>
       </div>
-      <PersonalPinboard />
     </div>
   );
 }

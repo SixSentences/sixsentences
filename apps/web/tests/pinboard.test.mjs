@@ -8,7 +8,7 @@ const source = readFileSync("src/lib/pinboard.ts", "utf8");
 const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
 }).outputText;
-const { PinboardSession, appendPinboardNote, arrangePinboardNotes, newPinboardNote, pinboardPosition, validatePinboard } = await import(
+const { PinboardSession, appendPinboardNote, arrangePinboardNotes, newPinboardNote, pinboardPosition, pinboardPoint, pinboardDragStarted, validatePinboard } = await import(
   `data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`,
 );
 const id = "b27ed80a-2f10-4565-a61b-314508b92642";
@@ -271,9 +271,11 @@ test("the composer has no implicit pinboard context or browser content storage",
 // Execute the real editor with a minimal hook/element harness, without a DOM or
 // browser storage. Dialog dismissal, state transitions, and listener cleanup are
 // exercised through the component's actual handlers rather than source patterns.
-function editorFixture(original = note(), isNew = false) {
+function editorFixture(original = note(), isNew = false, componentName = "NoteEditor", additionalProps = {}) {
   const editorSource = readFileSync("src/components/home/personal-pinboard.tsx", "utf8");
-  const output = ts.transpileModule(`${editorSource.slice(editorSource.indexOf("function NoteEditor("))}\nexports.NoteEditor = NoteEditor;`, {
+  const start = editorSource.indexOf(`function ${componentName}(`);
+  const next = editorSource.indexOf("\nfunction ", start + 1);
+  const output = ts.transpileModule(`${editorSource.slice(start, next < 0 ? undefined : next)}\nexports.Component = ${componentName};`, {
     compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const hooks = [];
@@ -310,12 +312,17 @@ function editorFixture(original = note(), isNew = false) {
         });
       }
     },
+    useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
     window: {
       addEventListener: (type, handler) => { assert.equal(type, "beforeunload"); listeners.add(handler); },
       removeEventListener: (type, handler) => { assert.equal(type, "beforeunload"); listeners.delete(handler); },
     },
     Dialog: "Dialog", DialogContent: "DialogContent", DialogTitle: "DialogTitle", DialogDescription: "DialogDescription",
-    Button: "Button", Check: "Check", Trash2: "Trash2", Pin: "Pin", styles: {},
+    Popover: "Popover", PopoverAnchor: "PopoverAnchor", PopoverContent: "PopoverContent", PopoverTrigger: "PopoverTrigger",
+    PinnedNote: "PinnedNote", NoteEditor: "NoteEditor", Button: "Button", Check: "Check", Trash2: "Trash2", Pin: "Pin",
+    Plus: "Plus", Grip: "Grip", Pencil: "Pencil", RotateCcw: "RotateCcw", LoaderCircle: "LoaderCircle", styles: {},
+    pinboardPoint, pinboardDragStarted, pinboardPosition, newPinboardNote, PINBOARD_LIMIT: 24,
+    crypto: { randomUUID: () => "3d9d01c4-c0fb-4f2a-ae1e-f51365686958" },
     PINBOARD_TEXT_LIMIT: 2000, PINBOARD_COLORS: ["butter", "sage"], PINBOARD_SHAPES: ["note", "card"],
     COLOR_LABELS: { butter: ["Butter", "Butter"], sage: ["Sage", "Salbei"] },
     SHAPE_LABELS: { note: ["Sticky note", "Notiz"], card: ["Index card", "Karte"] },
@@ -323,7 +330,8 @@ function editorFixture(original = note(), isNew = false) {
   runInNewContext(output, context);
   const render = () => {
     cursor = 0;
-    tree = exports.NoteEditor({ note: original, isNew, de: false, onClose: () => { closed++; }, onSave: (value) => { saved = value; }, onDelete: () => {} });
+    tree = exports.Component({ note: original, isNew, de: false, index: 0, onClose: () => { closed++; },
+      onEdit: () => { closed++; }, onMove: (value) => { saved = value; }, onSave: (value) => { saved = value; }, onDelete: () => {}, ...additionalProps });
     while (pendingEffects.length) pendingEffects.shift()();
     return tree;
   };
@@ -372,6 +380,99 @@ test("dirty new and existing editor drafts survive dialog dismissal until explic
     editor.unmount();
     assert.equal(editor.warningCount, 0);
   }
+});
+
+test("a background click anchors the new note at the click and clamps canvas edges", () => {
+  const position = pinboardPoint(320, 90, 900, 650);
+  assert.equal(position.x * (900 - 210) + 105, 320);
+  assert.equal(position.y * (650 - 216) + 13, 90);
+  assert.deepEqual(pinboardPoint(-100, -100, 900, 650), { x: 0, y: 0 });
+  assert.deepEqual(pinboardPoint(9999, 9999, 320, 450), { x: 1, y: 1 });
+  assert.deepEqual(pinboardPoint(NaN, Infinity, 100, 100), { x: 0, y: 0 });
+  assert.equal(pinboardDragStarted(3, 3), false);
+  assert.equal(pinboardDragStarted(3, 4), true);
+});
+
+test("left and right background clicks open a local creation popup, never child or drag clicks", async () => {
+  for (const type of ["click", "contextmenu"]) {
+    const { session, writes } = fixture();
+    await session.load();
+    const board = editorFixture(note(), false, "Board", { session });
+    const surface = () => board.find((node) => node.props["data-testid"] === "pinboard-surface");
+    const area = { getBoundingClientRect: () => ({ left: 20, top: 30, width: 900, height: 650 }) };
+    const event = { type, target: area, currentTarget: area, clientX: 340, clientY: 120, preventDefault() {} };
+    surface().props.onPointerDown(event);
+    surface().props[type === "click" ? "onClick" : "onContextMenu"]({ ...event, target: {} });
+    board.render();
+    assert.equal(board.find((node) => node.type === "Popover").props.open, false);
+    surface().props[type === "click" ? "onClick" : "onContextMenu"](event);
+    board.render();
+    assert.equal(board.find((node) => node.type === "Popover").props.open, true);
+    board.find((node) => node.type === "Button" && node.props.children?.includes?.("Pin a note here")).props.onClick();
+    board.render();
+    const editor = board.find((node) => node.type === "NoteEditor");
+    assert.equal(editor.props.isNew, true);
+    assert.equal(editor.props.note.x, pinboardPoint(320, 90, 900, 650).x);
+    assert.equal(editor.props.note.y, pinboardPoint(320, 90, 900, 650).y);
+    assert.deepEqual(Object.keys(editor.props.note).sort(), Object.keys(note()).sort());
+    editor.props.onSave({ ...editor.props.note, text: "Keep the exact click position" });
+    await session.save();
+    assert.equal(writes[0].notes[0].x, editor.props.note.x);
+    assert.equal(writes[0].notes[0].y, editor.props.note.y);
+    assert.equal(session.getSnapshot().dirty, false);
+    board.unmount();
+  }
+  const { session } = fixture();
+  await session.load();
+  const board = editorFixture(note(), false, "Board", { session });
+  const surface = board.find((node) => node.props["data-testid"] === "pinboard-surface");
+  const target = {};
+  surface.props.onPointerDown({ target, currentTarget: target, clientX: 50, clientY: 50 });
+  surface.props.onClick({ type: "click", target, currentTarget: target, clientX: 100, clientY: 50 });
+  board.render();
+  assert.equal(board.find((node) => node.type === "Popover").props.open, false);
+  board.unmount();
+});
+
+test("note body captures the pointer but moves only after threshold, without opening the editor", () => {
+  const canvas = { current: { getBoundingClientRect: () => ({ width: 900, height: 650 }) } };
+  const card = editorFixture(note(), false, "PinnedNote", { canvas });
+  let article = card.find((node) => node.type === "article");
+  const captured = [];
+  const node = { offsetWidth: 210, offsetHeight: 216, setPointerCapture: (pointer) => captured.push(pointer) };
+  article.props.ref.current = node;
+  const pointer = { button: 0, pointerId: 1, clientX: 100, clientY: 100, currentTarget: node };
+  article.props.onPointerDown(pointer);
+  article.props.onPointerMove({ ...pointer, clientX: 103, clientY: 103 });
+  assert.equal(card.saved, undefined);
+  assert.deepEqual(captured, [1]);
+  article.props.onPointerMove({ ...pointer, clientX: 169, clientY: 143.4 });
+  assert.deepEqual(captured, [1]);
+  assert.equal(card.saved.x, note().x + 0.1);
+  assert.ok(Math.abs(card.saved.y - note().y - 0.1) < 1e-12);
+  article.props.onPointerUp(pointer);
+  card.render();
+  article = card.find((item) => item.type === "article");
+  let stopped = false;
+  const click = { detail: 1, target: { closest: () => null }, stopPropagation: () => { stopped = true; } };
+  article.props.onClick(click);
+  assert.equal(stopped, true);
+  assert.equal(card.closed, 0);
+  article.props.onPointerDown(pointer);
+  article.props.onPointerUp(pointer);
+  article.props.onClick(click);
+  assert.equal(card.closed, 1);
+  article.props.onPointerDown(pointer);
+  article.props.onPointerMove({ ...pointer, clientX: 169 });
+  article.props.onPointerCancel(pointer);
+  article.props.onClick({ ...click, detail: 0 });
+  assert.equal(card.closed, 2);
+  article.props.onPointerDown(pointer);
+  article.props.onPointerMove({ ...pointer, clientX: 169 });
+  article.props.onLostPointerCapture(pointer);
+  article.props.onClick({ ...click, detail: 0 });
+  assert.equal(card.closed, 3);
+  card.unmount();
 });
 
 test("editor unload warns only for changed content and removes the listener on revert or unmount", () => {

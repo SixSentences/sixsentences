@@ -1,17 +1,18 @@
 "use client";
 
-import { Check, Grip, LayoutGrid, LoaderCircle, Pencil, Pin, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Check, Grip, LoaderCircle, Pencil, Pin, Plus, RotateCcw, Trash2 } from "lucide-react";
 import {
   useEffect, useRef, useState, useSyncExternalStore,
-  type CSSProperties, type KeyboardEvent, type PointerEvent,
+  type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent,
 } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuth } from "@/lib/auth";
 import {
-  appendPinboardNote, arrangePinboardNotes, newPinboardNote, PINBOARD_COLORS, PINBOARD_LIMIT, PINBOARD_SHAPES, PINBOARD_TEXT_LIMIT,
-  pinboardPosition, type PinboardNote, type PinboardSession,
+  newPinboardNote, PINBOARD_COLORS, PINBOARD_LIMIT, PINBOARD_SHAPES, PINBOARD_TEXT_LIMIT,
+  pinboardDragStarted, pinboardPoint, pinboardPosition, type PinboardNote, type PinboardSession,
 } from "@/lib/pinboard";
 import { usePinboard } from "@/lib/use-pinboard";
 
@@ -25,7 +26,7 @@ const SHAPE_LABELS = {
   note: ["Sticky note", "Haftnotiz"], card: ["Index card", "Karteikarte"], circle: ["Circle", "Kreis"],
 } as const;
 
-/** A private, functional desk beneath search; notes cannot cover the composer. */
+/** The home background is the board; the unchanged composer stays above it. */
 export default function PersonalPinboard() {
   const session = usePinboard();
   const { me } = useAuth();
@@ -38,24 +39,19 @@ function Board({ session, de }: { session: PinboardSession; de: boolean }) {
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
   const [editor, setEditor] = useState<{ note: PinboardNote; isNew: boolean } | null>(null);
   const [reviewConflict, setReviewConflict] = useState(false);
-  const [columns, setColumns] = useState(3);
-  const board = useRef<HTMLElement>(null);
+  const [showNotes, setShowNotes] = useState(false);
+  const [menu, setMenu] = useState<{ left: number; top: number; x: number; y: number } | null>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const addButton = useRef<HTMLButtonElement>(null);
+  const surfaceStart = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => { void session.load(); }, [session]);
-  useEffect(() => {
-    if (!board.current) return;
-    const observer = new ResizeObserver(([entry]) => {
-      setColumns(Math.max(1, Math.min(4, Math.floor((entry.contentRect.width - 36) / 278))));
-    });
-    observer.observe(board.current);
-    return () => observer.disconnect();
-  }, []);
   useEffect(() => {
     if (state.phase === "closed") {
       setEditor(null);
       setReviewConflict(false);
+      setShowNotes(false);
+      setMenu(null);
     }
   }, [state.phase]);
 
@@ -63,96 +59,133 @@ function Board({ session, de }: { session: PinboardSession; de: boolean }) {
     session.edit(session.getSnapshot().notes.map((current) => current.id === note.id ? note : current));
   };
   const ready = !["loading", "load-error", "closed"].includes(state.phase);
-  const loading = state.phase === "loading";
-  const title = de ? "Dein Platz für lose Gedanken." : "A place for loose thoughts.";
+  const canAdd = ready && state.notes.length < PINBOARD_LIMIT;
+  const startNote = (position: { x: number; y: number }) => {
+    if (!canAdd) return;
+    setMenu(null);
+    setShowNotes(false);
+    setEditor({ note: { ...newPinboardNote(crypto.randomUUID(), state.notes.length), x: position.x, y: position.y }, isNew: true });
+  };
+  const openNote = (note: PinboardNote) => {
+    setMenu(null);
+    setShowNotes(false);
+    setEditor({ note: { ...note }, isNew: false });
+  };
+  const openSurfaceMenu = (event: MouseEvent<HTMLDivElement>) => {
+    // Only the bare background handles creation, never notes or portalled UI.
+    if (event.target !== event.currentTarget || !canAdd || editor) return;
+    if (event.type === "click" && surfaceStart.current
+      && pinboardDragStarted(event.clientX - surfaceStart.current.x, event.clientY - surfaceStart.current.y)) return;
+    event.preventDefault();
+    const area = event.currentTarget.getBoundingClientRect();
+    const left = event.clientX - area.left;
+    const top = event.clientY - area.top;
+    setShowNotes(false);
+    setMenu({ left, top, ...pinboardPoint(left, top, area.width, area.height) });
+  };
+  const saveStatus = state.phase === "loading" ? (de ? "Wird geladen…" : "Loading…")
+    : state.phase === "saving" ? (de ? "Speichert…" : "Saving…")
+    : state.phase === "ready" && state.dirty ? (de ? "Ungespeichert" : "Unsaved")
+    : state.phase === "ready" ? (de ? "Gespeichert" : "Saved")
+    : (de ? "Nicht gespeichert" : "Not saved");
 
   if (state.phase === "closed") return null;
 
   return (
-    <section ref={board} className={styles.board} aria-labelledby="pinboard-title" data-testid="personal-pinboard">
-      <header className={styles.header}>
-        <div>
-          <p className={styles.eyebrow}><Pin size={12} aria-hidden="true" /> {de ? "Deine Pinnwand" : "Your pinboard"}</p>
-          <h2 id="pinboard-title" className={styles.title}>{title}</h2>
-          <p className={styles.subtitle}>{de
-            ? "Nur für dein Konto. Nicht automatisch an KI gesendet."
-            : "For your account only. Never sent to AI automatically."}</p>
+    <>
+      <section className={styles.board} aria-label={de ? "Deine private Pinnwand" : "Your private pinboard"} data-testid="personal-pinboard">
+        <p id="pinboard-move-help" className="sr-only">{de
+          ? "Freie Fläche anklicken, um eine Notiz anzupinnen. Notizen ziehen oder am Griff mit den Pfeiltasten bewegen; Umschalt bewegt weiter. Alle Notizen sind auch im Notizen-Menü erreichbar."
+          : "Click empty space to pin a note. Drag notes, or focus a handle and use arrow keys; Shift moves further. All notes are also available in the Notes menu."}</p>
+        <div ref={canvas} className={styles.canvas} data-testid="pinboard-surface"
+          onPointerDown={(event) => {
+            surfaceStart.current = event.target === event.currentTarget ? { x: event.clientX, y: event.clientY } : null;
+          }}
+          onClick={openSurfaceMenu} onContextMenu={openSurfaceMenu}>
+          {ready && state.notes.map((note, index) => (
+            <PinnedNote key={note.id} note={note} index={index} de={de} canvas={canvas}
+              onEdit={() => openNote(note)} onMove={edit} />
+          ))}
+          <Popover open={menu !== null} onOpenChange={(open) => { if (!open) setMenu(null); }}>
+            <PopoverAnchor asChild><span className={styles.menuAnchor}
+              style={{ left: menu?.left ?? 0, top: menu?.top ?? 0 }} aria-hidden="true" /></PopoverAnchor>
+            <PopoverContent align="start" sideOffset={8} className="w-60" aria-label={de ? "Notiz an dieser Stelle" : "Note at this position"}
+              onCloseAutoFocus={(event) => event.preventDefault()}>
+              <Button type="button" variant="ghost" className="justify-start" disabled={!canAdd}
+                onClick={() => { if (menu) startNote(menu); }}><Plus aria-hidden="true" />{de ? "Hier eine Notiz anpinnen" : "Pin a note here"}</Button>
+              <p className="px-2 pb-1 text-xs leading-relaxed text-muted-foreground">{de
+                ? "Nur für dich. Nicht automatisch an KI gesendet."
+                : "Only for you. Never sent to AI automatically."}</p>
+            </PopoverContent>
+          </Popover>
         </div>
-        <div className={styles.actions}>
+      </section>
+      <div className={styles.tools} data-pinboard-ui>
+        {(state.phase === "load-error" || state.phase === "save-error") && (
+          <div className={styles.notice} role="alert">
+            <p>{state.phase === "load-error"
+              ? (de ? "Notizen konnten nicht geladen werden. Nichts wird überschrieben." : "Notes could not be loaded. Nothing will be overwritten.")
+              : (de ? "Noch nicht gespeichert. Dein Entwurf bleibt hier erhalten." : "Not saved yet. Your draft is still here.")}</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => void (state.phase === "load-error" ? session.load() : session.save())}>
+              <RotateCcw aria-hidden="true" />{de ? "Erneut versuchen" : "Retry"}
+            </Button>
+          </div>
+        )}
+        {state.phase === "conflict" && (
+          <div className={styles.notice} role="alert">
+            <p>{de ? "In einem anderen Fenster geändert. Dein Entwurf ist erhalten." : "Changed in another window. Your draft is safe here."}</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => setReviewConflict(true)}>{de ? "Versionen vergleichen" : "Compare versions"}</Button>
+          </div>
+        )}
+        <div className={styles.toolRow}>
           <span className={styles.saveStatus} role="status" aria-live="polite">
-            {loading ? (de ? "Wird geladen…" : "Loading…")
-              : state.phase === "saving" ? <><LoaderCircle size={13} className="motion-safe:animate-spin" aria-hidden="true" />{de ? "Speichert…" : "Saving…"}</>
-              : state.phase === "ready" && state.dirty ? (de ? "Ungespeichert" : "Unsaved")
-              : state.phase === "ready" ? <><Check size={13} aria-hidden="true" />{de ? "Gespeichert" : "Saved"}</>
-              : (de ? "Nicht gespeichert" : "Not saved")}
+            {state.phase === "saving" ? <LoaderCircle size={12} className="motion-safe:animate-spin" aria-hidden="true" />
+              : state.phase === "ready" && !state.dirty ? <Check size={12} aria-hidden="true" /> : null}
+            {saveStatus}
           </span>
-          {state.notes.length > 1 && <Button type="button" variant="ghost" size="icon" className="size-10"
-            aria-label={de ? "Notizen ordentlich anordnen" : "Tidy board"}
-            title={de ? "Notizen ordentlich anordnen" : "Tidy board"}
-            onClick={() => session.edit(arrangePinboardNotes(state.notes, columns))}><LayoutGrid aria-hidden="true" /></Button>}
-          <Button ref={addButton} type="button" variant="outline" className="h-10 bg-background/90" disabled={!ready || state.notes.length >= PINBOARD_LIMIT}
-            onClick={() => setEditor({ note: newPinboardNote(crypto.randomUUID(), state.notes.length), isNew: true })}>
-            <Plus aria-hidden="true" />{de ? "Notiz anpinnen" : "Pin a note"}
-          </Button>
+          <Popover open={showNotes} onOpenChange={setShowNotes}>
+            <PopoverTrigger asChild>
+              <button ref={addButton} type="button" className={styles.toolsButton} aria-describedby="pinboard-move-help">
+                <Pin size={14} aria-hidden="true" />{de ? "Notizen" : "Notes"}{state.notes.length ? ` · ${state.notes.length}` : ""}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent side="top" align="end" className="w-72" aria-label={de ? "Deine Notizen" : "Your notes"}
+              onCloseAutoFocus={(event) => { if (editor) event.preventDefault(); }}>
+              <div className="flex items-center justify-between gap-2 px-1">
+                <p className="text-sm font-medium">{de ? "Deine Notizen" : "Your notes"}</p>
+                <span className="text-xs text-muted-foreground">{state.notes.length} / {PINBOARD_LIMIT}</span>
+              </div>
+              <p className="px-1 text-xs leading-relaxed text-muted-foreground">{de
+                ? "Klicke auf die freie Tafel oder füge hier eine private Notiz hinzu."
+                : "Click the empty board or add a private note here."}</p>
+              <Button type="button" variant="outline" disabled={!canAdd} onClick={() => startNote({ x: 0, y: 0 })}>
+                <Plus aria-hidden="true" />{de ? "Notiz hinzufügen" : "Add a note"}
+              </Button>
+              <div className="grid max-h-64 gap-1 overflow-y-auto">
+                {state.notes.map((note, index) => <button key={note.id} type="button"
+                  className="flex gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+                  onClick={() => openNote(note)}>
+                  <span className={`${styles.noteSwatch} ${styles[note.color]}`} aria-hidden="true" />
+                  <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{note.text || `${de ? "Notiz" : "Note"} ${index + 1}`}</span>
+                </button>)}
+              </div>
+              <p className="px-1 text-[11px] leading-relaxed text-muted-foreground">{de
+                ? "Nur für dein Konto. Nicht automatisch an KI gesendet."
+                : "For your account only. Never sent to AI automatically."}</p>
+            </PopoverContent>
+          </Popover>
         </div>
-      </header>
-
-      {(state.phase === "load-error" || state.phase === "save-error") && (
-        <div className={styles.notice} role="alert">
-          <p>{state.phase === "load-error"
-            ? (de ? "Deine Pinnwand konnte nicht geladen werden. Bestehende Notizen werden nicht überschrieben." : "Your board could not be loaded. Existing notes will not be overwritten.")
-            : (de ? "Noch nicht gespeichert. Dein Entwurf bleibt hier erhalten. Bitte vor dem Schließen erneut versuchen." : "Not saved yet. Your draft is still here. Please retry before closing this tab.")}</p>
-          <Button type="button" variant="outline" onClick={() => void (state.phase === "load-error" ? session.load() : session.save())}>
-            <RotateCcw aria-hidden="true" />{de ? "Erneut versuchen" : "Retry"}
-          </Button>
-        </div>
-      )}
-      {state.phase === "conflict" && (
-        <div className={styles.notice} role="alert">
-          <p>{de ? "Die Pinnwand wurde in einem anderen Fenster geändert. Dein Entwurf ist erhalten; nichts wurde überschrieben." : "This board changed in another window. Your draft is safe here; nothing was overwritten."}</p>
-          <Button type="button" variant="outline" onClick={() => setReviewConflict(true)}>{de ? "Versionen vergleichen" : "Compare versions"}</Button>
-        </div>
-      )}
-
-      {ready && state.notes.length === 0 && (
-        <div className={styles.empty}>
-          <div className={styles.paperStack} aria-hidden="true"><span /><span /><span><Pin size={20} /><i>{de ? "Eine Idee\nfür später." : "A thought\nfor later."}</i></span></div>
-          <div>
-            <p className={styles.emptyTitle}>{de ? "Raus aus dem Kopf. Rauf aufs Board." : "Out of your head. Onto the board."}</p>
-            <p>{de ? "Ideen, nächste Schritte, kleine Erinnerungen — gib ihnen eine Farbe und einen Platz." : "Ideas, next steps, little reminders — give them a colour and a place."}</p>
-            <button type="button" className={styles.textButton} onClick={() => setEditor({ note: newPinboardNote(crypto.randomUUID(), 0), isNew: true })}>
-              {de ? "Deine erste Notiz →" : "Your first note →"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {ready && state.notes.length > 0 && (
-        <>
-          <p id="pinboard-move-help" className={styles.moveHelp}>{de
-            ? "Am Griff ziehen oder ihn mit Tab fokussieren und mit den Pfeiltasten bewegen. Auf kleinen Bildschirmen werden Notizen untereinander angeordnet."
-            : "Drag a handle, or focus it with Tab and use the arrow keys. On small screens, notes stack neatly instead."}</p>
-          <div className={styles.canvas} style={{ "--board-height": `${Math.max(310, Math.ceil(state.notes.length / columns) * 250 + 60)}px` } as CSSProperties}>
-            <div className={styles.travel} ref={canvas}>
-              {state.notes.map((note, index) => (
-                <PinnedNote key={note.id} note={note} index={index} de={de} canvas={canvas}
-                  onEdit={() => setEditor({ note: { ...note }, isNew: false })} onMove={edit} />
-              ))}
-            </div>
-          </div>
-          <p className={styles.count}>{state.notes.length} / {PINBOARD_LIMIT} {de ? "Notizen" : "notes"}</p>
-        </>
-      )}
-
+      </div>
       {editor && <NoteEditor key={editor.note.id} note={editor.note} isNew={editor.isNew} de={de}
         onClose={() => setEditor(null)}
         onSave={(note) => {
           if (editor.isNew) {
             const current = session.getSnapshot().notes;
             if (current.length >= PINBOARD_LIMIT) return;
-            session.edit(appendPinboardNote(current, note, columns));
+            session.edit([...current, note]);
           } else edit(note);
           setEditor(null);
+          if (canvas.current && canvas.current.clientWidth <= 660) setShowNotes(true);
         }}
         onDelete={() => {
           session.edit(session.getSnapshot().notes.filter((note) => note.id !== editor.note.id));
@@ -187,7 +220,7 @@ function Board({ session, de }: { session: PinboardSession; de: boolean }) {
           </div>
         </DialogContent>
       </Dialog>
-    </section>
+    </>
   );
 }
 
@@ -198,24 +231,32 @@ function PinnedNote({ note, index, de, canvas, onEdit, onMove }: {
 }) {
   const node = useRef<HTMLElement>(null);
   const drag = useRef<{ pointer: number; startX: number; startY: number; x: number; y: number; width: number; height: number } | null>(null);
+  const moved = useRef(false);
   const current = useRef(note);
   current.current = note;
   const [dragging, setDragging] = useState(false);
 
-  const pointerDown = (event: PointerEvent<HTMLButtonElement>) => {
-    if (event.button !== 0 || !canvas.current || !node.current || getComputedStyle(node.current).position !== "absolute") return;
+  const pointerDown = (event: PointerEvent<HTMLElement>) => {
+    if (event.button !== 0 || !canvas.current || !node.current) return;
     const area = canvas.current.getBoundingClientRect();
+    moved.current = false;
     drag.current = { pointer: event.pointerId, startX: event.clientX, startY: event.clientY, x: note.x, y: note.y,
       width: Math.max(1, area.width - node.current.offsetWidth), height: Math.max(1, area.height - node.current.offsetHeight) };
     event.currentTarget.setPointerCapture(event.pointerId);
-    setDragging(true);
   };
-  const pointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+  const pointerMove = (event: PointerEvent<HTMLElement>) => {
     const start = drag.current;
     if (!start || start.pointer !== event.pointerId) return;
+    const dx = event.clientX - start.startX;
+    const dy = event.clientY - start.startY;
+    if (!moved.current && !pinboardDragStarted(dx, dy)) return;
+    if (!moved.current) {
+      moved.current = true;
+      setDragging(true);
+    }
     onMove({ ...current.current,
-      x: pinboardPosition(start.x + (event.clientX - start.startX) / start.width),
-      y: pinboardPosition(start.y + (event.clientY - start.startY) / start.height),
+      x: pinboardPosition(start.x + dx / start.width),
+      y: pinboardPosition(start.y + dy / start.height),
     });
   };
   const endDrag = () => { drag.current = null; setDragging(false); };
@@ -231,19 +272,28 @@ function PinnedNote({ note, index, de, canvas, onEdit, onMove }: {
   return (
     <article ref={node} className={`${styles.note} ${styles[note.color]} ${styles[note.shape]} ${dragging ? styles.dragging : ""}`}
       style={{ "--note-x": note.x, "--note-y": note.y, "--note-rotation": `${note.rotation}deg` } as CSSProperties}
-      data-shape={note.shape} aria-label={`${de ? "Notiz" : "Note"} ${index + 1}`}>
+      data-shape={note.shape} aria-label={`${de ? "Notiz" : "Note"} ${index + 1}`}
+      onPointerDown={pointerDown} onPointerMove={pointerMove}
+      onPointerUp={endDrag} onPointerCancel={() => { endDrag(); moved.current = false; }} onLostPointerCapture={endDrag}
+      onClick={(event) => {
+        event.stopPropagation();
+        if (moved.current && event.detail !== 0) { moved.current = false; return; }
+        moved.current = false;
+        if (!(event.target as HTMLElement).closest("[data-drag-handle]")) onEdit();
+      }}
+      onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); if (!dragging) onEdit(); }}>
       <span className={styles.pin} aria-hidden="true" />
       <div className={styles.noteTop}>
         <span className={styles.noteNumber}>{String(index + 1).padStart(2, "0")}</span>
-        <button type="button" className={styles.dragHandle} aria-label={`${de ? "Notiz verschieben" : "Move note"} ${index + 1}`}
-          aria-describedby="pinboard-move-help" onPointerDown={pointerDown} onPointerMove={pointerMove}
-          onPointerUp={endDrag} onPointerCancel={endDrag} onLostPointerCapture={endDrag} onKeyDown={moveKey}>
+        <button type="button" className={styles.dragHandle} data-drag-handle
+          aria-label={`${de ? "Notiz verschieben" : "Move note"} ${index + 1}`}
+          aria-describedby="pinboard-move-help" onKeyDown={moveKey}>
           <Grip size={16} aria-hidden="true" />
         </button>
       </div>
-      <button type="button" className={styles.noteBody} onClick={onEdit} aria-label={`${de ? "Notiz bearbeiten" : "Edit note"} ${index + 1}: ${note.text.slice(0, 80)}`}>
+      <button type="button" className={styles.noteBody} aria-label={`${de ? "Notiz bearbeiten" : "Edit note"} ${index + 1}: ${note.text.slice(0, 80)}`}>
         <span className={styles.noteText}>{note.text || (de ? "Ein Gedanke …" : "A thought …")}</span>
-        <span className={styles.editLabel}><Pencil size={11} aria-hidden="true" />{de ? "Bearbeiten" : "Edit note"}</span>
+        <span className={styles.editLabel}><Pencil size={11} aria-hidden="true" />{de ? "Bearbeiten · ziehen" : "Edit · drag"}</span>
       </button>
     </article>
   );

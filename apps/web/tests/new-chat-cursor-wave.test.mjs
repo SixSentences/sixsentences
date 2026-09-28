@@ -21,6 +21,10 @@ test("the empty workspace uses a functional pinboard without blocking the compos
   assert.doesNotMatch(page, /<NewChatCursorWave/);
   assert.match(page, /overflow-x-hidden overflow-y-auto/);
   assert.doesNotMatch(page, /new-chat-dot-field/);
+  assert.match(page, /lg:justify-center/);
+  assert.match(page, /lg:-translate-y-\[4%\]/);
+  assert.match(page, /data-pinboard-foreground/);
+  assert.ok(page.indexOf("<PersonalPinboard") < page.indexOf("<Composer"));
 });
 
 test("the reusable wave remains theme-aware", () => {

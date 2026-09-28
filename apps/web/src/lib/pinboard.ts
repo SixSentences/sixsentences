@@ -39,6 +39,19 @@ export function pinboardPosition(value: number): number {
   return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
 }
 
+/** Place the note's pin at a canvas-local click, keeping the paper in bounds. */
+export function pinboardPoint(x: number, y: number, width: number, height: number): { x: number; y: number } {
+  return {
+    x: pinboardPosition((x - 105) / Math.max(1, width - 210)),
+    y: pinboardPosition((y - 13) / Math.max(1, height - 216)),
+  };
+}
+
+/** A click edits; movement beyond this threshold starts a note drag. */
+export function pinboardDragStarted(dx: number, dy: number): boolean {
+  return Number.isFinite(dx) && Number.isFinite(dy) && Math.hypot(dx, dy) >= 5;
+}
+
 /** Create a blank, deliberately unsaved note; no example research data is stored. */
 export function newPinboardNote(id: string, index: number): PinboardNote {
   return {
