@@ -15,10 +15,19 @@ const workspaceWave = await readFile(
   "utf8",
 );
 
-test("the empty workspace clips a sparse, theme-aware cursor wave", () => {
-  assert.match(page, /<NewChatCursorWave/);
+test("the empty workspace uses a functional pinboard without blocking the composer", () => {
+  assert.match(page, /<PersonalPinboard/);
+  assert.match(page, /<Composer seed=\{seed\}/);
+  assert.doesNotMatch(page, /<NewChatCursorWave/);
   assert.match(page, /overflow-x-hidden overflow-y-auto/);
   assert.doesNotMatch(page, /new-chat-dot-field/);
+  assert.match(page, /lg:justify-center/);
+  assert.match(page, /lg:-translate-y-\[4%\]/);
+  assert.match(page, /data-pinboard-foreground/);
+  assert.ok(page.indexOf("<PersonalPinboard") < page.indexOf("<Composer"));
+});
+
+test("the reusable wave remains theme-aware", () => {
   assert.match(workspaceWave, /backgroundColor="transparent"/);
   assert.match(workspaceWave, /cellSize=\{40\}/);
   assert.match(workspaceWave, /mode \? mode === "dark" : resolvedTheme === "dark"/);

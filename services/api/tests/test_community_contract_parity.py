@@ -54,16 +54,19 @@ def test_core_to_community_boundary_is_exact() -> None:
     parity = json.loads(PARITY_PATH.read_text(encoding="utf-8"))
     community, websockets = _application_operations()
     excluded = set(parity["excluded_operations"])
+    additions = set(parity["community"]["additions"])
 
-    assert len(community) == parity["community"]["http_operations"] == 400
+    assert len(community) == parity["community"]["http_operations"] == 402
     assert websockets == parity["community"]["websockets"] == 1
     assert _method_counts(community) == parity["community"]["methods"]
     assert _digest(community) == parity["community"]["contract_sha256"]
     assert not community & excluded
-    assert parity["community"]["additions"] == []
+    assert additions == {"GET /auth/pinboard", "PUT /auth/pinboard"}
+    assert additions <= community
     assert parity["community"]["noncommercial_gaps"] == []
 
-    reconstructed_core = community | excluded
+    # New community features do not rewrite the pinned historical export provenance.
+    reconstructed_core = (community - additions) | excluded
     assert len(excluded) == 63
     assert len(reconstructed_core) == parity["core"]["http_operations"] == 463
     assert _method_counts(reconstructed_core) == parity["core"]["methods"]
@@ -113,13 +116,13 @@ def test_checked_open_web_has_zero_community_gaps_when_present() -> None:
     central = checker.extract_central_client_contracts(source)
 
     assert hashlib.sha256(source.encode()).hexdigest() == expected["source_sha256"]
-    assert len(central) == expected["central_http_operations"] == 334
+    assert len(central) == expected["central_http_operations"] == 336
     assert (
         _method_counts({f"{item.method} {item.path}" for item in central})
         == expected["central_methods"]
     )
     assert checker.contract_sha256(central) == expected["central_contract_sha256"]
-    assert len(required) == expected["all_api_transport_operations"] == 349
+    assert len(required) == expected["all_api_transport_operations"] == 351
     assert (
         _method_counts({f"{item.method} {item.path}" for item in required})
         == expected["all_api_transport_methods"]

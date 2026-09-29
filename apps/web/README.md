@@ -117,6 +117,7 @@ development or hosted infrastructure.
 | Area | Representative source |
 | --- | --- |
 | Application and authentication routes | `src/app` |
+| Personal pinboard and conflict-safe note persistence | `src/components/home`, `src/lib/pinboard.ts` |
 | Literature runs, screening, extraction, and evidence views | `src/components/run` |
 | Library, source identity, citations, and sharing | `src/components/library` |
 | Research data and scientific figures | `src/app/(app)/data`, `src/app/(app)/figures` |
@@ -130,6 +131,9 @@ development or hosted infrastructure.
 
 ## Security and privacy notes
 
+- Personal pinboard content stays in the account's API storage and the current
+  authenticated in-memory draft, not browser local/session storage. It is not
+  added to AI prompts. See [pinboard behavior and privacy](docs/product/personal-pinboard.md).
 - Treat the self-hosted API origin as a security boundary. The browser sends
   authenticated requests and research content to that origin.
 - The current client keeps its opaque bearer token in browser local storage.

@@ -10,6 +10,12 @@ equivalents for Python package metadata.
 
 ### Added
 
+- A personal research pinboard on the workspace homepage: coloured notes, cards
+  and circles with editable text, draggable or keyboard-controlled positions,
+  responsive layouts and revision-bound autosave. Notes are creator-private,
+  participate in account export/erasure, and are never implicit AI context.
+  Self-hosted upgrades add the `20260928_0003` database migration; see the API
+  README for its additive upgrade and destructive downgrade boundary.
 - `sixsentences --version` and `six-community --version` report the installed
   version of each command-line tool.
 - Every `sixsentences` subcommand accepts `--output PATH`. A file receives

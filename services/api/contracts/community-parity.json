@@ -15,41 +15,44 @@
     "contract_sha256": "f1f468fad354cf18c0a4d4b35c49a2578e450a3a8b4ac57afe12259f5b1abce6"
   },
   "community": {
-    "http_operations": 400,
+    "http_operations": 402,
     "websockets": 1,
     "methods": {
       "DELETE": 41,
-      "GET": 158,
+      "GET": 159,
       "PATCH": 30,
       "POST": 165,
-      "PUT": 6
+      "PUT": 7
     },
-    "contract_sha256": "bf4ec20090d1c9eda237a382b7c74272ef2dcf8f900f0c573a10589a8f05f095",
-    "additions": [],
+    "contract_sha256": "5efb0a23b5014a5834287dfbf637ef5508e87ed2c83148113dd86fe607f9b8ca",
+    "additions": [
+      "GET /auth/pinboard",
+      "PUT /auth/pinboard"
+    ],
     "noncommercial_gaps": []
   },
   "open_web": {
     "source_path": "apps/web/src/lib/api.ts",
-    "source_sha256": "8bf88ac63fdb3981a1652f6c4635a9bf1ea7e5322d27bb1636fce60019ee5edc",
-    "central_http_operations": 334,
+    "source_sha256": "a88b8831c85e18efa97e93bc9d8d5d38a39ccb3b53af3e0688b4c61002812c11",
+    "central_http_operations": 336,
     "central_methods": {
       "DELETE": 36,
-      "GET": 121,
+      "GET": 122,
       "PATCH": 26,
       "POST": 145,
-      "PUT": 6
+      "PUT": 7
     },
-    "central_contract_sha256": "a4fdd96195da03fc15d6f9b47bb5f315f5f48b74a0f18446ffcd30688cda3f73",
-    "all_api_transport_operations": 349,
+    "central_contract_sha256": "deb15a2b536373bceed2127b16c92cc7c5b9cf3f9d80b6bfb0368877dffa032d",
+    "all_api_transport_operations": 351,
     "all_api_transport_methods": {
       "DELETE": 36,
-      "GET": 134,
+      "GET": 135,
       "PATCH": 26,
       "POST": 147,
-      "PUT": 6
+      "PUT": 7
     },
-    "all_api_transport_contract_sha256": "6c06b50462626abeb38eecbdfe3b329dfa2e81c7bf93d8f34dc90ae0a970a502",
-    "implemented": 349,
+    "all_api_transport_contract_sha256": "edd057921d11f813382eb27a45dab389b332bb51c234004a55e9cef436e94cba",
+    "implemented": 351,
     "missing": [],
     "separate_hosted_gate": {
       "source_path": "apps/web/src/lib/signup-control.ts",
