@@ -53,6 +53,24 @@ test("the API-declared private catalog may contain models from different provide
   }), flash.id);
 });
 
+test("the community API's deployment-controlled catalog populates the picker", () => {
+  const configured = {
+    ...catalog,
+    routing_mode: "configured",
+    content_scope: "deployment_controlled",
+  };
+  assert.deepEqual(privateModelOptions(configured), [flash, pro]);
+  assert.equal(resolvePrivateModelId(pro.id, configured), pro.id);
+  assert.equal(resolvePrivateModelId("removed-model", configured), flash.id);
+  assert.deepEqual(privateModelOptions({
+    ...configured, models: [flash, { ...pro, locked: true }],
+  }), [flash]);
+  for (const routing_mode of [undefined, "", "unknown", "configured "]) {
+    assert.deepEqual(privateModelOptions({ ...configured, routing_mode }), []);
+  }
+  assert.deepEqual(privateModelOptions({ ...configured, content_scope: "public" }), []);
+});
+
 test("old, missing and removed choices resolve to the declared server default", () => {
   for (const previous of [undefined, null, "", "auto", "sixsentences-router", "openai/gpt-5", "google/gemini-3.1-pro-preview"]) {
     assert.equal(resolvePrivateModelId(previous, catalog), flash.id);
