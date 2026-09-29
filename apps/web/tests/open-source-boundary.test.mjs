@@ -103,7 +103,10 @@ test("private model choices rely on the API declaration, not one provider", () =
   const selection = read("src/lib/private-model-selection.ts");
   const types = read("src/lib/types.ts");
 
-  assert.match(selection, /catalog\.content_scope !== "private"/);
+  assert.match(selection, /catalog\?\.content_scope === "private"/);
+  assert.match(selection, /catalog\?\.content_scope === "deployment_controlled"/);
+  assert.match(selection, /catalog\.routing_mode === "configured"/);
+  assert.match(selection, /!privateRoute && !deploymentRoute/);
   assert.match(selection, /catalog\.models\.filter\(\(model\) => !model\.locked\)/);
   assert.doesNotMatch(selection, /gemini|openrouter|perplexity/i);
   assert.match(types, /routing_mode\?: string/);
