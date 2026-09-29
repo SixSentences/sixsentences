@@ -8,8 +8,8 @@ The existing cursor-wave component remains reusable; the homepage uses the board
 
 ## Interaction
 
-- The visible Sun/Moon control uses the existing application theme preference;
-  it does not introduce another setting or reset a saved/system theme on mount.
+- The board follows the existing application theme preference and its settings
+  control. There is no separate board theme switch or reset of a saved/system theme.
 - Pin up to 24 personal notes, each with at most 2,000 Unicode code points.
 - Choose one of five paper colours and three shapes; adjust the tilt.
 - Left- or right-click empty background to open a small creation popup. The new

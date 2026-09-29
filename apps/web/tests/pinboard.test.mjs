@@ -313,14 +313,13 @@ function editorFixture(original = note(), isNew = false, componentName = "NoteEd
       }
     },
     useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
-    useTheme: () => additionalProps.themeContext ?? { resolvedTheme: "light", setTheme() {} },
     window: {
       addEventListener: (type, handler) => { assert.equal(type, "beforeunload"); listeners.add(handler); },
       removeEventListener: (type, handler) => { assert.equal(type, "beforeunload"); listeners.delete(handler); },
     },
     Dialog: "Dialog", DialogContent: "DialogContent", DialogTitle: "DialogTitle", DialogDescription: "DialogDescription",
     Popover: "Popover", PopoverAnchor: "PopoverAnchor", PopoverContent: "PopoverContent", PopoverTrigger: "PopoverTrigger",
-    BoardAppearance: "BoardAppearance", PinnedNote: "PinnedNote", NoteEditor: "NoteEditor", Button: "Button", Check: "Check", Trash2: "Trash2", Pin: "Pin", Sun: "Sun", Moon: "Moon",
+    PinnedNote: "PinnedNote", NoteEditor: "NoteEditor", Button: "Button", Check: "Check", Trash2: "Trash2", Pin: "Pin",
     Plus: "Plus", Grip: "Grip", Pencil: "Pencil", RotateCcw: "RotateCcw", LoaderCircle: "LoaderCircle", styles: {},
     pinboardPoint, pinboardDragStarted, pinboardPosition, newPinboardNote, PINBOARD_LIMIT: 24,
     crypto: { randomUUID: () => "3d9d01c4-c0fb-4f2a-ae1e-f51365686958" },
@@ -394,28 +393,26 @@ test("a background click anchors the new note at the click and clamps canvas edg
   assert.equal(pinboardDragStarted(3, 4), true);
 });
 
-test("visible appearance buttons respect the existing theme and change it only on explicit selection", () => {
-  const choices = [];
-  const themeContext = { resolvedTheme: "dark", setTheme: (value) => { choices.push(value); themeContext.resolvedTheme = value; } };
-  const appearance = editorFixture(note(), false, "BoardAppearance", { themeContext });
-  const light = () => appearance.find((node) => node.props["aria-label"] === "Use light appearance");
-  const dark = () => appearance.find((node) => node.props["aria-label"] === "Use dark appearance");
-  assert.equal(light().props.disabled, true);
-  assert.equal(dark().props["aria-pressed"], false);
-  appearance.render();
-  assert.equal(dark().props["aria-pressed"], true);
-  assert.equal(light().props.disabled, false);
-  assert.deepEqual(choices, []);
-  light().props.onClick();
-  appearance.render();
-  assert.deepEqual(choices, ["light"]);
-  assert.equal(light().props["aria-pressed"], true);
-  assert.equal(dark().props["aria-pressed"], false);
-  dark().props.onClick();
-  appearance.render();
-  assert.deepEqual(choices, ["light", "dark"]);
-  assert.equal(dark().props["aria-pressed"], true);
-  appearance.unmount();
+test("the board keeps its creation hint without duplicating the application theme control", async () => {
+  const { session } = fixture();
+  await session.load();
+  for (const de of [false, true]) {
+    const board = editorFixture(note(), false, "Board", { session, de });
+    assert.ok(board.find((node) => node.type === "p" && node.props.children === (de
+      ? "Klicken zum Anpinnen · Ziehen zum Anordnen" : "Click to pin · Drag to arrange")));
+    assert.equal(board.find((node) => node.props.role === "group"
+      && ["Appearance", "Darstellung"].includes(node.props["aria-label"])), undefined);
+    assert.equal(board.find((node) => node.type === "button" && /appearance|Darstellung/.test(node.props["aria-label"] ?? "")), undefined);
+    board.unmount();
+  }
+  const boardSource = readFileSync("src/components/home/personal-pinboard.tsx", "utf8");
+  assert.doesNotMatch(boardSource, /useTheme|setTheme|BoardAppearance/);
+  const providers = readFileSync("src/app/providers.tsx", "utf8");
+  assert.match(providers, /<ThemeProvider\s+attribute="class"/);
+  assert.match(providers, /storageKey="sixsentences-theme"/);
+  const settings = readFileSync("src/components/settings/account-settings.tsx", "utf8");
+  assert.match(settings, /"Darstellung" : "Appearance"/);
+  assert.match(settings, /setTheme\(option\.value\)/);
 });
 
 test("both quiet board themes retain readable text contrast", () => {

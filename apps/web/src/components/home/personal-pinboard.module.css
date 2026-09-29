@@ -61,14 +61,7 @@
 .intro { color: var(--board-muted); }
 .home :global([data-tour="home-composer"] > div:first-child > span:last-child) { color: var(--board-mode); }
 .home :global([data-tour="home-composer"] > p:last-child) { color: var(--board-muted); }
-.appearance { position: absolute; left: 24px; bottom: 22px; z-index: 20; display: flex; align-items: center; gap: .8rem; pointer-events: none; }
-.themeSwitch { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--board-control-border); border-radius: 12px; background: var(--board-control); pointer-events: auto; }
-.themeSwitch button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-width: 40px; min-height: 36px; padding: 0 .65rem; border-radius: 8px; color: var(--board-muted); font-size: 11px; cursor: pointer; }
-.themeSwitch button[aria-pressed="true"] { color: var(--board-text); background: var(--board-surface); box-shadow: 0 1px 3px #29251c12; }
-.themeSwitch button:hover { color: var(--board-text); background: var(--board-control-hover); }
-.themeSwitch button:focus-visible { outline: 2px solid var(--board-focus); outline-offset: 2px; }
-.themeSwitch button:disabled { cursor: default; }
-.boardHint { color: var(--board-muted); font-size: 10px; letter-spacing: .015em; }
+.boardHint { position: absolute; left: 24px; bottom: 22px; z-index: 20; pointer-events: none; color: var(--board-muted); font-size: 10px; letter-spacing: .015em; }
 .board { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
 .canvas { position: absolute; inset: 20px; pointer-events: auto; }
 .menuAnchor { position: absolute; width: 1px; height: 1px; pointer-events: none; }
@@ -110,10 +103,6 @@
   .boardHint { display: none; }
 }
 @media (max-width: 660px) {
-  .appearance { left: 20px; bottom: 20px; }
-  .themeLabel { display: none; }
-  .themeSwitch button { padding: 0; }
-
   .canvas { inset: 20px 14px 64px; }
   .tools { right: 20px; bottom: 20px; max-width: calc(100% - 24px); }
   .saveStatus { border-radius: 5px; background: var(--board-surface); padding: .2rem .35rem; }
