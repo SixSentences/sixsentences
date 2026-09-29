@@ -99,7 +99,7 @@ export interface ChatModelCatalog {
   default_id?: string;
   /** Opaque deployment route declared by the connected API. */
   routing_mode?: string;
-  content_scope?: "private";
+  content_scope?: "private" | "deployment_controlled";
   /** Provider features that are enabled on the connected API deployment. */
   runtime_capabilities?: {
     web_search: boolean;

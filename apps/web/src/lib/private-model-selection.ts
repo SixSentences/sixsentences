@@ -1,10 +1,15 @@
 import type { ChatModelCatalog, ChatModelOption } from "./types";
 
-/** Only an explicitly routed, private server catalog may populate choices. */
+/** Use only the connected server's explicitly declared workspace catalog. */
 export function privateModelOptions(
   catalog: ChatModelCatalog | null | undefined,
 ): ChatModelOption[] {
-  if (!catalog?.routing_mode?.trim() || catalog.content_scope !== "private") {
+  const privateRoute = catalog?.content_scope === "private" && !!catalog.routing_mode?.trim();
+  const deploymentRoute = catalog?.content_scope === "deployment_controlled"
+    && catalog.routing_mode === "configured";
+  // Community operators own their provider/contract policy. This declaration
+  // enables selection, not a claim of hosted approval, EU residency or ZDR.
+  if (!catalog || (!privateRoute && !deploymentRoute)) {
     return [];
   }
   return catalog.models.filter((model) => !model.locked);
