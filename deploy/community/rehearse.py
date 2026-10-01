@@ -34,6 +34,12 @@ def baseline_bootstrap_evidence(api_reference: str) -> dict[str, object]:
         or contract.get("target_database_revision") != "20260912_0001"
         or contract.get("invalid_default_sqlstate") != "42804"
         or contract.get("unmodified_original_installer") is not False
+        or contract.get("legacy_corpus_fixture")
+        != {
+            "mode": "synthetic_duckdb_build",
+            "records": 1,
+            "seed": 42,
+        }
         or contract.get("migration_path")
         != "services/api/alembic/versions/20260912_0001_community_baseline.py"
     ):
@@ -300,6 +306,25 @@ def main() -> None:
                 ]
             )
             environment["SIX_API_IMAGE"] = args.upgrade_from
+            # Unlike the candidate, alpha.1 readiness requires a local corpus.
+            # Build and verify one real synthetic record before starting that
+            # unchanged image. This is not a skipped or mocked health check.
+            run(
+                compose
+                + [
+                    "run",
+                    "--rm",
+                    "--no-deps",
+                    "-T",
+                    "--env",
+                    "SIX_COMMUNITY_REHEARSAL=DISPOSABLE",
+                    "migrate",
+                    "python",
+                    "-",
+                    "bootstrap-corpus",
+                ],
+                data=fixture,
+            )
             run(compose + ["up", "--no-build", "--detach", "--wait", "--wait-timeout", "180"])
             health()
             phase("seed")
@@ -344,6 +369,7 @@ def main() -> None:
             environment["SIX_API_IMAGE"] = args.api_image
             run(compose + ["up", "--no-build", "--detach", "--wait", "--wait-timeout", "180"])
             health()
+            phase("verify-no-corpus")
             phase("seed")
             phase("upgrade")
             phase("verify")
@@ -363,6 +389,8 @@ def main() -> None:
                     ["docker", "image", "inspect", "--format", "{{.Id}}", args.web_image]
                 ).strip(),
                 "fresh_start": True,
+                "synthetic_corpus_bootstrap": True,
+                "fresh_candidate_without_corpus": True,
                 "upgrade": True,
                 "backup_restore": True,
                 "erasure_replay": True,

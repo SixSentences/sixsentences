@@ -43,6 +43,63 @@ def test_fixture_refuses_missing_disposable_confirmation(monkeypatch: pytest.Mon
     monkeypatch.delenv("SIX_COMMUNITY_REHEARSAL", raising=False)
     with pytest.raises(SystemExit, match="explicitly disposable"):
         FIXTURE.main()
+    with pytest.raises(SystemExit, match="explicitly disposable"):
+        FIXTURE.bootstrap_corpus()
+
+
+def test_legacy_corpus_bootstrap_is_real_synthetic_and_never_replaces_content(
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sixsentences_server.corpus.duckdb_store import DuckDBCorpus
+
+    monkeypatch.setenv("SIX_COMMUNITY_REHEARSAL", "DISPOSABLE")
+    FIXTURE.bootstrap_corpus()
+    corpus = DuckDBCorpus(settings.corpus_dir)
+    assert corpus.exists()
+    checked = corpus.verify()
+    assert checked["ok"] is True and checked["works"] == 1
+    assert checked["release_approved"] is False
+    assert corpus.info()["sources"] == {"synthetic": "release-rehearsal-seed-42"}
+    record = corpus.lookup(work_id=FIXTURE.CORPUS_ID)[0]
+    assert record.source == "synthetic"
+    assert record.doi is None and record.authors == []
+    assert record.title == "Synthetic release rehearsal record"
+    before = {path.name: path.read_bytes() for path in settings.corpus_dir.iterdir()}
+    with pytest.raises(SystemExit, match="replace any existing corpus"):
+        FIXTURE.bootstrap_corpus()
+    assert {path.name: path.read_bytes() for path in settings.corpus_dir.iterdir()} == before
+
+
+def test_fresh_candidate_requires_no_corpus_and_real_readiness(
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def ready(path: str) -> dict[str, str]:
+        calls.append(path)
+        return {"status": "ready"}
+
+    monkeypatch.setattr(FIXTURE, "request", ready)
+    FIXTURE.verify_no_corpus()
+    assert calls == ["/health/ready"]
+    settings.corpus_dir.joinpath(".corpus.lock").touch()
+    FIXTURE.verify_no_corpus()
+    settings.corpus_dir.joinpath("unexpected-fixture.parquet").write_bytes(b"synthetic sentinel")
+    with pytest.raises(AssertionError):
+        FIXTURE.verify_no_corpus()
+    assert calls == ["/health/ready", "/health/ready"]
+
+
+def test_fresh_candidate_cannot_claim_ready_from_a_nonready_response(
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    del settings
+    monkeypatch.setattr(FIXTURE, "request", lambda _path: {"status": "not_ready"})
+    with pytest.raises(AssertionError):
+        FIXTURE.verify_no_corpus()
 
 
 @pytest.mark.parametrize("preupgrade", [False, True])
@@ -139,12 +196,12 @@ def test_post_backup_erasure_replays_without_resurrection(
     phase("verify-erasure", signature)
 
 
-@pytest.mark.parametrize("fail_rollback", [False, True])
+@pytest.mark.parametrize("failed_phase", [None, "verify-rollback", "verify-no-corpus"])
 def test_driver_restores_distinct_snapshots_with_matching_api_before_receipt(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    fail_rollback: bool,
+    failed_phase: str | None,
 ) -> None:
     """Verify orchestration only; actual released-image compatibility needs Docker CI."""
     report = tmp_path / "rehearsal.json"
@@ -176,14 +233,20 @@ def test_driver_restores_distinct_snapshots_with_matching_api_before_receipt(
             elif script == "restore.sh":
                 restored = Path(command[command.index("--backup") + 1])
                 history.append((f"restore-{snapshots.index(restored)}", image))
-        elif "exec" in command:
+        elif "python" in command and ("exec" in command or "run" in command):
             phase = command[command.index("python") + 2]
             history.append((phase, image))
+            if phase == "bootstrap-corpus":
+                assert "run" in command and "--no-deps" in command
+                assert "SIX_COMMUNITY_REHEARSAL=DISPOSABLE" in command
+                assert (
+                    kwargs["input"] == (ROOT / "deploy/community/rehearsal_fixture.py").read_bytes()
+                )
             if phase == "database-revision":
                 output = "20260912_0001\n"
             elif phase == "erase":
                 output = json.dumps({"signature": "a" * 64})
-            elif phase == "verify-rollback" and fail_rollback:
+            elif phase == failed_phase:
                 returncode = 1
                 output = "private-output-must-not-escape"
         elif command[1:3] == ["image", "inspect"]:
@@ -236,8 +299,8 @@ def test_driver_restores_distinct_snapshots_with_matching_api_before_receipt(
             str(report),
         ],
     )
-    if fail_rollback:
-        with pytest.raises(RuntimeError, match="verify-rollback"):
+    if failed_phase:
+        with pytest.raises(RuntimeError, match=failed_phase):
             DRIVER.main()
         assert not report.exists()
         output = capsys.readouterr().out
@@ -251,8 +314,11 @@ def test_driver_restores_distinct_snapshots_with_matching_api_before_receipt(
         assert receipt["baseline_bootstrap"] == DRIVER.baseline_bootstrap_evidence(old_image)
         assert receipt["rollback_data_lossless"] is False
         assert receipt["schema_downgrade"] is False
+        assert receipt["synthetic_corpus_bootstrap"] is True
+        assert receipt["fresh_candidate_without_corpus"] is True
     expected = [
         ("bootstrap-original-revision", new_image),
+        ("bootstrap-corpus", old_image),
         ("seed", old_image),
         ("prepare-rollback", old_image),
         ("database-revision", old_image),
@@ -271,6 +337,11 @@ def test_driver_restores_distinct_snapshots_with_matching_api_before_receipt(
     ]
     assert history[: len(expected)] == expected
     assert history[-1][0] == "cleanup"
+    assert history.count(("bootstrap-corpus", old_image)) == 1
+    assert ("bootstrap-corpus", new_image) not in history
+    if failed_phase != "verify-rollback":
+        no_corpus = history.index(("verify-no-corpus", new_image))
+        assert history[no_corpus - 1] == ("cleanup", old_image)
 
 
 @pytest.mark.parametrize(

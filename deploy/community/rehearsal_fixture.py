@@ -36,6 +36,78 @@ NOTE = {
     "rotation": 0.0,
     "size": 1.8,
 }
+CORPUS_ID = "SYNTHETIC-REHEARSAL-42"
+
+
+def bootstrap_corpus() -> None:
+    """Build one real, clearly synthetic Parquet record for the legacy API only."""
+    if os.environ.get("SIX_COMMUNITY_REHEARSAL") != "DISPOSABLE":
+        raise SystemExit("Refusing fixture outside an explicitly disposable container")
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from sixsentences_server.config import get_settings
+    from sixsentences_server.corpus.duckdb_store import DuckDBCorpus
+    from sixsentences_server.corpus.ingest import WORKS_SCHEMA
+
+    corpus_path = get_settings().data_dir / "corpus"
+    if corpus_path.is_symlink() or (
+        corpus_path.exists() and (not corpus_path.is_dir() or any(corpus_path.iterdir()))
+    ):
+        raise SystemExit("Refusing to replace any existing corpus content")
+    corpus_path.mkdir(parents=True, exist_ok=True)
+    store = DuckDBCorpus(corpus_path)
+    table = pa.Table.from_pylist(
+        [
+            {
+                "id": CORPUS_ID,
+                "doi": None,
+                "title": "Synthetic release rehearsal record",
+                "abstract": (
+                    "Invented fixture content, not a research publication or quality benchmark."
+                ),
+                "year": 2026,
+                "venue": "Synthetic fixture",
+                "authors": "[]",
+                "cited_by_count": 0,
+                "is_retracted": False,
+                "source": "synthetic",
+                "referenced_works": "[]",
+                "open_access": "{}",
+                "work_type": "article",
+                "corpus_slice": "synthetic-release-rehearsal",
+            },
+        ],
+        schema=WORKS_SCHEMA,
+    )
+    pq.write_table(table, store.works_path)
+    store.write_meta(
+        version="synthetic-release-rehearsal-seed-42",
+        works=1,
+        sources={"synthetic": "release-rehearsal-seed-42"},
+    )
+    checked = store.verify()
+    assert checked["ok"] is True and checked["works"] == 1
+    assert checked["release_approved"] is False
+    records = store.lookup(work_id=CORPUS_ID)
+    assert len(records) == 1 and records[0].id == CORPUS_ID
+    assert records[0].source == "synthetic"
+
+
+def verify_no_corpus() -> None:
+    """Prove fresh candidate readiness without either a fixture or imported corpus."""
+    from sixsentences_server.config import get_settings
+
+    corpus_path = get_settings().data_dir / "corpus"
+    assert not corpus_path.is_symlink()
+    # DuckDBCorpus.exists() may create its empty locking directory. Only that
+    # inert lock is permitted: no Parquet, metadata, snapshot or release file.
+    if corpus_path.exists():
+        assert corpus_path.is_dir()
+        assert all(
+            path.name == ".corpus.lock" and path.is_file() and not path.is_symlink()
+            for path in corpus_path.iterdir()
+        )
+    assert request("/health/ready") == {"status": "ready"}
 
 
 def request(path: str, *, token: str = "", body: object = None, method: str = "GET") -> Any:
@@ -202,6 +274,14 @@ def main() -> None:
     if os.environ.get("SIX_COMMUNITY_REHEARSAL") != "DISPOSABLE":
         raise SystemExit("Refusing fixture outside an explicitly disposable container")
     phase = sys.argv[1]
+    if phase == "bootstrap-corpus":
+        bootstrap_corpus()
+        print("Synthetic legacy corpus built and verified; no research-quality approval")
+        return
+    if phase == "verify-no-corpus":
+        verify_no_corpus()
+        print("Fresh candidate ready without a corpus")
+        return
     if phase == "database-revision":
         with db_session() as session:
             revisions = session.scalars(text("SELECT version_num FROM alembic_version")).all()
