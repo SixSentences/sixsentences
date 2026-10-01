@@ -88,21 +88,25 @@ def main() -> None:
         ]
         fixture = (COMMUNITY / "rehearsal_fixture.py").read_bytes()
 
-        def phase(name: str) -> None:
-            run(
-                compose
-                + [
-                    "exec",
-                    "-T",
-                    "--env",
-                    "SIX_COMMUNITY_REHEARSAL=DISPOSABLE",
-                    "api",
-                    "python",
-                    "-",
-                    name,
-                ],
-                data=fixture,
-            )
+        def phase(name: str, *arguments: str) -> str:
+            try:
+                return run(
+                    compose
+                    + [
+                        "exec",
+                        "-T",
+                        "--env",
+                        "SIX_COMMUNITY_REHEARSAL=DISPOSABLE",
+                        "api",
+                        "python",
+                        "-",
+                        name,
+                        *arguments,
+                    ],
+                    data=fixture,
+                )
+            except RuntimeError:
+                raise RuntimeError(f"Synthetic rehearsal phase failed: {name}") from None
 
         def health() -> None:
             for path in ("/login", "/api/health/ready"):
@@ -135,11 +139,20 @@ def main() -> None:
             run(compose + ["up", "--no-build", "--detach", "--wait", "--wait-timeout", "180"])
             health()
             phase("upgrade")
+            phase("prepare-erasure")
             run(["bash", str(COMMUNITY / "backup.sh")])
             backups = sorted((directory / "backups").glob("[0-9]*"))
             if len(backups) != 1 or not backups[0].is_dir():
                 raise RuntimeError("Expected one complete isolated backup")
             phase("mutate")
+            erasure = json.loads(phase("erase"))
+            if (
+                not isinstance(erasure, dict)
+                or set(erasure) != {"signature"}
+                or not isinstance(erasure["signature"], str)
+                or not re.fullmatch(r"[0-9a-f]{64}", erasure["signature"])
+            ):
+                raise RuntimeError("Missing authenticated synthetic post-backup erasure")
             run(
                 [
                     "bash",
@@ -152,6 +165,7 @@ def main() -> None:
             )
             health()
             phase("verify")
+            phase("verify-erasure", erasure["signature"])
             # Separately prove the candidate migrates an empty database, not
             # merely the released database used by the upgrade path above.
             run(compose + ["down", "--volumes", "--remove-orphans", "--timeout", "30"])
@@ -177,6 +191,7 @@ def main() -> None:
                 "fresh_start": True,
                 "upgrade": True,
                 "backup_restore": True,
+                "erasure_replay": True,
                 "synthetic_only": True,
                 "provider_calls": 0,
             }
