@@ -70,9 +70,18 @@ or production configuration.
 
 ## Artifacts and publication
 
+- [ ] One `release.yml` run orchestrates source validation, the protected
+      reusable image job and the protected final publisher. No standalone
+      post-publication image-evidence dispatch is required or permitted.
 - [ ] Python sdist and wheel install in isolated environments and match checksums.
 - [ ] API and web images are rebuilt and scanned from the tag. The
       origin-specific web image is not published as a generic artifact.
+- [ ] The image job starts only after every source, attestation, self-hosting,
+      security and preview gate passes. Exact published digests pass their own
+      scans, runtime drill and metadata validation before evidence is exported.
+- [ ] The reusable image job exports exactly ten sanitized evidence files as a
+      same-run artifact, without raw build metadata, diagnostics or secrets.
+      The publisher verifies the tag/source/digest bindings again before upload.
 - [ ] The GitHub release describes the Companion as source-only. Developer ID,
       notarization, Sparkle appcast, and native binary publication remain a
       separate reviewed follow-up.
@@ -80,12 +89,25 @@ or production configuration.
 - [ ] The 16:9 product GIF was reviewed for rights and sensitive content, contains
       no audio, matches `docs/assets/sixsentences-overview.sha256`, and is the
       only asset in the draft before automation uploads the build artifacts.
+- [ ] The final publisher uploads four engine files and ten image-evidence files
+      without clobbering to that still-editable draft. It downloads and verifies
+      the exact fifteen-file remote inventory, including the GIF, before the
+      last step publishes it. Missing, extra or changed bytes stop publication.
+- [ ] GitHub release immutability stays enabled; no assets are appended after
+      publication, no existing image/tag is overwritten, and failed partial
+      publication is preserved for inspection rather than automatically deleted.
 - [ ] The GitHub release is a prerelease, its links and preview resolve, and its
       downloadable assets exactly match the release notes.
 - [ ] A release maintainer reviewed the completed workflow evidence and approved
       the protected `community-release` environment before publication.
 - [ ] A maintainer independently verifies checksums, attestations, image digests,
       fresh startup, and the private vulnerability-reporting link.
+
+GitHub's [immutable-release guidance](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases)
+requires attaching assets before publication. The exact uploaded inventory is
+listed in [RELEASING.md](RELEASING.md); generated source archives and the release
+body are not extra uploaded files. A prepared workflow or successful earlier
+version's checks do not complete these gates for the current release.
 
 ## Repository controls
 

@@ -47,7 +47,7 @@
 </p>
 
 > [!WARNING]
-> `v0.2.0-alpha.3` is an early self-hosting release. APIs, migrations, and UI
+> `v0.2.0-alpha.4` is an early self-hosting release. APIs, migrations, and UI
 > contracts can change before `1.0`. Inspect outputs and validate methods;
 > software cannot guarantee an exhaustive search or a scientifically valid
 > conclusion.
@@ -93,11 +93,11 @@ account. That last step matters — self-signup is off until you configure mail,
 so without an owner account nobody can sign in. The script never overwrites an
 existing configuration and prints no secret value.
 
-After a release has `IMAGE_DIGESTS` and runtime evidence attached, its separately
-approved images let a localhost deployment skip the build:
+After the unified release workflow publishes the complete `IMAGE_DIGESTS` and
+runtime evidence, its approved images let a localhost deployment skip the build:
 
 ```console
-RELEASE=v0.2.0-alpha.3  # use a published release with image evidence attached
+RELEASE=v0.2.0-alpha.4  # use a published release with image evidence attached
 export SIX_API_IMAGE=ghcr.io/sixsentences/community-api:$RELEASE
 export SIX_WEB_IMAGE=ghcr.io/sixsentences/community-web:$RELEASE-localhost
 make up

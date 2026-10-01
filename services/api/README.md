@@ -13,7 +13,7 @@ capability profile; local resource and provider-spend limits remain as safety ra
 ## Quickstart
 
 Requirements: the public SixSentences monorepo with `sixsentences-engine` at
-`0.2.0a3`, Docker with Compose v2, and `openssl` for local secret generation.
+`0.2.0a4`, Docker with Compose v2, and `openssl` for local secret generation.
 
 From `services/api`:
 
