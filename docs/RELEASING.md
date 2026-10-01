@@ -153,14 +153,19 @@ gh workflow run publish-images.yml \
 
 The workflow checks out the verified commit and publishes Linux amd64 images
 `community-api:<tag>` and `community-web:<tag>-localhost`. It refuses to replace
-either existing tag. No `latest` tag or untested ARM64 image is created. Only
+either existing tag, and registry errors other than confirmed absence stop it.
+No `latest` tag or untested ARM64 image is created. Only
 localhost is reusable because the web client bakes its public origin at build
 time; TLS operators must build their own.
 
 BuildKit records SBOM and provenance in the registry. The workflow retrieves
 them by digest, validates nonempty SPDX package inventories and build
-provenance, and attaches `IMAGE_DIGESTS`, `images.json`, the two SBOMs, the two
-provenance exports and `IMAGE_SHA256SUMS` without overwriting existing assets.
+provenance, and checks the pulled images' OCI revision/version against the
+verified source and tag. It then runs the startup, upgrade and restore rehearsal
+against those exact published digests, not merely the earlier candidate builds.
+Only after those checks succeed does it attach `IMAGE_DIGESTS`, `images.json`,
+the two SBOMs, two provenance exports, two OCI identity records,
+`runtime-rehearsal.json` and `IMAGE_SHA256SUMS`, without overwriting existing assets.
 Keep the engine's `SHA256SUMS` separate. Verify image files with
 `sha256sum --check IMAGE_SHA256SUMS`, then use the `@sha256:` references from
 `IMAGE_DIGESTS`. BuildKit provenance records build inputs; it is not independent

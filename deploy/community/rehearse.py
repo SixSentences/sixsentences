@@ -47,7 +47,7 @@ def main() -> None:
         if not key.startswith(("SIX_", "POSTGRES_", "COMPOSE_"))
     }
     environment["COMPOSE_PROJECT_NAME"] = project
-    environment["SIX_HTTP_PORT"] = "127.0.0.1:18080"
+    environment["SIX_HTTP_PORT"] = "127.0.0.1:80"
     environment["SIX_HTTPS_PORT"] = "127.0.0.1:18443"
     environment["SIX_WEB_IMAGE"] = args.web_image
 
@@ -61,17 +61,16 @@ def main() -> None:
         return result.stdout.decode()
 
     run(["docker", "info", "--format", "{{.ServerVersion}}"])
-    if run(
-        ["docker", "ps", "-aq", "--filter", f"label=com.docker.compose.project={project}"]
-    ).strip():
-        raise RuntimeError("Refusing to reuse an existing Compose project")
+    for resource in (["ps", "-aq"], ["volume", "ls", "-q"], ["network", "ls", "-q"]):
+        if run(
+            ["docker", *resource, "--filter", f"label=com.docker.compose.project={project}"]
+        ).strip():
+            raise RuntimeError("Refusing to reuse an existing Compose project")
     with tempfile.TemporaryDirectory(prefix="six-community-rehearsal-") as scratch:
         directory = Path(scratch)
         env_file = directory / "rehearsal.env"
         run(["bash", str(COMMUNITY / "init-env.sh"), "--local", "--output", str(env_file)])
-        config = env_file.read_text(encoding="utf-8").replace(
-            "http://localhost", "http://localhost:18080"
-        )
+        config = env_file.read_text(encoding="utf-8")
         config = re.sub(
             r"(?m)^SIX_BACKUP_DIR=.*$", f"SIX_BACKUP_DIR={directory / 'backups'}", config
         )
@@ -110,7 +109,7 @@ def main() -> None:
                 for attempt in range(30):
                     try:
                         with urllib.request.urlopen(
-                            f"http://localhost:18080{path}", timeout=5
+                            f"http://localhost{path}", timeout=5
                         ) as response:
                             if response.status == 200:
                                 break
@@ -167,6 +166,8 @@ def main() -> None:
                 "source_revision": revision,
                 "seed": 42,
                 "baseline_image": baseline,
+                "api_reference": args.api_image,
+                "web_reference": args.web_image,
                 "api_image": run(
                     ["docker", "image", "inspect", "--format", "{{.Id}}", args.api_image]
                 ).strip(),

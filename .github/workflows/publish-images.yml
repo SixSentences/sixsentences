@@ -91,8 +91,11 @@ jobs:
           api="$IMAGE_PREFIX-api:$RELEASE_TAG"
           web="$IMAGE_PREFIX-web:$RELEASE_TAG-localhost"
           for image in "$api" "$web"; do
-            if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
+            if probe="$(docker buildx imagetools inspect "$image" 2>&1)"; then
               echo "Refusing to replace an existing image tag; use a new release." >&2
+              exit 1
+            elif [[ "$probe" != "ERROR: $image: not found" ]]; then
+              echo "Registry absence was not confirmed; refusing to publish." >&2
               exit 1
             fi
           done
@@ -116,8 +119,18 @@ jobs:
             docker buildx imagetools inspect "$ref" --format '{{json .SBOM}}' > "image-evidence/$kind.sbom.json"
             docker buildx imagetools inspect "$ref" --format '{{json .Provenance}}' > "image-evidence/$kind.provenance.json"
             docker pull "$ref"
+            docker image inspect "$ref" --format '{{json .Config.Labels}}' > "image-evidence/$kind.identity.json"
             printf '%s\n' "$ref" >> image-evidence/IMAGE_DIGESTS
           done
+      - name: Exercise the exact published digests before advertising their evidence
+        run: |
+          set -euo pipefail
+          api="$(sed -n '1p' image-evidence/IMAGE_DIGESTS)"
+          web="$(sed -n '2p' image-evidence/IMAGE_DIGESTS)"
+          python deploy/community/rehearse.py --confirm DISPOSABLE \
+            --api-image "$api" --web-image "$web" \
+            --upgrade-from ghcr.io/sixsentences/community-api@sha256:31b374cfb4b45c2cceb6a609d3b0ec8853ee47cd0a3d1588dfa48305bcb3498d \
+            --report image-evidence/runtime-rehearsal.json
       - name: Validate SBOMs and write checksummed public evidence
         run: python .github/scripts/image_evidence.py --directory image-evidence --tag "$RELEASE_TAG" --revision "$RELEASE_SHA"
       - name: Publish additive image evidence without replacing existing assets
@@ -126,7 +139,9 @@ jobs:
           gh release upload "$RELEASE_TAG" --repo "$REPOSITORY" \
             image-evidence/IMAGE_DIGESTS image-evidence/IMAGE_SHA256SUMS \
             image-evidence/images.json image-evidence/api.sbom.json image-evidence/web.sbom.json \
-            image-evidence/api.provenance.json image-evidence/web.provenance.json
+            image-evidence/api.provenance.json image-evidence/web.provenance.json \
+            image-evidence/api.identity.json image-evidence/web.identity.json \
+            image-evidence/runtime-rehearsal.json
           cat image-evidence/IMAGE_DIGESTS >> "$GITHUB_STEP_SUMMARY"
           echo 'Linux amd64 only. Web image: http://localhost only. TLS origins must build locally.' >> "$GITHUB_STEP_SUMMARY"
       - name: Remove registry credentials and disposable builder

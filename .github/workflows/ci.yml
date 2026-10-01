@@ -310,9 +310,9 @@ jobs:
           docker build \
             --tag sixsentences-community-web:ci \
             --file apps/web/Dockerfile \
-            --build-arg NEXT_PUBLIC_SIX_API_URL=http://localhost:18080/api \
-            --build-arg NEXT_PUBLIC_APP_URL=http://localhost:18080 \
-            --build-arg NEXT_PUBLIC_LEGAL_BASE_URL=http://localhost:18080/legal \
+            --build-arg NEXT_PUBLIC_SIX_API_URL=http://localhost/api \
+            --build-arg NEXT_PUBLIC_APP_URL=http://localhost \
+            --build-arg NEXT_PUBLIC_LEGAL_BASE_URL=http://localhost/legal \
             --build-arg SIX_ALLOW_INSECURE_LOCAL_HTTP=true \
             --build-arg NEXT_PUBLIC_TERMS_VERSION=community-operator-v1 \
             --build-arg NEXT_PUBLIC_PRIVACY_VERSION=community-operator-v1 \
@@ -323,7 +323,7 @@ jobs:
           python deploy/community/rehearse.py --confirm DISPOSABLE \
             --api-image sixsentences-community-api:ci \
             --web-image sixsentences-community-web:ci \
-            --upgrade-from ghcr.io/sixsentences/community-api:v0.2.0-alpha.1 \
+            --upgrade-from ghcr.io/sixsentences/community-api@sha256:31b374cfb4b45c2cceb6a609d3b0ec8853ee47cd0a3d1588dfa48305bcb3498d \
             --report "$RUNNER_TEMP/community-rehearsal.json"
       - name: Retain sanitized deployment evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

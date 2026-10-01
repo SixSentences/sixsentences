@@ -44,6 +44,11 @@ def prepare(directory: Path, tag: str, revision: str) -> None:
         build = _document(directory / f"{kind}.build.json")
         if build.get("containerimage.digest") != match[1]:
             raise ValueError(f"{kind} digest does not match build receipt")
+        identity = _document(directory / f"{kind}.identity.json")
+        if identity.get("org.opencontainers.image.revision") != revision:
+            raise ValueError(f"{kind} OCI revision does not match verified source")
+        if identity.get("org.opencontainers.image.version") != tag:
+            raise ValueError(f"{kind} OCI version does not match verified tag")
         sbom = _predicate(_document(directory / f"{kind}.sbom.json"), "SPDX")
         if not str(sbom.get("spdxVersion", "")).startswith("SPDX-") or not sbom.get("packages"):
             raise ValueError(f"{kind} SBOM has no package inventory")
@@ -56,6 +61,14 @@ def prepare(directory: Path, tag: str, revision: str) -> None:
         ):
             raise ValueError(f"{kind} build provenance is missing")
         images[kind] = {"reference": ref, "platform": "linux/amd64"}
+    runtime = _document(directory / "runtime-rehearsal.json")
+    if runtime.get("source_revision") != revision or any(
+        runtime.get(key) is not True
+        for key in ("fresh_start", "upgrade", "backup_restore", "synthetic_only")
+    ):
+        raise ValueError("missing successful same-revision runtime rehearsal")
+    if runtime.get("api_reference") != refs[0] or runtime.get("web_reference") != refs[1]:
+        raise ValueError("runtime rehearsal did not execute the published digests")
     receipt = {
         "schema_version": 1,
         "tag": tag,
@@ -69,8 +82,10 @@ def prepare(directory: Path, tag: str, revision: str) -> None:
     with (directory / "images.json").open("x", encoding="utf-8") as handle:
         json.dump(receipt, handle, indent=2, sort_keys=True)
         handle.write("\n")
-    names = ["IMAGE_DIGESTS", "images.json"] + [
-        f"{kind}.{suffix}.json" for kind in ("api", "web") for suffix in ("sbom", "provenance")
+    names = ["IMAGE_DIGESTS", "images.json", "runtime-rehearsal.json"] + [
+        f"{kind}.{suffix}.json"
+        for kind in ("api", "web")
+        for suffix in ("sbom", "provenance", "identity")
     ]
     with (directory / "IMAGE_SHA256SUMS").open("x", encoding="utf-8") as handle:
         for name in sorted(names):
