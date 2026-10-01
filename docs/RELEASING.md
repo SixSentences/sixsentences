@@ -100,10 +100,13 @@ workspace, upgrades it, verifies saved notes/files after backup/restore, and
 separately starts the candidate against an empty database. Its sanitized
 image/revision receipt is a required artifact. This is an API/Compose runtime
 test, not a browser interaction test or proof of research-output quality.
-The initial drill verifies an empty authenticated erasure journal; it does not
-yet prove that a user deleted after backup stays deleted after restore. That
-non-resurrection scenario and an actual rollback drill remain open in #29.
-Do not check those release-checklist items off from this receipt alone.
+The drill additionally creates a second synthetic owner before backup, deletes
+that account through the authenticated API afterwards, and requires its user,
+workspace, sessions, notes and dataset files to remain absent after restore.
+The exact authenticated deletion-journal signature must survive the restore.
+Only the successful runtime receipt proves this scenario; source/unit checks
+alone do not. A prior-version rollback drill remains open in #29 and must not be
+checked off from a same-version backup/restore receipt.
 
 The preview is checked by a separate job before the environment gate, so a wrong
 or missing preview fails the run before a maintainer is asked to approve

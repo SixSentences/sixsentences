@@ -41,8 +41,9 @@ bash deploy/community/quickstart.sh --domain research.example.org
 An existing environment file is reused, never overwritten, so re-running the
 script is a safe way to restart a deployment after a configuration change.
 
-A tagged release publishes the API image and a `localhost` web image. Pointing
-the deployment at them replaces the longest step of a first start:
+After separately approved image publication attaches `IMAGE_DIGESTS` and its
+runtime evidence, a release supplies an API image and a `localhost` web image.
+Pointing the deployment at them replaces the longest step of a first start:
 
 ```console
 RELEASE=v0.2.0-alpha.2  # use a published release with IMAGE_DIGESTS attached

@@ -9,8 +9,9 @@ item still requires a scoped issue, review, and the quality gates in
 - Implemented, pending the next reviewed release: responsive personal boards
   with persistent resizing, keyboard controls and recovery of obscured notes.
 - Release gates now include a provider-free fresh Compose startup, upgrade from
-  `v0.2.0-alpha.1`, and isolated database/file restore rehearsal. A green build
-  alone is not runtime acceptance; retain the successful workflow receipt.
+  `v0.2.0-alpha.1`, and isolated database/file restore with post-backup account
+  erasure replay. A green build alone is not runtime acceptance; retain the
+  successful workflow receipt. Prior-version rollback remains a separate drill.
 - Image publication verifies a signed main-branch release and records immutable
   digests, SPDX SBOMs, build provenance and checksums. Initially Linux amd64 and
   localhost web origins only; multi-architecture/TLS generic images are not
