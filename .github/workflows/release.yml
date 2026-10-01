@@ -564,9 +564,20 @@ jobs:
             sha256sum --check "$GITHUB_WORKSPACE/docs/assets/sixsentences-overview.sha256"
           )
 
-  publish:
-    name: Publish community source prerelease with engine artifacts
+  images:
+    name: Prepare verified images before immutable publication
     needs: [validate, build, attest, self-hosting, browser-extension-source, companion-macos-source, tag-security, preview]
+    permissions:
+      contents: write
+      packages: write
+    uses: ./.github/workflows/publish-images.yml
+    with:
+      tag: ${{ inputs.tag }}
+      release_sha: ${{ needs.validate.outputs.release-sha }}
+
+  publish:
+    name: Publish complete immutable community prerelease
+    needs: [validate, build, attest, self-hosting, browser-extension-source, companion-macos-source, tag-security, preview, images]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: community-release
@@ -583,6 +594,11 @@ jobs:
         with:
           name: python-engine-release-candidate-${{ inputs.tag }}
           path: release
+      - name: Restore the validated image evidence from this release run
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: community-image-evidence-${{ inputs.tag }}
+          path: image-evidence
       - name: Recheck artifact checksums
         working-directory: release
         run: sha256sum --check SHA256SUMS
@@ -623,15 +639,59 @@ jobs:
             cd "$RUNNER_TEMP/release-preview"
             sha256sum --check "$GITHUB_WORKSPACE/docs/assets/sixsentences-overview.sha256"
           )
+      - name: Verify the complete local publication bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_SHA: ${{ needs.validate.outputs.release-sha }}
+        run: |
+          set -euo pipefail
+          release_id="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json databaseId --jq .databaseId)"
+          python .github/scripts/release_bundle.py verify-local \
+            --root . --engine-dir release --image-dir image-evidence \
+            --preview "$RUNNER_TEMP/release-preview/sixsentences-overview.gif" \
+            --tag "$RELEASE_TAG" --revision "$RELEASE_SHA" --release-id "$release_id" \
+            --out "$RUNNER_TEMP/release-bundle.json"
+      - name: Upload the complete artifact set while the release is still a draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          PACKAGE_VERSION: ${{ needs.validate.outputs.package-version }}
+          PUBLIC_VERSION: ${{ needs.validate.outputs.public-version }}
+        run: |
+          set -euo pipefail
+          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            "release/sixsentences_engine-${PACKAGE_VERSION}-py3-none-any.whl" \
+            "release/sixsentences_engine-${PACKAGE_VERSION}.tar.gz" \
+            "release/sixsentences-engine-${PUBLIC_VERSION}.cdx.json" \
+            release/SHA256SUMS \
+            image-evidence/IMAGE_DIGESTS \
+            image-evidence/IMAGE_SHA256SUMS \
+            image-evidence/images.json \
+            image-evidence/api.sbom.json \
+            image-evidence/web.sbom.json \
+            image-evidence/api.provenance.json \
+            image-evidence/web.provenance.json \
+            image-evidence/api.identity.json \
+            image-evidence/web.identity.json \
+            image-evidence/runtime-rehearsal.json
+      - name: Verify all staged release files and downloaded bytes before publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python .github/scripts/release_bundle.py verify-remote \
+            --repo "$GITHUB_REPOSITORY" --manifest "$RUNNER_TEMP/release-bundle.json"
       - name: Publish the immutable GitHub prerelease
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
+          set -euo pipefail
           {
             printf '%s\n' \
               '> [!NOTE]' \
-              '> This release publishes the complete tagged community application source, including the tested macOS Companion source. The downloadable, attested build artifacts below cover the `sixsentences-engine` Python distribution. API and web images pass isolated startup, upgrade and restore checks. Digest-bound Linux amd64 container images and their SBOMs are published by a separately approved workflow; do not assume they exist until IMAGE_DIGESTS is attached. TLS-origin web images and the source-only macOS app remain operator-built.' \
+              '> This release publishes the complete tagged community application source, including the tested macOS Companion source, attested `sixsentences-engine` distributions, and digest-bound Linux amd64 container evidence. The exact API and localhost web image digests passed isolated startup, upgrade and restore checks before publication. Their SBOMs, provenance and runtime receipt are included below. TLS-origin web images and the source-only macOS app remain operator-built.' \
               ''
             cat release/RELEASE_NOTES.md
           } > "$RUNNER_TEMP/release-notes.md"
@@ -644,18 +704,11 @@ jobs:
             exit 1
           fi
 
-          gh release upload "$RELEASE_TAG" \
-            release/*.whl \
-            release/*.tar.gz \
-            release/*.cdx.json \
-            release/SHA256SUMS \
-            --repo "$GITHUB_REPOSITORY" \
-            --clobber
           gh release edit "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --draft=false \
             --prerelease \
             --latest=false \
-            --title "SixSentences ${RELEASE_TAG} · community source + engine artifacts" \
+            --title "SixSentences ${RELEASE_TAG} · community source, engine and images" \
             --notes-file "$RUNNER_TEMP/release-notes.md"

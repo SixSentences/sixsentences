@@ -8,6 +8,23 @@ equivalents for Python package metadata.
 
 ## [Unreleased]
 
+## [0.2.0-alpha.4] - 2026-10-01
+
+### Fixed
+
+- Orchestrate source and image evidence in one release workflow: prepare and
+  validate the complete draft inventory before publishing the immutable release.
+  This addresses #185 without overwriting images, clobbering assets or disabling
+  release protection. Application logic and migrations are unchanged.
+- Update the API's runtime PDF parser from pypdf 6.18.1 to 6.19.0 for three
+  denial-of-service advisories. The specific vulnerable features are not used
+  by the current API, but it processes untrusted PDFs. No other canonical
+  third-party dependency versions change; see the dated dependency triage.
+- Preserve the published alpha.3 source/Python release and its successful image
+  builds, scans and isolated drill. GitHub rejected its later image-evidence
+  upload because the release was already immutable; those assets remain absent.
+  Alpha.4 must pass its own complete publication and verification gates.
+
 ## [0.2.0-alpha.3] - 2026-10-01
 
 ### Fixed
@@ -161,7 +178,8 @@ equivalents for Python package metadata.
   production artifacts, private configuration, customer data, and proprietary
   datasets.
 
-[Unreleased]: https://github.com/SixSentences/sixsentences/compare/v0.2.0-alpha.3...HEAD
+[Unreleased]: https://github.com/SixSentences/sixsentences/compare/v0.2.0-alpha.4...HEAD
+[0.2.0-alpha.4]: https://github.com/SixSentences/sixsentences/releases/tag/v0.2.0-alpha.4
 [0.2.0-alpha.3]: https://github.com/SixSentences/sixsentences/releases/tag/v0.2.0-alpha.3
 [0.2.0-alpha.2]: https://github.com/SixSentences/sixsentences/releases/tag/v0.2.0-alpha.2
 [0.2.0-alpha.1]: https://github.com/SixSentences/sixsentences/releases/tag/v0.2.0-alpha.1

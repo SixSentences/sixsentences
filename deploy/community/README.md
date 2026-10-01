@@ -47,12 +47,13 @@ the operator imports a corpus; its status remains visible in operator diagnostic
 API readiness requires the database, storage, queue and a live background worker.
 Both API and worker start after migration, without waiting on each other.
 
-After separately approved image publication attaches `IMAGE_DIGESTS` and its
-runtime evidence, a release supplies an API image and a `localhost` web image.
+After the unified release workflow checks and attaches `IMAGE_DIGESTS` and its
+runtime evidence before publication, a release supplies an API image and a
+`localhost` web image.
 Pointing the deployment at them replaces the longest step of a first start:
 
 ```console
-RELEASE=v0.2.0-alpha.3  # use a published release with IMAGE_DIGESTS attached
+RELEASE=v0.2.0-alpha.4  # use a published release with IMAGE_DIGESTS attached
 export SIX_API_IMAGE=ghcr.io/sixsentences/community-api:$RELEASE
 export SIX_WEB_IMAGE=ghcr.io/sixsentences/community-web:$RELEASE-localhost
 bash deploy/community/quickstart.sh --pull

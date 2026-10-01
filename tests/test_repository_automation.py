@@ -7,8 +7,10 @@ import importlib.util
 import io
 import json
 import plistlib
+import subprocess
 import sys
 import tarfile
+import textwrap
 import urllib.request
 from datetime import UTC, date, datetime
 from email.message import Message
@@ -326,7 +328,8 @@ def test_image_publication_is_bound_to_a_verified_release_tag() -> None:
         encoding="utf-8"
     )
 
-    assert "\n  workflow_dispatch:\n" in workflow
+    assert "\n  workflow_call:\n" in workflow
+    assert "workflow_dispatch:" not in workflow
     assert "\npermissions: {}\n" in workflow
     assert "packages: write" in workflow
     assert "environment: community-release" in workflow
@@ -335,7 +338,13 @@ def test_image_publication_is_bound_to_a_verified_release_tag() -> None:
     assert "persist-credentials: false" in workflow
     assert "git verify-tag" in workflow
     assert "git merge-base --is-ancestor" in workflow
+    assert 'test "$sha" = "$EXPECTED_RELEASE_SHA"' in workflow
+    assert "EXPECTED_RELEASE_SHA: ${{ inputs.release_sha }}" in workflow
+    assert '--json isDraft --jq .isDraft)" = true' in workflow
+    assert '"$EXPECTED_RELEASE_SHA" =~ ^[0-9a-f]{40}$' in workflow
     assert "--clobber" not in workflow
+    for mutation in ("gh release create", "gh release edit", "gh release upload"):
+        assert mutation not in workflow
 
 
 def test_published_web_image_matches_the_generated_local_configuration() -> None:
@@ -366,7 +375,7 @@ def test_release_publication_requires_the_protected_environment() -> None:
     assert "\n    environment: community-release\n" in publish_job
     assert (
         "\n    needs: [validate, build, attest, self-hosting, browser-extension-source, "
-        "companion-macos-source, tag-security, preview]\n" in publish_job
+        "companion-macos-source, tag-security, preview, images]\n" in publish_job
     )
     assert "ref: ${{ needs.validate.outputs.release-sha }}" in publish_job
 
@@ -383,7 +392,7 @@ def test_the_preview_gate_can_see_the_draft_it_guards() -> None:
     workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "release.yml").read_text(
         encoding="utf-8"
     )
-    preview_job = workflow.split("\n  preview:\n", maxsplit=1)[1].split("\n  publish:\n")[0]
+    preview_job = workflow.split("\n  preview:\n", maxsplit=1)[1].split("\n  images:\n")[0]
 
     assert "\n    permissions:\n      contents: write\n" in preview_job
     # Visibility, not mutation: the job lists the draft and checks one checksum.
@@ -391,6 +400,137 @@ def test_the_preview_gate_can_see_the_draft_it_guards() -> None:
         assert mutation not in preview_job
     assert "sha256sum --check" in preview_job
     assert "docs/assets/sixsentences-overview.sha256" in preview_job
+
+
+def test_reusable_images_run_only_after_every_existing_release_gate() -> None:
+    workflow = (REPOSITORY_ROOT / ".github/workflows/release.yml").read_text()
+    images = workflow.split("\n  images:\n", 1)[1].split("\n  publish:\n", 1)[0]
+    assert (
+        "needs: [validate, build, attest, self-hosting, browser-extension-source, "
+        "companion-macos-source, tag-security, preview]" in images
+    )
+    assert "uses: ./.github/workflows/publish-images.yml" in images
+    assert "tag: ${{ inputs.tag }}" in images
+    assert "release_sha: ${{ needs.validate.outputs.release-sha }}" in images
+    assert "contents: write" in images and "packages: write" in images
+    assert "if:" not in images and "continue-on-error" not in images
+    callee = (REPOSITORY_ROOT / ".github/workflows/publish-images.yml").read_text()
+    assert "group: release-${{ inputs.tag }}" in workflow
+    assert "group: publish-images-${{ inputs.tag }}" in callee
+    assert "cancel-in-progress: false" in workflow and "cancel-in-progress: false" in callee
+    validation = callee.split("\n  validate:\n", 1)[1].split("\n  images:\n", 1)[0]
+    assert "contents: write" in validation  # Draft visibility, not release mutation.
+    assert "packages: write" not in validation
+    image_job = callee.split("\n  images:\n", 1)[1]
+    assert "needs: validate" in image_job
+    assert "environment: community-release" in image_job
+    assert "contents: read" in image_job and "packages: write" in image_job
+
+
+@pytest.mark.parametrize(
+    "workflow_ref,expected_sha,draft,tag,accepted",
+    [
+        ("refs/heads/main", "a" * 40, "true", "v0.2.0-alpha.4", True),
+        ("refs/heads/feature", "a" * 40, "true", "v0.2.0-alpha.4", False),
+        ("refs/heads/main", "b" * 40, "true", "v0.2.0-alpha.4", False),
+        ("refs/heads/main", "invalid", "true", "v0.2.0-alpha.4", False),
+        ("refs/heads/main", "a" * 40, "false", "v0.2.0-alpha.4", False),
+        ("refs/heads/main", "a" * 40, "true", "invalid-tag", False),
+    ],
+)
+def test_reusable_source_guard_fails_before_executing_release_source(
+    tmp_path: Path,
+    workflow_ref: str,
+    expected_sha: str,
+    draft: str,
+    tag: str,
+    accepted: bool,
+) -> None:
+    """Execute the real guard shell with inert git/gh/python functions, never network tools."""
+    workflow = (REPOSITORY_ROOT / ".github/workflows/publish-images.yml").read_text()
+    step = workflow.split(
+        "- name: Verify signed main ancestor, caller source and release draft\n", 1
+    )[1].split("\n  images:\n", 1)[0]
+    run = textwrap.dedent(step.split("run: |\n", 1)[1])
+    trace = tmp_path / "trace"
+    script = (
+        r"""
+git() {
+  printf 'git %s\n' "$1" >> "$TRACE"
+  case "$1" in
+    rev-parse) printf '%s\n' "$ACTUAL_SHA" ;;
+    show) printf '1790000000\n' ;;
+  esac
+}
+gh() { printf 'gh view\n' >> "$TRACE"; printf '%s\n' "$DRAFT_STATE"; }
+python() { printf 'validated source\n' >> "$TRACE"; }
+"""
+        + run
+    )
+    completed = subprocess.run(
+        ["/bin/bash", "-c", script],
+        env={
+            "PATH": "/usr/bin:/bin",
+            "TRACE": str(trace),
+            "ACTUAL_SHA": "a" * 40,
+            "EXPECTED_RELEASE_SHA": expected_sha,
+            "DRAFT_STATE": draft,
+            "RELEASE_TAG": tag,
+            "WORKFLOW_REF": workflow_ref,
+            "GITHUB_WORKSPACE": str(tmp_path),
+            "RUNNER_TEMP": str(tmp_path),
+            "GITHUB_OUTPUT": str(tmp_path / "outputs"),
+            "REPOSITORY": "Example/research",
+            "OWNER": "Example",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=5,
+    )
+    calls = trace.read_text() if trace.exists() else ""
+    assert (completed.returncode == 0) is accepted
+    assert ("validated source" in calls) is accepted
+    assert ("git worktree" in calls) is accepted
+    assert (tmp_path / "outputs").exists() is accepted
+
+
+def test_one_publisher_verifies_all_bytes_before_immutable_publication() -> None:
+    workflow = (REPOSITORY_ROOT / ".github/workflows/release.yml").read_text()
+    publish = workflow.split("\n  publish:\n", 1)[1]
+    assert "name: community-image-evidence-${{ inputs.tag }}" in publish
+    assert "path: image-evidence" in publish
+    assert "The draft must contain only sixsentences-overview.gif before publication." in publish
+    assert "release_bundle.py verify-local" in publish
+    assert '--tag "$RELEASE_TAG" --revision "$RELEASE_SHA" --release-id "$release_id"' in publish
+    assert "RELEASE_SHA: ${{ needs.validate.outputs.release-sha }}" in publish
+    assert "--json databaseId --jq .databaseId" in publish
+    assert "releases/tags/" not in publish  # REST tag lookup cannot resolve an editable draft.
+    assert "release_bundle.py verify-remote" in publish
+    assert '--repo "$GITHUB_REPOSITORY" --manifest "$RUNNER_TEMP/release-bundle.json"' in publish
+    assert (
+        publish.index("release_bundle.py verify-local")
+        < publish.index("gh release upload")
+        < publish.index("release_bundle.py verify-remote")
+        < publish.index("gh release edit")
+        < publish.index("--draft=false")
+    )
+    assert publish.count("gh release upload") == 1
+    assert publish.count("gh release edit") == 1
+    assert "--clobber" not in publish and "continue-on-error" not in publish
+    assert "if: always()" not in publish and "|| true" not in publish
+    upload = publish.split(
+        "- name: Upload the complete artifact set while the release is still a draft\n", 1
+    )[1].split("- name:", 1)[0]
+    assert "set -euo pipefail" in upload
+    assert '--json isDraft --jq .isDraft)" = true' in upload
+    assert upload.count("release/") == 4
+    assert upload.count("image-evidence/") == 10
+    assert "*" not in upload and "sixsentences-overview.gif" not in upload
+    assert '"release/sixsentences_engine-${PACKAGE_VERSION}-py3-none-any.whl"' in upload
+    assert '"release/sixsentences_engine-${PACKAGE_VERSION}.tar.gz"' in upload
+    assert '"release/sixsentences-engine-${PUBLIC_VERSION}.cdx.json"' in upload
+    assert "release/SHA256SUMS" in upload
 
 
 def test_release_dispatch_checks_out_and_verifies_one_explicit_signed_tag() -> None:

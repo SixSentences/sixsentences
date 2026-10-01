@@ -1,10 +1,14 @@
 name: Publish images
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       tag:
-        description: Published signed release tag (dispatch from main)
+        description: Signed release tag with a reviewed draft
+        required: true
+        type: string
+      release_sha:
+        description: Exact source commit already verified by the release caller
         required: true
         type: string
 
@@ -16,11 +20,12 @@ permissions: {}
 
 jobs:
   validate:
-    name: Verify published immutable image source
+    name: Verify signed image source and editable release draft
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
-      contents: read
+      # GitHub hides drafts from read-only tokens. This job reads, never mutates, the release.
+      contents: write
     outputs:
       sha: ${{ steps.source.outputs.sha }}
       epoch: ${{ steps.source.outputs.epoch }}
@@ -32,23 +37,32 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: false
-      - name: Verify signed main ancestor and published release
+      - name: Verify signed main ancestor, caller source and release draft
         id: source
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_RELEASE_SHA: ${{ inputs.release_sha }}
           WORKFLOW_REF: ${{ github.ref }}
           REPOSITORY: ${{ github.repository }}
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           test "$WORKFLOW_REF" = refs/heads/main
-          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.(0|[1-9][0-9]*))?$ ]]
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.(0|[1-9][0-9]*))?$ ]]; then
+            echo "Unsupported release tag syntax." >&2
+            exit 1
+          fi
+          if [[ ! "$EXPECTED_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "The release caller did not supply a full source commit." >&2
+            exit 1
+          fi
           git config --local gpg.ssh.allowedSignersFile "$GITHUB_WORKSPACE/.github/release-maintainers.allowed_signers"
           git verify-tag "$RELEASE_TAG"
           sha="$(git rev-parse --verify "${RELEASE_TAG}^{commit}")"
+          test "$sha" = "$EXPECTED_RELEASE_SHA"
           git merge-base --is-ancestor "$sha" refs/remotes/origin/main
-          test "$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft --jq .isDraft)" = false
+          test "$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft --jq .isDraft)" = true
           git worktree add --detach "$RUNNER_TEMP/image-source" "$sha"
           python .github/scripts/release.py validate --root "$RUNNER_TEMP/image-source" --tag "$RELEASE_TAG" --main-ref refs/remotes/origin/main
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
@@ -56,13 +70,13 @@ jobs:
           echo "owner=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
   images:
-    name: Publish digest-bound community images and SBOMs
+    name: Build and verify digest-bound community images and SBOMs
     needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment: community-release
     permissions:
-      contents: write
+      contents: read
       packages: write
     env:
       RELEASE_TAG: ${{ inputs.tag }}
@@ -159,17 +173,25 @@ jobs:
             --report image-evidence/runtime-rehearsal.json
       - name: Validate SBOMs and write checksummed public evidence
         run: python .github/scripts/image_evidence.py --directory image-evidence --tag "$RELEASE_TAG" --revision "$RELEASE_SHA"
-      - name: Publish additive image evidence without replacing existing assets
-        run: |
-          set -euo pipefail
-          gh release upload "$RELEASE_TAG" --repo "$REPOSITORY" \
-            image-evidence/IMAGE_DIGESTS image-evidence/IMAGE_SHA256SUMS \
-            image-evidence/images.json image-evidence/api.sbom.json image-evidence/web.sbom.json \
-            image-evidence/api.provenance.json image-evidence/web.provenance.json \
-            image-evidence/api.identity.json image-evidence/web.identity.json \
+      - name: Retain validated image evidence before final release publication
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: community-image-evidence-${{ inputs.tag }}
+          path: |
+            image-evidence/IMAGE_DIGESTS
+            image-evidence/IMAGE_SHA256SUMS
+            image-evidence/images.json
+            image-evidence/api.sbom.json
+            image-evidence/web.sbom.json
+            image-evidence/api.provenance.json
+            image-evidence/web.provenance.json
+            image-evidence/api.identity.json
+            image-evidence/web.identity.json
             image-evidence/runtime-rehearsal.json
-          cat image-evidence/IMAGE_DIGESTS >> "$GITHUB_STEP_SUMMARY"
-          echo 'Linux amd64 only. Web image: http://localhost only. TLS origins must build locally.' >> "$GITHUB_STEP_SUMMARY"
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+          include-hidden-files: false
       - name: Remove registry credentials and disposable builder
         if: always()
         run: |

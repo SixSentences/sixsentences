@@ -28,3 +28,39 @@ on the current base commit. No dependency PR was bulk-merged.
 Snapshot: twelve open dependency PRs; seven had failed checks and five had no failed
 checks in their reported rollups. A past green rollup does not prove compatibility
 with today's head or required-check completion.
+
+## Alpha.4 release follow-up: pypdf runtime advisories
+
+A later 2026-10-01 GitHub advisory refresh added six High alerts: three issues
+duplicated across the API manifest and lockfile. The maintainer disclosures
+predate this refresh; these are not six distinct or newly discovered bugs.
+All affect pypdf versions before 6.19.0:
+
+- [GHSA-w23x-9jrw-r45c](https://github.com/py-pdf/pypdf/security/advisories/GHSA-w23x-9jrw-r45c):
+  excessive memory use in alphabetical page labels.
+- [GHSA-php9-fj8v-98fj](https://github.com/py-pdf/pypdf/security/advisories/GHSA-php9-fj8v-98fj):
+  excessive CPU use in appearance streams/form-field flattening.
+- [GHSA-v247-6f48-mgcj](https://github.com/py-pdf/pypdf/security/advisories/GHSA-v247-6f48-mgcj):
+  excessive CPU use in dictionary-based embedded-file access.
+
+The API installs pypdf in its production image and parses untrusted uploaded or
+linked PDFs. Source review found no production calls to page labels, PdfWriter
+form flattening, or attachment dictionaries; it did not demonstrate a reachable
+path to these specific vulnerable features. This is not a claim that the parser
+is risk-free. Alpha.4 pins the
+[patched 6.19.0 release](https://github.com/py-pdf/pypdf/releases/tag/6.19.0).
+
+Only pypdf's package records and direct requirement change in the canonical
+API `uv.lock`; no other package version or transitive dependency changes. The BSD-3-Clause
+license is unchanged. The legacy direct-pin `services/api/requirements.lock`
+is not used by the canonical Docker/uv installation; only its pypdf and engine
+pins are synchronized here. Other historical snapshot drift is not silently
+treated as canonical or broadly updated in this fix.
+
+Local validation passed 136 existing PDF, acquisition, capture and security
+tests, frozen environment synchronization, offline lock checking, and the
+422-file API export audit. The web runtime-only npm audit still reports zero
+findings at this snapshot; eleven other open alerts concern development tools.
+Full new-head CI and exact-release image scans remain mandatory. These scoped
+checks do not certify the whole system free of vulnerabilities or update an
+already-running hosted deployment.

@@ -2,10 +2,11 @@
 
 Releases come from immutable tags on reviewed `main` commits. GitHub Actions
 validates the complete source tree—including the macOS Companion on a pinned
-Xcode toolchain—publishes Python-engine distributions, records checksums and
-available SBOM/provenance attestations, and creates a GitHub prerelease. It does
-not publish to PyPI or npm, does not build a distributable macOS binary, and
-uses no long-lived registry or Apple credential.
+Xcode toolchain—prepares Python-engine distributions and container evidence in
+one orchestrated workflow. It uploads and verifies the complete draft before
+publishing an immutable GitHub prerelease. It does not publish to PyPI or npm,
+does not build a distributable macOS binary, and uses no long-lived registry or
+Apple credential.
 
 ## Authority and protection
 
@@ -17,6 +18,11 @@ to release maintainers.
 
 A tag is immutable even when automation fails. Fix failures through a reviewed
 pull request and use a new prerelease version; never move or reuse the tag.
+
+[GitHub immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases)
+lock release assets after publication. Attach every asset while the release is
+a draft, verify the remote bytes, and publish last. Do not disable immutability
+or try to append image evidence after publication.
 
 ## Prepare the release pull request
 
@@ -36,17 +42,22 @@ pull request and use a new prerelease version; never move or reuse the tag.
    `Package.resolved` graph is unchanged after resolution.
 8. Complete every item in [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
-For this release, `0.2.0a3` in Python metadata maps to public version
-`0.2.0-alpha.3` and tag `v0.2.0-alpha.3`. Beta and release-candidate suffixes
+For this release, `0.2.0a4` in Python metadata maps to public version
+`0.2.0-alpha.4` and tag `v0.2.0-alpha.4`. Beta and release-candidate suffixes
 map to `-beta.N` and `-rc.N`.
 
-Alpha.3 is a release-evidence format correction, not an application or
-third-party dependency upgrade. The published alpha.2 source release and Python
-artifacts remain valid and unchanged. Its container builds, scans and isolated runtime
-drill passed, but the evidence validator rejected BuildKit's SLSA v1 build-type
-URI before attaching image receipts. Do not replace those existing image tags,
-move the alpha.2 tag or retrofit its release notes. Alpha.3 must complete its own
-source and container workflows before being advertised with verified images.
+Alpha.4 corrects publication order and updates the API's pypdf runtime dependency
+from 6.18.1 to 6.19.0 for security fixes. Application logic, migrations and other
+canonical third-party dependency versions are unchanged; see
+[dependency triage](DEPENDENCY-TRIAGE-2026-10-01.md).
+Alpha.3's source/Python release was published on
+2026-10-01; its image builds, scans, isolated drill and metadata validation also
+passed. The later evidence upload was rejected with HTTP 422 because the release
+was already immutable. Those image receipts are absent from alpha.3's release;
+its valid source/Python artifacts and completed test results remain unchanged.
+Do not replace earlier images, move old tags or retrofit old release notes.
+Alpha.4 must complete its own unified workflow and final artifact verification
+before being described as fully published. Publication recovery is tracked in #185.
 
 The release workflow verifies the tag as Git data using the release verifier and
 maintainer keys from protected `main`. Only after signature, syntax, ancestry,
@@ -63,25 +74,25 @@ After the release pull request is merged and all required checks are green:
 ```console
 git switch main
 git pull --ff-only
-git tag -s v0.2.0-alpha.3 -m "SixSentences v0.2.0-alpha.3"
-git push origin v0.2.0-alpha.3
-gh release create v0.2.0-alpha.3 \
+git tag -s v0.2.0-alpha.4 -m "SixSentences v0.2.0-alpha.4"
+git push origin v0.2.0-alpha.4
+gh release create v0.2.0-alpha.4 \
   /absolute/path/to/sixsentences-overview.gif \
   --repo SixSentences/sixsentences \
   --verify-tag \
   --draft \
   --prerelease \
   --latest=false \
-  --title "SixSentences v0.2.0-alpha.3 · release candidate" \
+  --title "SixSentences v0.2.0-alpha.4 · release candidate" \
   --notes "Release automation will replace these draft notes after every gate passes."
 gh workflow run release.yml \
   --repo SixSentences/sixsentences \
   --ref main \
-  -f tag=v0.2.0-alpha.3
+  -f tag=v0.2.0-alpha.4
 ```
 
 Run the three publication commands together in one supervised release session.
-For alpha.3, stage an unchanged copy of the checked-in
+For alpha.4, stage an unchanged copy of the checked-in
 `docs/assets/sixsentences-thesis-overview.gif` under the release filename
 `sixsentences-overview.gif`; its bytes must match
 `docs/assets/sixsentences-overview.sha256`. The owner-supplied thesis-film preview
@@ -91,8 +102,10 @@ The explicit workflow dispatch occurs only after the signed tag and draft both
 exist, so there is no tag-push/draft-creation race. The workflow verifies the
 tag before executing its source and fails closed unless the draft contains only
 `sixsentences-overview.gif` with the checksum committed at that tag. A failed
-workflow never publishes the draft. Correct the draft and rerun the workflow
-without moving or reusing the tag.
+workflow never publishes the draft. A draft with unexpected or partially
+uploaded artifacts is not clobbered or automatically cleaned. Investigate the
+failure and use a new reviewed version when existing images or assets prevent
+a clean run; never move or reuse a release tag.
 
 The workflow rebuilds and retests from the tag. Python wheels are built from the
 source distribution and installed in isolation. API and web sources are tested
@@ -116,9 +129,9 @@ workspace, upgrades it, verifies saved notes/files after backup/restore, and
 separately starts the candidate against an empty database. Its sanitized
 image/revision receipt is a required artifact. This is an API/Compose runtime
 test, not a browser interaction test or proof of research-output quality.
-For alpha.3, this required upgrade/rollback pair is the pinned alpha.1 baseline
-and the alpha.3 candidate, with the compatibility bootstrap below. It is not a
-dedicated exact-image alpha.2-to-alpha.3 upgrade or rollback rehearsal.
+For alpha.4, this required upgrade/rollback pair is the pinned alpha.1 baseline
+and the alpha.4 candidate, with the compatibility bootstrap below. It is not a
+dedicated exact-image alpha.3-to-alpha.4 upgrade or rollback rehearsal.
 The original alpha.1 PostgreSQL installer has an invalid `BOOLEAN DEFAULT 0`
 in the baseline migration; the real PostgreSQL regression confirms SQLSTATE
 `42804`. The candidate changes exactly that literal to SQLAlchemy `sa.false()`.
@@ -135,7 +148,7 @@ installation with the unmodified alpha.1 installer. The candidate separately
 has to migrate a completely empty database through its full migration chain.
 The legacy API also requires a corpus for readiness. Only its baseline receives
 a real, verified one-record synthetic Parquet corpus, recorded as
-`legacy_corpus_fixture` and `synthetic_corpus_bootstrap: true`. The fresh alpha.3
+`legacy_corpus_fixture` and `synthetic_corpus_bootstrap: true`. The fresh alpha.4
 run must instead prove `fresh_candidate_without_corpus: true`: the optional
 literature corpus does not block the wider workspace, while database, storage,
 queue and live-worker health remain mandatory. Corpus searches still fail
@@ -168,11 +181,32 @@ releases only to callers with push access, so a read-only token cannot see the
 draft it is meant to check and answers "release not found". It reads and never
 mutates, and a test asserts that it calls no release-mutating command.
 
-After every build, test, attestation, self-hosting, and preview dependency
-passes, the publish job pauses at the protected `community-release` environment.
-A release maintainer must inspect the workflow evidence and explicitly approve
-that job. The write-scoped job then rechecks the draft and checksum immediately
-before publication.
+After every source build, test, attestation, self-hosting, security and preview
+dependency passes, `release.yml` calls the protected reusable image-preparation
+workflow. Its exact-digest scans, drill and evidence checks must pass before it
+exports a sanitized ten-file artifact to the same workflow run. It does not
+upload to the GitHub release or publish the draft.
+
+The final publisher then pauses at the protected `community-release` environment.
+A release maintainer must inspect the completed evidence and approve publication.
+That job downloads only this run's engine and image artifacts, revalidates them,
+and requires the still-editable draft to contain only the checksum-matched GIF.
+It uploads the fourteen remaining files without overwriting anything, downloads
+the resulting assets again, and requires both exact inventory and byte/checksum
+equality. Only after those checks pass may it publish the draft as a prerelease.
+
+The exact fifteen uploaded release assets are:
+
+| Group | Count | Files |
+| --- | ---: | --- |
+| Reviewed preview | 1 | `sixsentences-overview.gif` |
+| Python engine | 4 | Versioned wheel, sdist, CycloneDX SBOM, `SHA256SUMS` |
+| Image evidence | 10 | `IMAGE_DIGESTS`, `images.json`, API/web SPDX SBOMs, API/web provenance exports, API/web OCI identity records, `runtime-rehearsal.json`, `IMAGE_SHA256SUMS` |
+
+GitHub's automatically generated source archives are not uploaded assets in this
+inventory. Release notes are the release body, not a sixteenth asset. A missing,
+extra or changed file leaves the draft unpublished; no post-publication upload
+step is permitted.
 
 ### Repository settings the release depends on
 
@@ -203,19 +237,14 @@ Developer ID signing, Apple notarization, Sparkle feed/key management, appcast
 publication, update provenance, and ZIP/DMG/App Store distribution require a
 separate reviewed pipeline before any binary can be advertised as supported.
 
-## Publish the container images
+## Prepare container evidence inside the release workflow
 
-`publish-images.yml` is deliberately dispatched from `main` after the release
-is verified. It independently verifies the SSH-signed tag, main ancestry,
-canonical metadata, and that the GitHub release is already published. The
-package-writing job requires the protected `community-release` approval:
-
-```console
-gh workflow run publish-images.yml \
-  --repo SixSentences/sixsentences \
-  --ref main \
-  -f tag=v0.2.0-alpha.3
-```
+Do not dispatch `publish-images.yml` after publication. It is a reusable workflow
+called by `release.yml` only after all prerequisite gates pass. It independently
+verifies the SSH-signed tag, main ancestry, canonical metadata, the caller's
+verified source revision, and the still-unpublished draft. Registry writes
+require the protected `community-release` approval, separately from the final
+GitHub publisher's approval but within the same orchestrated run.
 
 The workflow checks out the verified commit and publishes Linux amd64 images
 `community-api:<tag>` and `community-web:<tag>-localhost`. It refuses to replace
@@ -242,9 +271,13 @@ top-level builder, invocation, metadata and materials. Similar URI prefixes or
 mixed schemas are not accepted. This format support does not weaken the exact
 OCI revision/version, build-digest or runtime-receipt bindings and does not turn
 a provenance VCS hint into independent source verification.
-Only after those checks succeed does it attach `IMAGE_DIGESTS`, `images.json`,
+Only after those checks succeed does it export `IMAGE_DIGESTS`, `images.json`,
 the two SBOMs, two provenance exports, two OCI identity records,
-`runtime-rehearsal.json` and `IMAGE_SHA256SUMS`, without overwriting existing assets.
+`runtime-rehearsal.json` and `IMAGE_SHA256SUMS` as the ten-file same-run artifact.
+Raw build metadata and diagnostic files are not part of that artifact. The final
+publisher verifies and attaches this evidence together with the engine assets
+while the release is still a draft; this workflow never adds files to a published
+release. Existing image references and release files are never overwritten.
 Keep the engine's `SHA256SUMS` separate. Verify image files with
 `sha256sum --check IMAGE_SHA256SUMS`, then use the `@sha256:` references from
 `IMAGE_DIGESTS`. BuildKit provenance records build inputs; it is not independent
@@ -264,10 +297,11 @@ authentication error rather than a missing-image error.
 Download release files into an empty directory:
 
 ```console
-gh release download v0.2.0-alpha.3 --repo SixSentences/sixsentences
+gh release download v0.2.0-alpha.4 --repo SixSentences/sixsentences
 sha256sum --check SHA256SUMS
-gh attestation verify sixsentences_engine-0.2.0a3-py3-none-any.whl --repo SixSentences/sixsentences
-gh attestation verify sixsentences_engine-0.2.0a3.tar.gz --repo SixSentences/sixsentences
+sha256sum --check IMAGE_SHA256SUMS
+gh attestation verify sixsentences_engine-0.2.0a4-py3-none-any.whl --repo SixSentences/sixsentences
+gh attestation verify sixsentences_engine-0.2.0a4.tar.gz --repo SixSentences/sixsentences
 ```
 
 Build both images from the tag, record their local digests, start a fresh local
