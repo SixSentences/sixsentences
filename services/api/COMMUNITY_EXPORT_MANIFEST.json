@@ -1693,10 +1693,10 @@
       "sha256": "350dec2b4b3a28258b5546f65cb98ced52a71f3d785231061a8e20dfa5fac181"
     },
     {
-      "bytes": 16964,
+      "bytes": 18929,
       "mode": "0644",
       "path": "tests/test_community_rehearsal_fixture.py",
-      "sha256": "9be6954bd9a28bb89271c4b948053c5079781a5719fe195f3058075bbcec774c"
+      "sha256": "0b361d5e18d045a6198cc9ba9653edeef91db3c3ccb72f19911092ce6ee2d5b6"
     },
     {
       "bytes": 613,
