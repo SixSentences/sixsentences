@@ -25,6 +25,6 @@ on the current base commit. No dependency PR was bulk-merged.
 | #164 | Sparkle update | Keep blocked on both native toolchain checks; do not bypass source-only or update-signature boundaries. |
 | #166 | Motion major update | Separate behavior/accessibility review, despite currently green checks; do not fold a major animation change into recovery hardening. |
 
-Snapshot: twelve open dependency PRs; six had failed checks and six had no failed
+Snapshot: twelve open dependency PRs; seven had failed checks and five had no failed
 checks in their reported rollups. A past green rollup does not prove compatibility
 with today's head or required-check completion.

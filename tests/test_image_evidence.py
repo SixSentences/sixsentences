@@ -140,7 +140,8 @@ def test_runtime_rehearsal_is_a_required_ci_and_release_step() -> None:
         workflow = (ROOT / ".github/workflows" / name).read_text()
         assert "rehearse.py --confirm DISPOSABLE" in workflow
         assert (
-            "--upgrade-from ghcr.io/sixsentences/community-api@sha256:31b374cfb4b45c2cceb6a609d3b0ec8853ee47cd0a3d1588dfa48305bcb3498d"
+            "--upgrade-from ghcr.io/sixsentences/community-api@sha256:"
+            "31b374cfb4b45c2cceb6a609d3b0ec8853ee47cd0a3d1588dfa48305bcb3498d"
             in workflow
         )
         assert "NEXT_PUBLIC_APP_URL=http://localhost " in workflow
