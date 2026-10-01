@@ -86,6 +86,7 @@ jobs:
           docker buildx inspect --bootstrap
           mkdir image-evidence
       - name: Build and publish only new immutable version references
+        id: built-images
         run: |
           set -euo pipefail
           api="$IMAGE_PREFIX-api:$RELEASE_TAG"
@@ -121,7 +122,32 @@ jobs:
             docker pull "$ref"
             docker image inspect "$ref" --format '{{json .Config.Labels}}' > "image-evidence/$kind.identity.json"
             printf '%s\n' "$ref" >> image-evidence/IMAGE_DIGESTS
+            printf '%s=%s\n' "$kind" "$ref" >> "$GITHUB_OUTPUT"
           done
+      - name: Scan the exact published API digest for fixable critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.built-images.outputs.api }}
+          scanners: vuln
+          severity: CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+          hide-progress: true
+          version: v0.69.3
+      - name: Scan the exact published web digest for fixable critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.built-images.outputs.web }}
+          scanners: vuln
+          severity: CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+          hide-progress: true
+          version: v0.69.3
       - name: Exercise the exact published digests before advertising their evidence
         run: |
           set -euo pipefail

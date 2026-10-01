@@ -185,3 +185,24 @@ def test_runtime_rehearsal_is_a_required_ci_and_release_step() -> None:
     assert "restore.sh" in driver
     assert 'phase("verify")' in driver
     assert "capture_output=True" in driver
+
+
+@pytest.mark.parametrize("kind", ["API", "web"])
+def test_published_images_require_pinned_critical_vulnerability_scans(kind: str) -> None:
+    workflow = (ROOT / ".github/workflows/publish-images.yml").read_text()
+    scan_name = f"Scan the exact published {kind} digest for fixable critical vulnerabilities"
+    scan = workflow.split(f"- name: {scan_name}\n", 1)[1].split("- name:", 1)[0]
+    assert "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25" in scan
+    assert "version: v0.69.3" in scan
+    assert "scan-type: image" in scan
+    assert f"image-ref: ${{{{ steps.built-images.outputs.{kind.lower()} }}}}" in scan
+    assert "scanners: vuln" in scan
+    assert "severity: CRITICAL" in scan
+    assert "ignore-unfixed: true" in scan
+    assert 'exit-code: "1"' in scan
+    assert "continue-on-error" not in scan
+    assert "if:" not in scan
+    assert workflow.index('docker pull "$ref"') < workflow.index(scan_name)
+    assert workflow.index(scan_name) < workflow.index("Validate SBOMs and write")
+    assert workflow.index(scan_name) < workflow.index("gh release upload")
+    assert 'printf \'%s=%s\\n\' "$kind" "$ref" >> "$GITHUB_OUTPUT"' in workflow
