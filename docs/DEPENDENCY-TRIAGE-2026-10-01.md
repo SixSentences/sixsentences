@@ -51,7 +51,7 @@ is risk-free. Alpha.4 pins the
 [patched 6.19.0 release](https://github.com/py-pdf/pypdf/releases/tag/6.19.0).
 
 Only pypdf's package records and direct requirement change in the canonical
-API `uv.lock`; all other 59 package records remain unchanged. The BSD-3-Clause
+API `uv.lock`; no other package version or transitive dependency changes. The BSD-3-Clause
 license is unchanged. The legacy direct-pin `services/api/requirements.lock`
 is not used by the canonical Docker/uv installation; only its pypdf and engine
 pins are synchronized here. Other historical snapshot drift is not silently
