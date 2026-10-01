@@ -88,10 +88,12 @@ boundary, exact dependency resolution, tests, and release compilation run on
 pinned Xcode 26.1.1 without signing or notarization credentials. The exact tag
 is scanned again for current and historical secrets, critical dependency
 vulnerabilities, and deployment misconfiguration. The self-hosting definition
-and both container builds are validated from the tag. Images remain
-deployment-built during this alpha; in particular, public origins and legal
-versions are compile-time browser configuration, so a generic web image would
-be misleading.
+and both container builds are validated from the tag. A provider-free rehearsal
+starts the published `v0.2.0-alpha.1` API in isolated volumes, seeds a synthetic
+workspace, upgrades it, verifies saved notes/files after backup/restore, and
+separately starts the candidate against an empty database. Its sanitized
+image/revision receipt is a required artifact. This is an API/Compose runtime
+test, not a browser interaction test or proof of research-output quality.
 
 The preview is checked by a separate job before the environment gate, so a wrong
 or missing preview fails the run before a maintainer is asked to approve
@@ -137,10 +139,10 @@ separate reviewed pipeline before any binary can be advertised as supported.
 
 ## Publish the container images
 
-`publish-images.yml` declares `on: release: published`, and that trigger will
-not fire for a release this automation publishes: GitHub deliberately does not
-start a workflow from an event caused by `GITHUB_TOKEN`, which is what the
-publish job uses. Dispatch it explicitly after the release is verified:
+`publish-images.yml` is deliberately dispatched from `main` after the release
+is verified. It independently verifies the SSH-signed tag, main ancestry,
+canonical metadata, and that the GitHub release is already published. The
+package-writing job requires the protected `community-release` approval:
 
 ```console
 gh workflow run publish-images.yml \
@@ -149,10 +151,25 @@ gh workflow run publish-images.yml \
   -f tag=v0.2.0-alpha.1
 ```
 
-The workflow checks out the exact tag, refuses anything that is not a version
-tag, and publishes `community-api:<tag>` and `community-web:<tag>-localhost`.
-Only the localhost origin is publishable as a reusable web image, because the
-web client bakes its public origin at build time.
+The workflow checks out the verified commit and publishes Linux amd64 images
+`community-api:<tag>` and `community-web:<tag>-localhost`. It refuses to replace
+either existing tag. No `latest` tag or untested ARM64 image is created. Only
+localhost is reusable because the web client bakes its public origin at build
+time; TLS operators must build their own.
+
+BuildKit records SBOM and provenance in the registry. The workflow retrieves
+them by digest, validates nonempty SPDX package inventories and build
+provenance, and attaches `IMAGE_DIGESTS`, `images.json`, the two SBOMs, the two
+provenance exports and `IMAGE_SHA256SUMS` without overwriting existing assets.
+Keep the engine's `SHA256SUMS` separate. Verify image files with
+`sha256sum --check IMAGE_SHA256SUMS`, then use the `@sha256:` references from
+`IMAGE_DIGESTS`. BuildKit provenance records build inputs; it is not independent
+audit or a promise of byte-identical reproducibility. System package mirrors
+and build/scanner tooling may change. Checksums are not signatures.
+
+If publication partially succeeds, do not replace or move the tag to retry it.
+Inspect the digest evidence and prepare a new reviewed prerelease. No pipeline
+step deletes previously published packages or release files.
 
 New packages are private on first publish. Make each one public once, in the
 organization's package settings, or an operator's `docker pull` fails with an

@@ -190,6 +190,23 @@ the new images and use `docker compose up --detach --wait`. The dedicated
 one-shot `migrate` service owns schema migration; restore with the same source
 revision before attempting a version upgrade.
 
+Resizable pinboards add a `size` field to stored note JSON, without a new SQL
+migration. Existing notes read as size `1.0` without being rewritten, and old
+cached clients preserve saved sizes when editing. Once notes are saved by this
+version, do not run a pre-size API against that database: its strict schema
+rejects the new field. Prefer a forward fix; an old binary requires its matching
+pre-upgrade database/files backup, with subsequent deletions replayed. Never
+strip saved sizes to make a downgrade pass.
+
+CI runs `rehearse.py` against a randomly named, loopback-only Compose project:
+fresh released API, upgrade to candidate, authenticated pinboard round-trip,
+database/file backup and restore, then a separate fresh candidate startup. It
+requires `--confirm DISPOSABLE`, accepts no existing env file, generates new
+credentials, strips inherited provider settings, and removes only its own
+synthetic volumes. It uses an already running Docker engine and never starts
+one. This gate does not send mail or make inference calls; normal operator
+registration, browser, provider, and offsite recovery acceptance remain separate.
+
 The reference worker uses the `all` lane at low concurrency. Larger deployments
 should split worker lanes only after measuring PostgreSQL connections, memory,
 provider limits and queue latency. Do not expose PostgreSQL or port 8000 merely

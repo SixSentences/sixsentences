@@ -386,14 +386,29 @@ jobs:
           docker build \
             --tag "sixsentences-community-web:${IMAGE_TAG}" \
             --file apps/web/Dockerfile \
-            --build-arg NEXT_PUBLIC_SIX_API_URL=http://127.0.0.1/api \
-            --build-arg NEXT_PUBLIC_APP_URL=http://127.0.0.1 \
-            --build-arg NEXT_PUBLIC_LEGAL_BASE_URL=http://127.0.0.1/legal \
+            --build-arg NEXT_PUBLIC_SIX_API_URL=http://localhost:18080/api \
+            --build-arg NEXT_PUBLIC_APP_URL=http://localhost:18080 \
+            --build-arg NEXT_PUBLIC_LEGAL_BASE_URL=http://localhost:18080/legal \
             --build-arg SIX_ALLOW_INSECURE_LOCAL_HTTP=true \
-            --build-arg NEXT_PUBLIC_TERMS_VERSION=release-test-v1 \
-            --build-arg NEXT_PUBLIC_PRIVACY_VERSION=release-test-v1 \
-            --build-arg NEXT_PUBLIC_DPA_VERSION=release-test-v1 \
+            --build-arg NEXT_PUBLIC_TERMS_VERSION=community-operator-v1 \
+            --build-arg NEXT_PUBLIC_PRIVACY_VERSION=community-operator-v1 \
+            --build-arg NEXT_PUBLIC_DPA_VERSION=community-operator-v1 \
             apps/web
+      - name: Rehearse tagged startup, upgrade and isolated restore
+        env:
+          IMAGE_TAG: ${{ needs.validate.outputs.public-version }}
+        run: |
+          python deploy/community/rehearse.py --confirm DISPOSABLE \
+            --api-image "sixsentences-community-api:$IMAGE_TAG" \
+            --web-image "sixsentences-community-web:$IMAGE_TAG" \
+            --upgrade-from ghcr.io/sixsentences/community-api:v0.2.0-alpha.1 \
+            --report "$RUNNER_TEMP/community-rehearsal.json"
+      - name: Retain sanitized tagged deployment evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tagged-community-rehearsal
+          path: ${{ runner.temp }}/community-rehearsal.json
+          if-no-files-found: error
 
   tag-security:
     name: Scan the exact verified release source
@@ -571,7 +586,7 @@ jobs:
           {
             printf '%s\n' \
               '> [!NOTE]' \
-              '> This release publishes the complete tagged community application source, including the tested macOS Companion source. The downloadable, attested build artifacts below cover the `sixsentences-engine` Python distribution. API, web, and Companion sources are validated from the tag; containers and the macOS app remain deployment-built so configuration and signing authority stay explicit.' \
+              '> This release publishes the complete tagged community application source, including the tested macOS Companion source. The downloadable, attested build artifacts below cover the `sixsentences-engine` Python distribution. API and web images pass isolated startup, upgrade and restore checks. Digest-bound Linux amd64 container images and their SBOMs are published by a separately approved workflow; do not assume they exist until IMAGE_DIGESTS is attached. TLS-origin web images and the source-only macOS app remain operator-built.' \
               ''
             cat release/RELEASE_NOTES.md
           } > "$RUNNER_TEMP/release-notes.md"

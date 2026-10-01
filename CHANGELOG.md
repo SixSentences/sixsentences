@@ -10,6 +10,12 @@ equivalents for Python package metadata.
 
 ### Added
 
+- Persistent pinboard resizing, compact mobile editing and a no-write action
+  to recover notes obscured by the composer. Old clients preserve saved sizes;
+  downgrade compatibility is documented in the self-hosting guide.
+- Required provider-free Compose startup, released-image upgrade and isolated
+  restore rehearsal, plus digest-bound image SBOM/provenance/checksum receipts.
+
 - A personal research pinboard on the workspace homepage: coloured notes, cards
   and circles with editable text, draggable or keyboard-controlled positions,
   responsive layouts and revision-bound autosave. Notes are creator-private,
@@ -32,6 +38,9 @@ equivalents for Python package metadata.
   other targets.
 
 ### Changed
+
+- Update Next.js to 16.3.8 and repair an embedded Python syntax error in the
+  self-hosted erasure-journal restore selector, covered by a compile regression.
 
 - The server package reads its version from the installed distribution metadata
   instead of a second literal in `sixsentences_server/__init__.py`.

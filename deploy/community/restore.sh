@@ -225,8 +225,7 @@ def read_regular(path: str) -> bytes:
     flags = os.O_RDONLY
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
-    try:
-        descriptor = os.open(path, flags)
+    descriptor = os.open(path, flags)
     try:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise SystemExit(f"erasure journal is not a regular file: {path}")

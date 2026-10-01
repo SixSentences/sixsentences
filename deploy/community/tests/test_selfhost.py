@@ -183,6 +183,13 @@ class SelfHostDeploymentTests(unittest.TestCase):
         )
         self.assertLess(replay_at, proxy_start_at)
 
+    def test_restore_embedded_python_compiles_before_any_state_operation(self) -> None:
+        source = (COMMUNITY / "restore.sh").read_text(encoding="utf-8")
+        snippets = re.findall(r"--entrypoint python api -c '\n(.*?)\n'", source, re.S)
+        self.assertEqual(len(snippets), 1)
+        for snippet in snippets:
+            compile(snippet, "restore.sh:embedded-python", "exec")
+
     def test_backup_dereferences_hardlinks_and_restarts_with_health_waits(self) -> None:
         source = (COMMUNITY / "backup.sh").read_text(encoding="utf-8")
         self.assertEqual(source.count("tar --hard-dereference -czf"), 2)

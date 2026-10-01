@@ -310,11 +310,24 @@ jobs:
           docker build \
             --tag sixsentences-community-web:ci \
             --file apps/web/Dockerfile \
-            --build-arg NEXT_PUBLIC_SIX_API_URL=http://127.0.0.1/api \
-            --build-arg NEXT_PUBLIC_APP_URL=http://127.0.0.1 \
-            --build-arg NEXT_PUBLIC_LEGAL_BASE_URL=http://127.0.0.1/legal \
+            --build-arg NEXT_PUBLIC_SIX_API_URL=http://localhost:18080/api \
+            --build-arg NEXT_PUBLIC_APP_URL=http://localhost:18080 \
+            --build-arg NEXT_PUBLIC_LEGAL_BASE_URL=http://localhost:18080/legal \
             --build-arg SIX_ALLOW_INSECURE_LOCAL_HTTP=true \
-            --build-arg NEXT_PUBLIC_TERMS_VERSION=ci-v1 \
-            --build-arg NEXT_PUBLIC_PRIVACY_VERSION=ci-v1 \
-            --build-arg NEXT_PUBLIC_DPA_VERSION=ci-v1 \
+            --build-arg NEXT_PUBLIC_TERMS_VERSION=community-operator-v1 \
+            --build-arg NEXT_PUBLIC_PRIVACY_VERSION=community-operator-v1 \
+            --build-arg NEXT_PUBLIC_DPA_VERSION=community-operator-v1 \
             apps/web
+      - name: Rehearse fresh startup, released-image upgrade and isolated restore
+        run: |
+          python deploy/community/rehearse.py --confirm DISPOSABLE \
+            --api-image sixsentences-community-api:ci \
+            --web-image sixsentences-community-web:ci \
+            --upgrade-from ghcr.io/sixsentences/community-api:v0.2.0-alpha.1 \
+            --report "$RUNNER_TEMP/community-rehearsal.json"
+      - name: Retain sanitized deployment evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: community-rehearsal
+          path: ${{ runner.temp }}/community-rehearsal.json
+          if-no-files-found: error

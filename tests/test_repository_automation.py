@@ -326,14 +326,16 @@ def test_image_publication_is_bound_to_a_verified_release_tag() -> None:
         encoding="utf-8"
     )
 
-    assert "\n  release:\n    types: [published]\n" in workflow
-    assert "\npermissions:\n  contents: read\n" in workflow
+    assert "\n  workflow_dispatch:\n" in workflow
+    assert "\npermissions: {}\n" in workflow
     assert "packages: write" in workflow
-    assert "contents: write" not in workflow
+    assert "environment: community-release" in workflow
     assert "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" in workflow
-    assert "ref: ${{ steps.release.outputs.tag }}" in workflow
+    assert "ref: ${{ needs.validate.outputs.sha }}" in workflow
     assert "persist-credentials: false" in workflow
-    assert "refusing to publish images for" in workflow
+    assert "git verify-tag" in workflow
+    assert "git merge-base --is-ancestor" in workflow
+    assert "--clobber" not in workflow
 
 
 def test_published_web_image_matches_the_generated_local_configuration() -> None:
@@ -346,9 +348,9 @@ def test_published_web_image_matches_the_generated_local_configuration() -> None
         encoding="utf-8"
     )
 
-    assert "LOCAL_ORIGIN: http://localhost" in workflow
+    assert "--build-arg NEXT_PUBLIC_APP_URL=http://localhost " in workflow
     assert 'PUBLIC_ORIGIN="http://localhost"' in init_env
-    assert "LOCAL_DOCUMENT_VERSION: community-operator-v1" in workflow
+    assert "--build-arg NEXT_PUBLIC_TERMS_VERSION=community-operator-v1" in workflow
     assert "SIX_TERMS_VERSION=community-operator-v1" in init_env
     assert "SIX_PRIVACY_VERSION=community-operator-v1" in init_env
     assert "SIX_DPA_VERSION=community-operator-v1" in init_env
