@@ -50,6 +50,13 @@ class SelfHostDeploymentTests(unittest.TestCase):
         self.assertIn("egress:", worker_block)
         self.assertGreaterEqual(source.count("gw_priority: 1"), 3)
 
+    def test_worker_starts_after_migration_without_waiting_for_api_readiness(self) -> None:
+        source = COMPOSE.read_text(encoding="utf-8")
+        worker = source.split("\n  worker:\n", 1)[1].split("\n  migrate:\n", 1)[0]
+        dependencies = worker.split("    depends_on:\n", 1)[1].split("    healthcheck:", 1)[0]
+        self.assertIn("migrate:\n        condition: service_completed_successfully", dependencies)
+        self.assertNotIn("api:", dependencies)
+
     def test_public_proxy_does_not_log_capability_urls(self) -> None:
         source = (COMMUNITY / "Caddyfile").read_text(encoding="utf-8")
         self.assertIn("@api path /api /api/*", source)
@@ -102,12 +109,8 @@ class SelfHostDeploymentTests(unittest.TestCase):
             self.assertEqual(values["SIX_ALLOW_INSECURE_LOCAL_HTTP"], "false")
             self.assertRegex(values["POSTGRES_PASSWORD"], r"^[0-9a-f]{64}$")
             self.assertRegex(values["SIX_ERASURE_LEDGER_HMAC_KEY"], r"^[0-9a-f]{64}$")
-            self.assertRegex(
-                values["SIX_CONNECTOR_ENCRYPTION_KEY"], r"^[A-Za-z0-9_-]{43}=?$"
-            )
-            self.assertNotEqual(
-                values["POSTGRES_PASSWORD"], values["SIX_ERASURE_LEDGER_HMAC_KEY"]
-            )
+            self.assertRegex(values["SIX_CONNECTOR_ENCRYPTION_KEY"], r"^[A-Za-z0-9_-]{43}=?$")
+            self.assertNotEqual(values["POSTGRES_PASSWORD"], values["SIX_ERASURE_LEDGER_HMAC_KEY"])
             self.assertEqual(values["SIX_PUBMED_ENABLED"], "false")
             self.assertEqual(values["SIX_PUBMED_EMAIL"], "")
             self.assertEqual(values["SIX_PUBMED_API_KEY"], "")
@@ -147,9 +150,7 @@ class SelfHostDeploymentTests(unittest.TestCase):
                 text=True,
             )
             self.assertEqual(local.returncode, 0, local.stderr)
-            self.assertEqual(
-                read_env(local_target)["SIX_ALLOW_INSECURE_LOCAL_HTTP"], "true"
-            )
+            self.assertEqual(read_env(local_target)["SIX_ALLOW_INSECURE_LOCAL_HTTP"], "true")
 
     def test_web_http_exception_is_explicit_and_loopback_only(self) -> None:
         source = (ROOT / "apps" / "web" / "Dockerfile").read_text(encoding="utf-8")
@@ -171,25 +172,106 @@ class SelfHostDeploymentTests(unittest.TestCase):
 
     def test_restore_replays_the_newest_authenticated_erasure_journal(self) -> None:
         source = (COMMUNITY / "restore.sh").read_text(encoding="utf-8")
-        self.assertGreaterEqual(source.count("six-community-erasure api verify"), 2)
+        self.assertIn("inspect_journals verify", source)
+        self.assertIn("inspect_journals select", source)
         self.assertIn("six-community-erasure api replay", source)
-        self.assertIn("current.startswith(candidate)", source)
-        self.assertIn("candidate.startswith(current)", source)
+        helper = (COMMUNITY / "restore_journals.py").read_text(encoding="utf-8")
+        self.assertIn(".startswith(", helper)
+        self.assertIn("read_events", helper)
+        self.assertNotRegex(source, r"--user(?:\s|=)")
+        self.assertNotIn("--cap-add", source)
+        self.assertNotIn("/candidate:ro", source)
+        self.assertIn('<"$JOURNAL_INPUT"', source)
         self.assertIn('LEDGER_SOURCE" == "backup"', source)
         self.assertIn("run --rm --no-deps -T migrate", source)
         replay_at = source.index("six-community-erasure api replay")
-        proxy_start_at = source.index(
-            'up --detach --wait --wait-timeout 180 worker web proxy'
-        )
+        proxy_start_at = source.index("up --detach --wait --wait-timeout 180 web proxy")
         self.assertLess(replay_at, proxy_start_at)
+        runtime_start_at = source.index("up --detach --wait --wait-timeout 180 postgres api worker")
+        self.assertLess(replay_at, runtime_start_at)
+        self.assertLess(runtime_start_at, proxy_start_at)
+
+    def test_restore_helper_compiles_before_any_state_operation(self) -> None:
+        helper = (COMMUNITY / "restore_journals.py").read_text(encoding="utf-8")
+        compile(helper, "restore_journals.py", "exec")
+
+    def test_restore_stop_errors_prevent_journal_selection_and_state_changes(self) -> None:
+        source = (COMMUNITY / "restore.sh").read_text(encoding="utf-8")
+        block = source.split("RESTORE_PHASE=stop_services\n", 1)[1].split(
+            'case "$LEDGER_SOURCE" in', 1
+        )[0]
+        self.assertNotIn("|| true", block)
+        for service in ("proxy web", "worker", "api"):
+            with self.subTest(service=service), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory) / "commands.txt"
+                script = "\n".join(
+                    [
+                        "set -euo pipefail",
+                        'record() { printf "%s\\n" "$*" >> "$TEST_COMMAND_OUTPUT"; [[ "$*" != *"$FAIL_SERVICE" ]]; }',
+                        'inspect_journals() { printf "JOURNAL_SELECT\\n" >> "$TEST_COMMAND_OUTPUT"; printf "current\\n"; }',
+                        "COMPOSE=(record)",
+                        block,
+                        'printf "DATABASE_RESTORE_REPLAY_START\\n" >> "$TEST_COMMAND_OUTPUT"',
+                    ]
+                )
+                result = subprocess.run(
+                    ["bash", "-c", script],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    env={**os.environ, "TEST_COMMAND_OUTPUT": str(output), "FAIL_SERVICE": service},
+                )
+                self.assertNotEqual(result.returncode, 0)
+                commands = output.read_text()
+                self.assertNotIn("JOURNAL_SELECT", commands)
+                self.assertNotIn("DATABASE_RESTORE_REPLAY_START", commands)
 
     def test_backup_dereferences_hardlinks_and_restarts_with_health_waits(self) -> None:
         source = (COMMUNITY / "backup.sh").read_text(encoding="utf-8")
         self.assertEqual(source.count("tar --hard-dereference -czf"), 2)
-        self.assertNotIn('${SIX_BACKUP_DIR:-', source)
-        self.assertIn("up --detach --wait --wait-timeout 180 api", source)
+        self.assertNotIn("${SIX_BACKUP_DIR:-", source)
+        self.assertIn('up --no-deps --detach --wait --wait-timeout 180 "${services[@]}"', source)
+        self.assertEqual(source.count("start_previously_running_services"), 3)
         for service in ("api", "worker", "web", "postgres", "proxy"):
             self.assertIn(f"{service}_image=%s", source)
+
+    def test_backup_resumes_only_previously_running_services_as_one_group(self) -> None:
+        source = (COMMUNITY / "backup.sh").read_text(encoding="utf-8")
+        function = source.split("start_previously_running_services() {", 1)[1].split("\n}\n", 1)[0]
+        for api, worker, expected in (
+            (0, 0, []),
+            (1, 0, ["api"]),
+            (0, 1, ["worker"]),
+            (1, 1, ["api", "worker"]),
+        ):
+            with self.subTest(api=api, worker=worker), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory) / "commands.txt"
+                script = "\n".join(
+                    [
+                        "set -euo pipefail",
+                        'record() { printf "%s\\n" "$*" >> "$TEST_COMMAND_OUTPUT"; }',
+                        "COMPOSE=(record)",
+                        f"API_WAS_RUNNING={api}",
+                        f"WORKER_WAS_RUNNING={worker}",
+                        "start_previously_running_services() {" + function + "\n}",
+                        "start_previously_running_services",
+                    ]
+                )
+                result = subprocess.run(
+                    ["bash", "-c", script],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    env={**os.environ, "TEST_COMMAND_OUTPUT": str(output)},
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                commands = output.read_text().splitlines() if output.exists() else []
+                self.assertEqual(
+                    commands,
+                    ["up --no-deps --detach --wait --wait-timeout 180 " + " ".join(expected)]
+                    if expected
+                    else [],
+                )
 
     def test_backup_and_restore_share_an_atomic_operation_lock(self) -> None:
         lock_name = ".sixsentences-state-operation.lock"
@@ -201,7 +283,7 @@ class SelfHostDeploymentTests(unittest.TestCase):
     def test_restore_validates_manifest_and_metadata_before_state_changes(self) -> None:
         source = (COMMUNITY / "restore.sh").read_text(encoding="utf-8")
         checksum_validation = source.index("SHA256SUMS must name each expected")
-        service_stop = source.index('stop --timeout 30 proxy web')
+        service_stop = source.index("stop --timeout 30 proxy web")
         self.assertLess(checksum_validation, service_stop)
         self.assertIn('metadata_value format)" == "1"', source)
         self.assertIn('metadata_value database)" == "postgresql"', source)

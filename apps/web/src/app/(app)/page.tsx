@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import PersonalPinboard from "@/components/home/personal-pinboard";
 import boardStyles from "@/components/home/personal-pinboard.module.css";
@@ -11,6 +11,7 @@ import { consumeResearchQuestionHandoff } from "@/lib/research-question-handoff"
 
 export default function NewSearchPage() {
   const { me } = useAuth();
+  const composerSurface = useRef<HTMLDivElement>(null);
   // picked after mount: greetings are random and time-of-day dependent,
   // which server-rendered HTML cannot agree with (hydration)
   const [greeting, setGreeting] = useState<string | null>(null);
@@ -57,8 +58,8 @@ export default function NewSearchPage() {
 
   return (
     <div className={`${boardStyles.home} relative isolate flex min-h-0 flex-1 flex-col items-center justify-start overflow-x-hidden overflow-y-auto px-3 py-6 sm:px-5 sm:py-10 lg:justify-center lg:rounded-[calc(var(--radius)*1.8-1px)]`}>
-      <PersonalPinboard />
-      <div className="relative z-10 w-full max-w-[52.5rem] lg:-translate-y-[4%]" data-pinboard-foreground>
+      <PersonalPinboard protectedArea={composerSurface} />
+      <div className="pointer-events-none relative w-full max-w-[52.5rem] lg:top-[-4%]" data-pinboard-foreground>
         <div className="rise rise-1 mb-5 flex flex-col items-center text-center sm:mb-8">
           <h1 className={`${boardStyles.greeting} font-display text-[clamp(2rem,9vw,3.2rem)] leading-tight`}>
             {greeting ?? (isGerman ? "Frag die Literatur." : "Ask the literature.")}
@@ -70,7 +71,7 @@ export default function NewSearchPage() {
           </p>
         </div>
 
-        <div className="rise rise-2">
+        <div ref={composerSurface} className="pointer-events-none relative" data-pinboard-composer>
           <Composer seed={seed} />
         </div>
       </div>

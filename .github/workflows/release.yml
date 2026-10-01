@@ -229,6 +229,19 @@ jobs:
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONHASHSEED: "42"
       UV_PROJECT_ENVIRONMENT: /tmp/sixsentences-release-api-env
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+        env:
+          POSTGRES_DB: community_ci
+          POSTGRES_USER: postgres
+          # Disposable runner-local synthetic database; no reusable credential.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d community_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
       - name: Check out the verified release source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -243,6 +256,14 @@ jobs:
           enable-cache: false
       - name: Install the frozen API environment
         run: uv sync --frozen --extra dev
+      - name: Reproduce the legacy PostgreSQL Boolean default with temporary tables
+        env:
+          SIX_TEST_POSTGRES_URL: postgresql+psycopg://postgres@127.0.0.1:5432/community_ci
+        run: uv run --frozen --no-sync pytest -q -s tests/test_postgres_runtime.py::test_postgres_boolean_default_contract
+      - name: Test fresh PostgreSQL migrations and concurrent queue claims
+        env:
+          SIX_TEST_POSTGRES_URL: postgresql+psycopg://postgres@127.0.0.1:5432/community_ci
+        run: uv run --frozen --no-sync pytest -q tests/test_postgres_runtime.py
       - name: Run API quality, test, and boundary gates
         run: |
           uv run --frozen --no-sync ruff check src scripts tests
@@ -386,14 +407,53 @@ jobs:
           docker build \
             --tag "sixsentences-community-web:${IMAGE_TAG}" \
             --file apps/web/Dockerfile \
-            --build-arg NEXT_PUBLIC_SIX_API_URL=http://127.0.0.1/api \
-            --build-arg NEXT_PUBLIC_APP_URL=http://127.0.0.1 \
-            --build-arg NEXT_PUBLIC_LEGAL_BASE_URL=http://127.0.0.1/legal \
+            --build-arg NEXT_PUBLIC_SIX_API_URL=http://localhost/api \
+            --build-arg NEXT_PUBLIC_APP_URL=http://localhost \
+            --build-arg NEXT_PUBLIC_LEGAL_BASE_URL=http://localhost/legal \
             --build-arg SIX_ALLOW_INSECURE_LOCAL_HTTP=true \
-            --build-arg NEXT_PUBLIC_TERMS_VERSION=release-test-v1 \
-            --build-arg NEXT_PUBLIC_PRIVACY_VERSION=release-test-v1 \
-            --build-arg NEXT_PUBLIC_DPA_VERSION=release-test-v1 \
+            --build-arg NEXT_PUBLIC_TERMS_VERSION=community-operator-v1 \
+            --build-arg NEXT_PUBLIC_PRIVACY_VERSION=community-operator-v1 \
+            --build-arg NEXT_PUBLIC_DPA_VERSION=community-operator-v1 \
             apps/web
+      - name: Scan the candidate API image for fixable critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: sixsentences-community-api:${{ needs.validate.outputs.public-version }}
+          scanners: vuln
+          severity: CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+          hide-progress: true
+          version: v0.69.3
+      - name: Scan the candidate web image for fixable critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: sixsentences-community-web:${{ needs.validate.outputs.public-version }}
+          scanners: vuln
+          severity: CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+          hide-progress: true
+          version: v0.69.3
+      - name: Rehearse tagged startup, upgrade and isolated restore
+        env:
+          IMAGE_TAG: ${{ needs.validate.outputs.public-version }}
+        run: |
+          python deploy/community/rehearse.py --confirm DISPOSABLE \
+            --api-image "sixsentences-community-api:$IMAGE_TAG" \
+            --web-image "sixsentences-community-web:$IMAGE_TAG" \
+            --upgrade-from ghcr.io/sixsentences/community-api@sha256:31b374cfb4b45c2cceb6a609d3b0ec8853ee47cd0a3d1588dfa48305bcb3498d \
+            --report "$RUNNER_TEMP/community-rehearsal.json"
+      - name: Retain sanitized tagged deployment evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tagged-community-rehearsal
+          path: ${{ runner.temp }}/community-rehearsal.json
+          if-no-files-found: error
 
   tag-security:
     name: Scan the exact verified release source
@@ -571,7 +631,7 @@ jobs:
           {
             printf '%s\n' \
               '> [!NOTE]' \
-              '> This release publishes the complete tagged community application source, including the tested macOS Companion source. The downloadable, attested build artifacts below cover the `sixsentences-engine` Python distribution. API, web, and Companion sources are validated from the tag; containers and the macOS app remain deployment-built so configuration and signing authority stay explicit.' \
+              '> This release publishes the complete tagged community application source, including the tested macOS Companion source. The downloadable, attested build artifacts below cover the `sixsentences-engine` Python distribution. API and web images pass isolated startup, upgrade and restore checks. Digest-bound Linux amd64 container images and their SBOMs are published by a separately approved workflow; do not assume they exist until IMAGE_DIGESTS is attached. TLS-origin web images and the source-only macOS app remain operator-built.' \
               ''
             cat release/RELEASE_NOTES.md
           } > "$RUNNER_TEMP/release-notes.md"

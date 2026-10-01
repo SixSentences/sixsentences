@@ -1,116 +1,177 @@
 name: Publish images
 
-# Publishes the two container images a self-hosting operator would otherwise
-# build locally. The API image is origin-independent. The web client bakes its
-# public origin at build time, so only the local HTTP origin that
-# `init-env.sh --local` generates can be published as a reusable image; a public
-# TLS deployment still builds its own web image.
-#
-# No image is built from a branch: the workflow checks out the exact release tag
-# and refuses anything that is not a version tag.
-
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish images for"
+        description: Published signed release tag (dispatch from main)
         required: true
         type: string
 
 concurrency:
-  group: publish-images-${{ github.event.release.tag_name || inputs.tag }}
+  group: publish-images-${{ inputs.tag }}
   cancel-in-progress: false
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
-  images:
-    name: Publish community images
+  validate:
+    name: Verify published immutable image source
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 10
     permissions:
       contents: read
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+      epoch: ${{ steps.source.outputs.epoch }}
+      owner: ${{ steps.source.outputs.owner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - name: Verify signed main ancestor and published release
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          WORKFLOW_REF: ${{ github.ref }}
+          REPOSITORY: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          test "$WORKFLOW_REF" = refs/heads/main
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.(0|[1-9][0-9]*))?$ ]]
+          git config --local gpg.ssh.allowedSignersFile "$GITHUB_WORKSPACE/.github/release-maintainers.allowed_signers"
+          git verify-tag "$RELEASE_TAG"
+          sha="$(git rev-parse --verify "${RELEASE_TAG}^{commit}")"
+          git merge-base --is-ancestor "$sha" refs/remotes/origin/main
+          test "$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft --jq .isDraft)" = false
+          git worktree add --detach "$RUNNER_TEMP/image-source" "$sha"
+          python .github/scripts/release.py validate --root "$RUNNER_TEMP/image-source" --tag "$RELEASE_TAG" --main-ref refs/remotes/origin/main
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "epoch=$(git show -s --format=%ct "$sha")" >> "$GITHUB_OUTPUT"
+          echo "owner=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+  images:
+    name: Publish digest-bound community images and SBOMs
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: community-release
+    permissions:
+      contents: write
       packages: write
     env:
-      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
-      REGISTRY: ghcr.io
-      REGISTRY_OWNER: ${{ github.repository_owner }}
-      REGISTRY_USER: ${{ github.actor }}
-      # The local origin these images are published for. It must stay identical
-      # to the values `deploy/community/init-env.sh --local` writes, because the
-      # web client compares its build-time origin against the running API.
-      LOCAL_ORIGIN: http://localhost
-      LOCAL_DOCUMENT_VERSION: community-operator-v1
+      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_SHA: ${{ needs.validate.outputs.sha }}
+      SOURCE_DATE_EPOCH: ${{ needs.validate.outputs.epoch }}
+      IMAGE_PREFIX: ghcr.io/${{ needs.validate.outputs.owner }}/community
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
     steps:
-      - name: Resolve and verify the release tag
-        id: release
-        run: |
-          set -euo pipefail
-          case "$RELEASE_TAG" in
-            v[0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "refusing to publish images for '$RELEASE_TAG'" >&2; exit 1 ;;
-          esac
-          owner="$(printf '%s' "$REGISTRY_OWNER" | tr '[:upper:]' '[:lower:]')"
-          {
-            echo "tag=$RELEASE_TAG"
-            echo "api=$REGISTRY/$owner/community-api:$RELEASE_TAG"
-            echo "web=$REGISTRY/$owner/community-web:$RELEASE_TAG-localhost"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Check out the tagged source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ steps.release.outputs.tag }}
+          ref: ${{ needs.validate.outputs.sha }}
           persist-credentials: false
-
-      - name: Sign in to the container registry
+      - name: Initialize isolated builder and registry authentication
         env:
-          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: printf '%s' "$REGISTRY_TOKEN" | docker login "$REGISTRY" --username "$REGISTRY_USER" --password-stdin
-
-      - name: Build and push the API image
-        env:
-          API_IMAGE: ${{ steps.release.outputs.api }}
+          REGISTRY_USER: ${{ github.actor }}
         run: |
           set -euo pipefail
-          docker build --tag "$API_IMAGE" --file services/api/Dockerfile .
-          docker push "$API_IMAGE"
-
-      - name: Build and push the local-origin web image
-        env:
-          WEB_IMAGE: ${{ steps.release.outputs.web }}
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
+          docker buildx create --name community-release --driver docker-container --use
+          docker buildx inspect --bootstrap
+          mkdir image-evidence
+      - name: Build and publish only new immutable version references
+        id: built-images
         run: |
           set -euo pipefail
-          docker build \
-            --tag "$WEB_IMAGE" \
-            --file apps/web/Dockerfile \
-            --build-arg "NEXT_PUBLIC_SIX_API_URL=$LOCAL_ORIGIN/api" \
-            --build-arg "NEXT_PUBLIC_APP_URL=$LOCAL_ORIGIN" \
-            --build-arg "NEXT_PUBLIC_LEGAL_BASE_URL=$LOCAL_ORIGIN/legal" \
+          api="$IMAGE_PREFIX-api:$RELEASE_TAG"
+          web="$IMAGE_PREFIX-web:$RELEASE_TAG-localhost"
+          for image in "$api" "$web"; do
+            if probe="$(docker buildx imagetools inspect "$image" 2>&1)"; then
+              echo "Refusing to replace an existing image tag; use a new release." >&2
+              exit 1
+            elif [[ "$probe" != "ERROR: $image: not found" ]]; then
+              echo "Registry absence was not confirmed; refusing to publish." >&2
+              exit 1
+            fi
+          done
+          common=(--platform linux/amd64 --sbom=true --provenance=mode=max --push
+            --build-arg "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH"
+            --label "org.opencontainers.image.revision=$RELEASE_SHA"
+            --label "org.opencontainers.image.version=$RELEASE_TAG"
+            --label "org.opencontainers.image.source=https://github.com/$REPOSITORY")
+          docker buildx build "${common[@]}" --tag "$api" --file services/api/Dockerfile --metadata-file image-evidence/api.build.json .
+          docker buildx build "${common[@]}" --tag "$web" --file apps/web/Dockerfile --metadata-file image-evidence/web.build.json \
+            --build-arg NEXT_PUBLIC_SIX_API_URL=http://localhost/api \
+            --build-arg NEXT_PUBLIC_APP_URL=http://localhost \
+            --build-arg NEXT_PUBLIC_LEGAL_BASE_URL=http://localhost/legal \
             --build-arg SIX_ALLOW_INSECURE_LOCAL_HTTP=true \
-            --build-arg "NEXT_PUBLIC_TERMS_VERSION=$LOCAL_DOCUMENT_VERSION" \
-            --build-arg "NEXT_PUBLIC_PRIVACY_VERSION=$LOCAL_DOCUMENT_VERSION" \
-            --build-arg "NEXT_PUBLIC_DPA_VERSION=$LOCAL_DOCUMENT_VERSION" \
-            apps/web
-          docker push "$WEB_IMAGE"
-
-      - name: Report the published references
-        env:
-          API_IMAGE: ${{ steps.release.outputs.api }}
-          WEB_IMAGE: ${{ steps.release.outputs.web }}
+            --build-arg NEXT_PUBLIC_TERMS_VERSION=community-operator-v1 \
+            --build-arg NEXT_PUBLIC_PRIVACY_VERSION=community-operator-v1 \
+            --build-arg NEXT_PUBLIC_DPA_VERSION=community-operator-v1 apps/web
+          for kind in api web; do
+            digest="$(jq -er '."containerimage.digest" | select(test("^sha256:[0-9a-f]{64}$"))' "image-evidence/$kind.build.json")"
+            ref="$IMAGE_PREFIX-$kind@$digest"
+            docker buildx imagetools inspect "$ref" --format '{{json .SBOM}}' > "image-evidence/$kind.sbom.json"
+            docker buildx imagetools inspect "$ref" --format '{{json .Provenance}}' > "image-evidence/$kind.provenance.json"
+            docker pull "$ref"
+            docker image inspect "$ref" --format '{{json .Config.Labels}}' > "image-evidence/$kind.identity.json"
+            printf '%s\n' "$ref" >> image-evidence/IMAGE_DIGESTS
+            printf '%s=%s\n' "$kind" "$ref" >> "$GITHUB_OUTPUT"
+          done
+      - name: Scan the exact published API digest for fixable critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.built-images.outputs.api }}
+          scanners: vuln
+          severity: CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+          hide-progress: true
+          version: v0.69.3
+      - name: Scan the exact published web digest for fixable critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.built-images.outputs.web }}
+          scanners: vuln
+          severity: CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+          hide-progress: true
+          version: v0.69.3
+      - name: Exercise the exact published digests before advertising their evidence
         run: |
           set -euo pipefail
-          {
-            echo "### Published images"
-            echo
-            echo '```console'
-            echo "export SIX_API_IMAGE=$API_IMAGE"
-            echo "export SIX_WEB_IMAGE=$WEB_IMAGE"
-            echo "make up"
-            echo '```'
-            echo
-            echo "The web image serves $LOCAL_ORIGIN. A public TLS deployment builds its own."
-          } >> "$GITHUB_STEP_SUMMARY"
+          api="$(sed -n '1p' image-evidence/IMAGE_DIGESTS)"
+          web="$(sed -n '2p' image-evidence/IMAGE_DIGESTS)"
+          python deploy/community/rehearse.py --confirm DISPOSABLE \
+            --api-image "$api" --web-image "$web" \
+            --upgrade-from ghcr.io/sixsentences/community-api@sha256:31b374cfb4b45c2cceb6a609d3b0ec8853ee47cd0a3d1588dfa48305bcb3498d \
+            --report image-evidence/runtime-rehearsal.json
+      - name: Validate SBOMs and write checksummed public evidence
+        run: python .github/scripts/image_evidence.py --directory image-evidence --tag "$RELEASE_TAG" --revision "$RELEASE_SHA"
+      - name: Publish additive image evidence without replacing existing assets
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" --repo "$REPOSITORY" \
+            image-evidence/IMAGE_DIGESTS image-evidence/IMAGE_SHA256SUMS \
+            image-evidence/images.json image-evidence/api.sbom.json image-evidence/web.sbom.json \
+            image-evidence/api.provenance.json image-evidence/web.provenance.json \
+            image-evidence/api.identity.json image-evidence/web.identity.json \
+            image-evidence/runtime-rehearsal.json
+          cat image-evidence/IMAGE_DIGESTS >> "$GITHUB_STEP_SUMMARY"
+          echo 'Linux amd64 only. Web image: http://localhost only. TLS origins must build locally.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove registry credentials and disposable builder
+        if: always()
+        run: |
+          docker logout ghcr.io
+          docker buildx rm community-release || true

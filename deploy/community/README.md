@@ -41,11 +41,18 @@ bash deploy/community/quickstart.sh --domain research.example.org
 An existing environment file is reused, never overwritten, so re-running the
 script is a safe way to restart a deployment after a configuration change.
 
-A tagged release publishes the API image and a `localhost` web image. Pointing
-the deployment at them replaces the longest step of a first start:
+The workspace starts without downloading a literature corpus or contacting a
+model provider. Corpus-dependent literature searches remain unavailable until
+the operator imports a corpus; its status remains visible in operator diagnostics.
+API readiness requires the database, storage, queue and a live background worker.
+Both API and worker start after migration, without waiting on each other.
+
+After separately approved image publication attaches `IMAGE_DIGESTS` and its
+runtime evidence, a release supplies an API image and a `localhost` web image.
+Pointing the deployment at them replaces the longest step of a first start:
 
 ```console
-RELEASE=v0.2.0-alpha.1  # the tag you are deploying, from the releases page
+RELEASE=v0.2.0-alpha.2  # use a published release with IMAGE_DIGESTS attached
 export SIX_API_IMAGE=ghcr.io/sixsentences/community-api:$RELEASE
 export SIX_WEB_IMAGE=ghcr.io/sixsentences/community-web:$RELEASE-localhost
 bash deploy/community/quickstart.sh --pull
@@ -189,6 +196,23 @@ Create and verify a backup before changing images. Re-run the preflight, build
 the new images and use `docker compose up --detach --wait`. The dedicated
 one-shot `migrate` service owns schema migration; restore with the same source
 revision before attempting a version upgrade.
+
+Resizable pinboards add a `size` field to stored note JSON, without a new SQL
+migration. Existing notes read as size `1.0` without being rewritten, and old
+cached clients preserve saved sizes when editing. Once notes are saved by this
+version, do not run a pre-size API against that database: its strict schema
+rejects the new field. Prefer a forward fix; an old binary requires its matching
+pre-upgrade database/files backup, with subsequent deletions replayed. Never
+strip saved sizes to make a downgrade pass.
+
+CI runs `rehearse.py` against a randomly named, loopback-only Compose project:
+fresh released API, upgrade to candidate, authenticated pinboard round-trip,
+database/file backup and restore, then a separate fresh candidate startup. It
+requires `--confirm DISPOSABLE`, accepts no existing env file, generates new
+credentials, strips inherited provider settings, and removes only its own
+synthetic volumes. It uses an already running Docker engine and never starts
+one. This gate does not send mail or make inference calls; normal operator
+registration, browser, provider, and offsite recovery acceptance remain separate.
 
 The reference worker uses the `all` lane at low concurrency. Larger deployments
 should split worker lanes only after measuring PostgreSQL connections, memory,

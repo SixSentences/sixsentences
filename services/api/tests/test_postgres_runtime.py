@@ -1,13 +1,13 @@
-"""PostgreSQL-only migration and concurrent queue contract.
+"""PostgreSQL-only public migration and concurrent queue contract.
 
 The regular suite intentionally uses isolated SQLite files. CI supplies a real
 PostgreSQL service for this test so dialect-specific row locks, sequences and
-the one-time migration cannot regress unnoticed.
+the public Alembic migration chain cannot regress unnoticed. A private legacy
+SQLite cutover utility is not part of the community installation or this test.
 """
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
@@ -15,29 +15,106 @@ import threading
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, inspect, select, text
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
 import sixsentences_server.core.db as dbmod
 import sixsentences_server.jobs as jobs
 from sixsentences_server.config import get_settings
-from sixsentences_server.core.db import BackgroundJobRow, Base, Org, Project
+from sixsentences_server.core.db import BackgroundJobRow, Org, Project
+
+
+def _postgres_target_url() -> str:
+    """Refuse any target outside the explicit disposable runner-local database."""
+    value = os.environ["SIX_TEST_POSTGRES_URL"]
+    target = make_url(value)
+    if (
+        target.drivername != "postgresql+psycopg"
+        or target.host not in {"127.0.0.1", "localhost"}
+        or target.port != 5432
+        or target.database != "community_ci"
+        or target.username != "postgres"
+        or target.query
+    ):
+        raise ValueError("PostgreSQL contracts require the dedicated runner-local community_ci DB")
+    return value
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql+psycopg://postgres@database.example.invalid:5432/community_ci",
+        "postgresql+psycopg://postgres@127.0.0.1:5432/production",
+        "postgresql+psycopg://operator@127.0.0.1:5432/community_ci",
+        "postgresql+psycopg://postgres@127.0.0.1:5433/community_ci",
+        "postgresql+psycopg://postgres@127.0.0.1:5432/community_ci?host=database.example.invalid",
+        "postgresql+psycopg://postgres@127.0.0.1:5432/community_ci?dbname=production",
+        "postgresql+psycopg://postgres@127.0.0.1:5432/community_ci?service=production",
+        "postgresql+psycopg://postgres@127.0.0.1:5432/community_ci?options=-csearch_path=private",
+        "postgresql+psycopg://postgres@127.0.0.1:5432/community_ci?hostaddr=192.0.2.1",
+        "sqlite:///unexpected.db",
+    ],
+)
+def test_postgres_contract_refuses_targets_outside_its_ci_scope(
+    monkeypatch: pytest.MonkeyPatch, url: str
+) -> None:
+    monkeypatch.setenv("SIX_TEST_POSTGRES_URL", url)
+    with pytest.raises(ValueError, match="dedicated runner-local"):
+        _postgres_target_url()
 
 
 @pytest.mark.skipif(
     not os.environ.get("SIX_TEST_POSTGRES_URL"),
     reason="requires the dedicated CI PostgreSQL service",
 )
-def test_postgres_cutover_and_skip_locked_claims(
+def test_postgres_boolean_default_contract() -> None:
+    """Reproduce the old baseline's invalid SQL using only temporary tables."""
+    engine = create_engine(_postgres_target_url())
+    try:
+        with pytest.raises(ProgrammingError) as failure, engine.begin() as connection:
+            connection.execute(
+                text("CREATE TEMP TABLE six_boolean_invalid (value BOOLEAN DEFAULT 0)")
+            )
+        assert getattr(failure.value.orig, "sqlstate", None) == "42804"
+        print("baseline_boolean_default_sqlstate=42804")
+        with engine.begin() as connection:
+            connection.execute(
+                text("CREATE TEMP TABLE six_boolean_valid (value BOOLEAN DEFAULT false)")
+            )
+            connection.execute(text("INSERT INTO six_boolean_valid DEFAULT VALUES"))
+            assert connection.scalar(text("SELECT value FROM six_boolean_valid")) is False
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.skipif(
+    not os.environ.get("SIX_TEST_POSTGRES_URL"),
+    reason="requires the dedicated CI PostgreSQL service",
+)
+def test_postgres_migrations_and_skip_locked_claims(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    target_url = os.environ["SIX_TEST_POSTGRES_URL"]
-    source_path = tmp_path / "source.db"
-    source_url = f"sqlite:///{source_path}"
-    source_engine = create_engine(source_url)
-    Base.metadata.create_all(source_engine)
-    with Session(source_engine) as session:
+    target_url = _postgres_target_url()
+    target_engine = create_engine(target_url)
+    assert inspect(target_engine).get_table_names() == [], "Refusing a nonempty PostgreSQL test DB"
+    completed = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=Path(__file__).resolve().parents[1],
+        env={
+            **os.environ,
+            "SIX_DATABASE_URL": target_url,
+            "SIX_DATA_DIR": str(tmp_path / "data"),
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    with Session(target_engine) as session:
+        assert session.scalar(text("SELECT version_num FROM alembic_version")) == "20260928_0003"
         org = Org(name="migration-fixture")
         session.add(org)
         session.flush()
@@ -49,30 +126,6 @@ def test_postgres_cutover_and_skip_locked_claims(
             )
         )
         session.commit()
-    source_engine.dispose()
-
-    report = tmp_path / "cutover.json"
-    completed = subprocess.run(
-        [
-            sys.executable,
-            "scripts/migrate_sqlite_to_postgres.py",
-            "--source",
-            source_url,
-            "--target",
-            target_url,
-            "--report",
-            str(report),
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    assert completed.returncode == 0, completed.stderr
-    evidence = json.loads(report.read_text(encoding="utf-8"))
-    assert evidence["table_counts"]["orgs"] == 1
-    assert evidence["table_counts"]["projects"] == 1
-
-    target_engine = create_engine(target_url)
     with Session(target_engine) as session:
         project = session.scalar(select(Project).where(Project.name == "Migration fixture"))
         assert project is not None

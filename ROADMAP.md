@@ -4,6 +4,33 @@ This roadmap communicates direction, not dates or delivery commitments. Each
 item still requires a scoped issue, review, and the quality gates in
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Current stabilization, 2026-10-01
+
+- Implemented, pending the next reviewed release: responsive personal boards
+  with persistent resizing, keyboard controls and recovery of obscured notes.
+- Release gates now include a provider-free fresh Compose startup, upgrade from
+  `v0.2.0-alpha.1`, and isolated database/file restore with post-backup account
+  erasure replay. A green build alone is not runtime acceptance; retain the
+  successful workflow receipt. A separate required phase restores the
+  pre-upgrade snapshot under the pinned alpha.1 API, retains newer deletions,
+  and verifies the prior schema. This does not preserve post-snapshot writes.
+  Alpha.1's invalid PostgreSQL Boolean default needs an explicitly recorded,
+  hash-bound bootstrap correction; unmodified alpha.1 fresh installation is
+  not claimed to work. Fresh candidate migrations remain a separate gate.
+- Image publication verifies a signed main-branch release and records immutable
+  digests, SPDX SBOMs, build provenance and checksums. Initially Linux amd64 and
+  localhost web origins only; multi-architecture/TLS generic images are not
+  promised.
+- Next: measure representative search, data/participant analysis and writing
+  journeys against independent synthetic/public evidence, including cost and
+  failure recovery. Do not treat model agreement as correctness.
+- Provider expansion remains operator-configured and review-bound. PubMed and
+  Jev keep their explicit rollout/evaluation gates; extra model choices do not
+  silently change screening or participant-data processing.
+
+This is a community roadmap, not the hosted deployment state. Durable workers
+already exist; a queue replacement is not a prerequisite for the next release.
+
 ## `v0.2.0-alpha.1`: self-hostable research workspace
 
 - Complete community application: Python engine, FastAPI service, background

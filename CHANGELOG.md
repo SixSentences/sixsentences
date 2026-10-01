@@ -8,7 +8,17 @@ equivalents for Python package metadata.
 
 ## [Unreleased]
 
+## [0.2.0-alpha.2] - 2026-10-01
+
 ### Added
+
+- Persistent pinboard resizing, compact mobile editing and a no-write action
+  to recover notes obscured by the composer. Old clients preserve saved sizes;
+  downgrade compatibility is documented in the self-hosting guide.
+- Required provider-free Compose startup, released-image upgrade and isolated
+  restore rehearsal, including authenticated post-backup account-erasure replay
+  and pre-upgrade snapshot rollback under the pinned prior API. Published image
+  SBOM/provenance/checksum receipts require the same runtime checks by digest.
 
 - A personal research pinboard on the workspace homepage: coloured notes, cards
   and circles with editable text, draggable or keyboard-controlled positions,
@@ -32,6 +42,22 @@ equivalents for Python package metadata.
   other targets.
 
 ### Changed
+
+- Update Next.js to 16.3.8 and repair an embedded Python syntax error in the
+  self-hosted erasure-journal restore selector, covered by a compile regression.
+- Replace the baseline migration's PostgreSQL-invalid Boolean default `0` with
+  `sa.false()`. The alpha.1-schema upgrade rehearsal records this single-literal
+  compatibility bootstrap and its original/corrected hashes; it does not
+  misrepresent the unmodified historical installer as functional.
+- Remove the API/worker readiness cycle during fresh startup and backup/restore.
+  The optional literature corpus no longer blocks the wider workspace; actual
+  database, storage, queue and live-worker health remain required. The immutable
+  prior API receives an explicitly recorded synthetic corpus in upgrade tests;
+  the fresh candidate is checked without one.
+- Verify and select recovery journals as the ordinary API user, streaming
+  host-owned staging bytes into private temporary files instead of inaccessible
+  root-only container reads. Shutdown failures now stop restore before state
+  replacement; authenticated journal and permission checks remain fail-closed.
 
 - The server package reads its version from the installed distribution metadata
   instead of a second literal in `sixsentences_server/__init__.py`.
@@ -122,6 +148,7 @@ equivalents for Python package metadata.
   production artifacts, private configuration, customer data, and proprietary
   datasets.
 
-[Unreleased]: https://github.com/SixSentences/sixsentences/compare/v0.2.0-alpha.1...HEAD
+[Unreleased]: https://github.com/SixSentences/sixsentences/compare/v0.2.0-alpha.2...HEAD
+[0.2.0-alpha.2]: https://github.com/SixSentences/sixsentences/releases/tag/v0.2.0-alpha.2
 [0.2.0-alpha.1]: https://github.com/SixSentences/sixsentences/releases/tag/v0.2.0-alpha.1
 [0.1.0-alpha.1]: https://github.com/SixSentences/sixsentences/releases/tag/v0.1.0-alpha.1

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "mode": "candidate_migrator_boolean_default_fix",
+  "original_release": "v0.2.0-alpha.1",
+  "original_source_revision": "f307c39b68038a4baf639e82cee673a536184ec6",
+  "original_api_reference": "ghcr.io/sixsentences/community-api@sha256:31b374cfb4b45c2cceb6a609d3b0ec8853ee47cd0a3d1588dfa48305bcb3498d",
+  "target_database_revision": "20260912_0001",
+  "migration_path": "services/api/alembic/versions/20260912_0001_community_baseline.py",
+  "original_migration_sha256": "0b2acc3adc93a5e9a465d97f9ab0f21b33139aefb2337c945803fbf47fd04a27",
+  "compatible_migration_sha256": "fc429fc83fbf510829241310e410900a5f6d18f0b38545d6e1095f22ba795af8",
+  "invalid_default_sqlstate": "42804",
+  "unmodified_original_installer": false,
+  "legacy_corpus_fixture": {
+    "mode": "synthetic_duckdb_build",
+    "records": 1,
+    "seed": 42
+  }
+}

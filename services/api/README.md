@@ -13,7 +13,7 @@ capability profile; local resource and provider-spend limits remain as safety ra
 ## Quickstart
 
 Requirements: the public SixSentences monorepo with `sixsentences-engine` at
-`0.2.0a1`, Docker with Compose v2, and `openssl` for local secret generation.
+`0.2.0a2`, Docker with Compose v2, and `openssl` for local secret generation.
 
 From `services/api`:
 
@@ -22,12 +22,17 @@ From `services/api`:
 3. Run the fresh community migration with `docker compose run --rm migrate`.
 4. Bootstrap the first tenant owner interactively:
    `docker compose run --rm api six-community auth create-owner --email you@example.org --org "My Lab"`.
-5. Build the initial local search corpus:
-   `docker compose run --rm api six-community corpus sync --profile micro`.
-6. Start the application with `docker compose up -d api worker`, then wait for
+5. Start the application with `docker compose up -d api worker`, then wait for
    both services to become healthy in `docker compose ps`.
-7. Sign in through the included community web client configured for
+6. Sign in through the included community web client configured for
    `http://localhost:8000`. The API schema is at `http://localhost:8000/docs`.
+
+Local corpus search is optional. After reviewing the metadata provider settings,
+build its first corpus with
+`docker compose run --rm api six-community corpus sync --profile micro`.
+This retrieves scholarly metadata; the core workspace starts without that
+download. Corpus-dependent searches remain unavailable until a corpus exists.
+Readiness still requires healthy database, storage, queue and background workers.
 
 Self-signup is off by default. `create-owner` prompts twice for the password on a
 hidden terminal, creates only a tenant-scoped `owner`, and never prints a password,

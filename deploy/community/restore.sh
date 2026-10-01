@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
+
+RESTORE_PHASE=configuration
+# Only a fixed phase label reaches CI diagnostics, never a command or payload.
+trap 'printf "SIX_RESTORE_FAILURE_PHASE=%s\n" "$RESTORE_PHASE" >&2' ERR
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
 REPOSITORY_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd -P)"
@@ -14,7 +18,8 @@ Usage: restore.sh --backup ABSOLUTE_BACKUP_DIRECTORY --confirm RESTORE
 
 This replaces the community database and application data. It selects the
 newest authenticated erasure journal and replays it before reopening traffic.
-On any restore failure, public/write services stay stopped for inspection.
+Verification or shutdown failure prevents persistent-state replacement.
+A failed restore requires inspection before reopening traffic.
 EOF
 }
 
@@ -60,6 +65,7 @@ env_value() {
 }
 
 CONFIGURED_BACKUP_ROOT="$(env_value SIX_BACKUP_DIR)"
+RESTORE_PHASE=backup_manifest
 CANONICAL_ROOT="$(CDPATH= cd -- "$CONFIGURED_BACKUP_ROOT" && pwd -P)"
 CANONICAL_BACKUP="$(CDPATH= cd -- "$BACKUP_DIR" && pwd -P)"
 case "$CANONICAL_BACKUP/" in
@@ -141,6 +147,7 @@ validate_archive() {
   done <<<"$listing"
 }
 
+PRIVACY_ARCHIVE_HAS_JOURNAL=0
 validate_privacy_archive() {
   local archive="$1"
   local listing member
@@ -151,12 +158,14 @@ validate_privacy_archive() {
   while IFS= read -r member; do
     [[ -n "$member" ]] || continue
     case "$member" in
-      .|./|erasure-ledger.jsonl|./erasure-ledger.jsonl) ;;
+      .|./) ;;
+      erasure-ledger.jsonl|./erasure-ledger.jsonl) PRIVACY_ARCHIVE_HAS_JOURNAL=1 ;;
       *) echo "Privacy archive contains an unexpected entry: $member" >&2; exit 1 ;;
     esac
   done <<<"$listing"
 }
 
+RESTORE_PHASE=archive_validation
 validate_archive "$CANONICAL_BACKUP/app-data.tar.gz"
 validate_archive "$CANONICAL_BACKUP/privacy-data.tar.gz"
 validate_privacy_archive "$CANONICAL_BACKUP/privacy-data.tar.gz"
@@ -167,6 +176,7 @@ if ! mkdir -m 700 "$LOCK_DIR" 2>/dev/null; then
   echo "Another backup or restore owns $LOCK_DIR; refusing to overlap state operations." >&2
   exit 1
 fi
+RESTORE_PHASE=staging
 RESTORE_STAGE="$(mktemp -d "$CANONICAL_ROOT/.restore-stage.XXXXXX")"
 cleanup() {
   rm -rf -- "$RESTORE_STAGE" 2>/dev/null || true
@@ -181,73 +191,38 @@ mkdir -m 700 "$RESTORE_STAGE/candidate"
 tar -xzf "$CANONICAL_BACKUP/privacy-data.tar.gz" \
   --no-same-owner --no-same-permissions -C "$RESTORE_STAGE/candidate"
 
-# Verify the backup journal before taking down a healthy deployment. The
-# container runs as root only for read access to the mode-0700 staging path.
-"${COMPOSE[@]}" run --rm --no-deps -T --user 0:0 \
-  --volume "$RESTORE_STAGE/candidate:/candidate:ro" \
-  --env SIX_ERASURE_LEDGER_PATH=/candidate/erasure-ledger.jsonl \
-  --entrypoint six-community-erasure api verify >/dev/null
+JOURNAL_INPUT=/dev/null
+if [[ "$PRIVACY_ARCHIVE_HAS_JOURNAL" == "1" ]]; then
+  [[ -f "$RESTORE_STAGE/candidate/erasure-ledger.jsonl" \
+    && ! -L "$RESTORE_STAGE/candidate/erasure-ledger.jsonl" \
+    && -r "$RESTORE_STAGE/candidate/erasure-ledger.jsonl" ]] || exit 1
+  JOURNAL_INPUT="$RESTORE_STAGE/candidate/erasure-ledger.jsonl"
+fi
+JOURNAL_HELPER="$(<"$SCRIPT_DIR/restore_journals.py")"
+[[ -n "$JOURNAL_HELPER" ]] || exit 1
 
-"${COMPOSE[@]}" stop --timeout 30 proxy web >/dev/null || true
-"${COMPOSE[@]}" stop --timeout 310 worker >/dev/null || true
-"${COMPOSE[@]}" stop --timeout 30 api >/dev/null || true
+inspect_journals() {
+  # Host-owned mode-0600 staging bytes cross stdin, not a bind-mounted path.
+  # The normal API user verifies private tempfiles and its own live journal.
+  "${COMPOSE[@]}" run --rm --no-deps -T --entrypoint python api \
+    -c "$JOURNAL_HELPER" "$1" <"$JOURNAL_INPUT"
+}
+
+# Authenticate the backup journal before taking down a healthy deployment.
+RESTORE_PHASE=candidate_journal_verification
+inspect_journals verify >/dev/null
+
+RESTORE_PHASE=stop_services
+"${COMPOSE[@]}" stop --timeout 30 proxy web >/dev/null
+"${COMPOSE[@]}" stop --timeout 310 worker >/dev/null
+"${COMPOSE[@]}" stop --timeout 30 api >/dev/null
 
 # With the API stopped the live journal is immutable. Verify both chains and
 # choose only when one is a byte-for-byte prefix of the other. A divergent pair
 # cannot be merged safely and therefore aborts before any persistent state is
 # replaced.
-"${COMPOSE[@]}" run --rm --no-deps -T --user 0:0 \
-  --entrypoint sh api -eu -c '
-    path=/privacy/erasure-ledger.jsonl
-    if { test -e "$path" || test -L "$path"; } \
-      && { test ! -f "$path" || test -L "$path"; }; then
-      echo "The live erasure journal is not a regular, non-symlink file." >&2
-      exit 1
-    fi
-  '
-"${COMPOSE[@]}" run --rm --no-deps -T --user 0:0 \
-  --entrypoint six-community-erasure api verify >/dev/null
-LEDGER_SOURCE="$(
-  "${COMPOSE[@]}" run --rm --no-deps -T --user 0:0 \
-    --volume "$RESTORE_STAGE/candidate:/candidate:ro" \
-    --entrypoint python api -c '
-import os
-import stat
-
-
-def read_regular(path: str) -> bytes:
-    try:
-        metadata = os.lstat(path)
-    except FileNotFoundError:
-        return b""
-    if not stat.S_ISREG(metadata.st_mode):
-        raise SystemExit(f"erasure journal is not a regular file: {path}")
-    flags = os.O_RDONLY
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    try:
-        descriptor = os.open(path, flags)
-    try:
-        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
-            raise SystemExit(f"erasure journal is not a regular file: {path}")
-        chunks = []
-        while chunk := os.read(descriptor, 1024 * 1024):
-            chunks.append(chunk)
-        return b"".join(chunks)
-    finally:
-        os.close(descriptor)
-
-
-current = read_regular("/privacy/erasure-ledger.jsonl")
-candidate = read_regular("/candidate/erasure-ledger.jsonl")
-if current == candidate or current.startswith(candidate):
-    print("current")
-elif candidate.startswith(current):
-    print("backup")
-else:
-    raise SystemExit("authenticated erasure journals diverge; refusing restore")
-'
-)"
+RESTORE_PHASE=live_journal_selection
+LEDGER_SOURCE="$(inspect_journals select)"
 case "$LEDGER_SOURCE" in
   current|backup) ;;
   *) echo "Could not select a safe erasure journal." >&2; exit 1 ;;
@@ -255,6 +230,7 @@ esac
 
 "${COMPOSE[@]}" up --detach --wait --wait-timeout 180 postgres
 
+RESTORE_PHASE=database_restore
 echo "Checksums and archive paths verified. Replacing persistent state..."
 if [[ "$LEDGER_SOURCE" == "backup" ]]; then
   "${COMPOSE[@]}" run --rm --no-deps -T --entrypoint sh api -eu -c '
@@ -272,6 +248,7 @@ fi
   --username sixsentences --dbname sixsentences \
   <"$CANONICAL_BACKUP/database.dump"
 
+RESTORE_PHASE=application_restore
 "${COMPOSE[@]}" run --rm --no-deps -T --entrypoint sh api -eu -c '
   find /data -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
   tar -xzf - --no-same-owner --no-same-permissions -C /data
@@ -280,13 +257,17 @@ fi
 # Reapply every authenticated deletion to the restored database and files while
 # the public proxy and write processes are still stopped. Any verification,
 # identity-guard or cleanup failure leaves the deployment closed.
+RESTORE_PHASE=erasure_replay
 "${COMPOSE[@]}" run --rm --no-deps -T migrate
 "${COMPOSE[@]}" run --rm --no-deps -T \
   --entrypoint six-community-erasure api replay
 
-"${COMPOSE[@]}" up --detach --wait --wait-timeout 180 postgres api
-"${COMPOSE[@]}" up --detach --wait --wait-timeout 180 worker web proxy
+# The API requires a live worker; start them together only after erasure replay.
+RESTORE_PHASE=service_restart
+"${COMPOSE[@]}" up --detach --wait --wait-timeout 180 postgres api worker
+"${COMPOSE[@]}" up --detach --wait --wait-timeout 180 web proxy
 
+RESTORE_PHASE=cleanup
 rm -rf -- "$RESTORE_STAGE"
 rmdir -- "$LOCK_DIR"
 trap - EXIT HUP INT TERM

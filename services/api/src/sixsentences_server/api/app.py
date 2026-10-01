@@ -7951,10 +7951,10 @@ def create_app() -> FastAPI:
     @app.get("/health/ready")
     def readiness() -> Response:
         """Return only the aggregate readiness state to unauthenticated callers."""
-        settings = get_settings()
         runtime = _operator_health_payload()
-        corpus_synced = DuckDBCorpus(settings.corpus_dir).exists()
-        ready = runtime["status"] == "ok" and corpus_synced
+        # An optional literature corpus must not block the rest of the workspace.
+        # Its search paths retain their own CorpusNotSyncedError guard.
+        ready = runtime["status"] == "ok"
         return JSONResponse(
             status_code=200 if ready else 503,
             content={"status": "ready" if ready else "not_ready"},

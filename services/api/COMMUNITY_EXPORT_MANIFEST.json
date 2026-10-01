@@ -16,7 +16,7 @@
       "bytes": 3470,
       "mode": "0644",
       "path": "Dockerfile",
-      "sha256": "a9ee4a789c158d9217042494ae0ba0dc666e97723cfb01b0f7b6a8d16f0620f7"
+      "sha256": "a3d697cddf4ed864da77100f16eb3aad4b765aec43a7266c79bc914becc58555"
     },
     {
       "bytes": 358,
@@ -31,10 +31,10 @@
       "sha256": "e0bfeec4f11af50244091b2a1323faaeb056ef1e3ee5d4a94d91e40fb9706b2e"
     },
     {
-      "bytes": 4626,
+      "bytes": 4925,
       "mode": "0644",
       "path": "README.md",
-      "sha256": "d6770892b17e5a14635ea7ea5dc759af75951ed75a7d68dcae28220283a66eab"
+      "sha256": "6f5a761c39bcd6fa6bbdf54f03d3dacc201f121a91b0715ab00e85ddc8cbeaf6"
     },
     {
       "bytes": 142910,
@@ -67,10 +67,10 @@
       "sha256": "d38920781b4d31ae1c0a71bc09f41c2ade8feab9e5a087e3f30cb4bbf0c1c9d3"
     },
     {
-      "bytes": 170196,
+      "bytes": 170194,
       "mode": "0644",
       "path": "alembic/versions/20260912_0001_community_baseline.py",
-      "sha256": "0b2acc3adc93a5e9a465d97f9ab0f21b33139aefb2337c945803fbf47fd04a27"
+      "sha256": "fc429fc83fbf510829241310e410900a5f6d18f0b38545d6e1095f22ba795af8"
     },
     {
       "bytes": 1552,
@@ -112,7 +112,7 @@
       "bytes": 1938,
       "mode": "0644",
       "path": "pyproject.toml",
-      "sha256": "acdaf33df0dda8c8b0128aa0b9e880f225ff0a9153d104660440213fc60b0c1a"
+      "sha256": "86a6ec42287b22a31aec47f594132e9d1e4729744ea11e28e0638002ce534c70"
     },
     {
       "bytes": 79,
@@ -130,7 +130,7 @@
       "bytes": 13605,
       "mode": "0644",
       "path": "scripts/audit_community_export.py",
-      "sha256": "92e81521fc6bca275f7ffa0583c0b5de13450f06bbcb71aec1e87a66eff20b48"
+      "sha256": "a01fc255c0c65f5d7767ff54e98a4da4632584921145ea023cd4142057bb1a0f"
     },
     {
       "bytes": 9906,
@@ -295,10 +295,10 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
-      "bytes": 1525511,
+      "bytes": 1525546,
       "mode": "0644",
       "path": "src/sixsentences_server/api/app.py",
-      "sha256": "3eed893b2727fa151ea6d961b9da052b72081e1f06bb771f9a7f3ff828d7e44b"
+      "sha256": "8976b5af8ae8c35dad1dff4e2116e9179ecc45084b18e8fb039eb6ae49d7dbcd"
     },
     {
       "bytes": 18781,
@@ -529,10 +529,10 @@
       "sha256": "102a1853f3778a07ee203a88ef03088d0681b9173560cc4c19a5309d0f76338e"
     },
     {
-      "bytes": 3636,
+      "bytes": 5333,
       "mode": "0644",
       "path": "src/sixsentences_server/core/pinboard.py",
-      "sha256": "07be78c4e40d52ad1a47e3d65d647fb3fe624f9ae035010290de24e8f9e5f505"
+      "sha256": "7d0989255906f52edd7e6bff60ae2f382a416c9d04d389ad100d9884e27dd3ab"
     },
     {
       "bytes": 4941,
@@ -1531,10 +1531,10 @@
       "sha256": "7826b7d0c14a74fc868a175a1e5551eb41e21bf6ea1f15a45a8b7ec4d13063d5"
     },
     {
-      "bytes": 115635,
+      "bytes": 117557,
       "mode": "0644",
       "path": "tests/test_api.py",
-      "sha256": "eff677b4e4a511548ff6330746f8550a65e1115453c7a988d78a3c15e389e184"
+      "sha256": "f6fd14f0dac7baa0d0b91f256d83f35403d71fa8511947ae9972612898ead2f9"
     },
     {
       "bytes": 103937,
@@ -1693,10 +1693,22 @@
       "sha256": "350dec2b4b3a28258b5546f65cb98ced52a71f3d785231061a8e20dfa5fac181"
     },
     {
+      "bytes": 20547,
+      "mode": "0644",
+      "path": "tests/test_community_rehearsal_fixture.py",
+      "sha256": "3767cbe0519fe6549c76b6955dfcb847adf25ee840ccb05c9e0baf357a9457e5"
+    },
+    {
       "bytes": 613,
       "mode": "0644",
       "path": "tests/test_community_release_pipeline.py",
       "sha256": "70f0b0e629c3669b5545171d61934e0d87513dbcd4371d89302ae4be201d6fd2"
+    },
+    {
+      "bytes": 8359,
+      "mode": "0644",
+      "path": "tests/test_community_restore_journals.py",
+      "sha256": "8a69f7ad30e49e72a076dbbb3ae229a714cf56a122bcfcd4ffa97b5a2cd7a4b8"
     },
     {
       "bytes": 29409,
@@ -2023,10 +2035,10 @@
       "sha256": "c57cffe10c16f2a0fa8803a9e533d34283183c22ba421090f3abbec41e942b1c"
     },
     {
-      "bytes": 10971,
+      "bytes": 17809,
       "mode": "0644",
       "path": "tests/test_pinboard.py",
-      "sha256": "c4c4385e41b560a7186aa3829bc62a7bd0556f1fb521c0b638dc3b563b47e70f"
+      "sha256": "3c5d6ab6992c2a1c34b136830e52e5625bb4e618c035c6677f4f8e8e3d9dfe77"
     },
     {
       "bytes": 7456,
@@ -2047,10 +2059,10 @@
       "sha256": "20dfcc189dc8c4f1c9948edaa1cce7267c8c4ee4e43dfa13e03ad6274bcbd913"
     },
     {
-      "bytes": 4739,
+      "bytes": 7486,
       "mode": "0644",
       "path": "tests/test_postgres_runtime.py",
-      "sha256": "e6113171229244e069d8cd9eb33fc8c1f906650396836ba255f3dee732cb2819"
+      "sha256": "b32017e0027dcfcaf9d491ad856aeaaaf909c30ec1edb016bff7cdaa6b745a3d"
     },
     {
       "bytes": 13305,
@@ -2518,7 +2530,7 @@
       "bytes": 264101,
       "mode": "0644",
       "path": "uv.lock",
-      "sha256": "3bb4036fbdb6fa26c5b4f1e336b4818962224b9ed529a730470f501795c2be74"
+      "sha256": "ba933a6ff3c1618818f6639ce74baf1bafefe4b968caa6973c761fb0ffcdc48a"
     }
   ],
   "format": 1,

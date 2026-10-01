@@ -1542,7 +1542,7 @@ def upgrade() -> None:
     sa.Column('text_status', sa.String(length=30), nullable=False),
     sa.Column('reason', sa.Text(), nullable=True),
     sa.Column('retrieved_at', sa.DateTime(timezone=True), nullable=True),
-    sa.Column('library_suppressed', sa.Boolean(), server_default=sa.text('0'), nullable=False),
+    sa.Column('library_suppressed', sa.Boolean(), server_default=sa.false(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['org_id'], ['orgs.id'], ),
     sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ),

@@ -2,6 +2,8 @@
 export const PINBOARD_LIMIT = 24;
 export const PINBOARD_TEXT_LIMIT = 2_000;
 export const PINBOARD_REVISION_LIMIT = 2_147_483_647;
+export const PINBOARD_SIZE_MIN = 0.6;
+export const PINBOARD_SIZE_MAX = 2.4;
 export const PINBOARD_COLORS = ["butter", "sage", "rose", "sky", "paper"] as const;
 export const PINBOARD_SHAPES = ["note", "card", "circle"] as const;
 
@@ -14,6 +16,8 @@ export interface PinboardNote {
   x: number;
   y: number;
   rotation: number;
+  /** User-selected paper size, independent of the responsive canvas scale. */
+  size: number;
 }
 
 export interface PinboardState {
@@ -39,11 +43,85 @@ export function pinboardPosition(value: number): number {
   return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
 }
 
-/** Place the note's pin at a canvas-local click, keeping the paper in bounds. */
-export function pinboardPoint(x: number, y: number, width: number, height: number): { x: number; y: number } {
+/** Fit paper to the actual board, including sidebars and short landscape screens. */
+export function pinboardScale(width: number, height: number): number {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return 0.62;
+  const responsive = Math.min(1, Math.max(0.62, Math.min(width / 900, height / 600)));
+  return Math.min(responsive, width / 254, height / 218);
+}
+
+/** Share exact paper dimensions between rendering, pointer placement, and tests. */
+export function pinboardNoteSize(shape: PinboardNote["shape"], scale: number): { width: number; height: number } {
+  const dimensions = { note: [210, 216], card: [254, 178], circle: [218, 218] } as const;
+  return { width: Math.round(dimensions[shape][0] * scale), height: Math.round(dimensions[shape][1] * scale) };
+}
+
+/** Bound rendered paper without rewriting its saved size on a smaller screen. */
+export function pinboardPaper(note: PinboardNote, width: number, height: number): {
+  width: number; height: number; scale: number; effectiveSize: number;
+} {
+  const responsive = pinboardScale(width, height);
+  const base = pinboardNoteSize(note.shape, 1);
+  const maximum = width > 0 && height > 0 ? Math.min(width / base.width, height / base.height) : 1;
+  const minimum = (note.shape === "card" ? 140 : 120) / base.width;
+  const scale = Math.min(Math.max(minimum, responsive * note.size), maximum);
+  return { ...pinboardNoteSize(note.shape, scale), scale, effectiveSize: scale / responsive };
+}
+
+/** Resize uniformly, keep the top-left anchor where possible, and fit the canvas. */
+export function resizePinboardNote(note: PinboardNote, width: number, height: number, requestedSize: number): PinboardNote {
+  if (!Number.isFinite(requestedSize) || !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return note;
+  const before = pinboardPaper(note, width, height);
+  const base = pinboardNoteSize(note.shape, pinboardScale(width, height));
+  const maximum = Math.max(PINBOARD_SIZE_MIN, Math.min(PINBOARD_SIZE_MAX, width / base.width, height / base.height));
+  const size = Math.round(Math.max(PINBOARD_SIZE_MIN, Math.min(maximum, requestedSize)) * 1000) / 1000;
+  const after = pinboardPaper({ ...note, size }, width, height);
+  return { ...note, size,
+    x: pinboardPosition(note.x * Math.max(0, width - before.width) / Math.max(1, width - after.width)),
+    y: pinboardPosition(note.y * Math.max(0, height - before.height) / Math.max(1, height - after.height)),
+  };
+}
+
+export interface PinboardRect { left: number; top: number; width: number; height: number }
+
+/** Keep the drag handle outside the composer after an explicit placement, never on resize. */
+export function keepPinboardHandleVisible(note: PinboardNote, width: number, height: number, protectedRect: PinboardRect): PinboardNote {
+  const paper = pinboardPaper(note, width, height);
+  const scale = Math.min(1, paper.scale);
+  const travelX = Math.max(0, width - paper.width);
+  const travelY = Math.max(0, height - paper.height);
+  const localX = paper.width - (note.shape === "circle" ? 34 * scale + 17 : 22);
+  const localY = Math.max(32, 37 * scale) / 2 + 2.5 + (note.shape === "circle" ? 10 * scale : 0);
+  const angle = note.rotation * Math.PI / 180;
+  const handleX = paper.width / 2 + (localX - paper.width / 2) * Math.cos(angle) - (localY - 13) * Math.sin(angle);
+  const handleY = 13 + (localX - paper.width / 2) * Math.sin(angle) + (localY - 13) * Math.cos(angle);
+  const margin = 24;
+  const isCovered = (candidate: PinboardNote) => {
+    const x = candidate.x * travelX + handleX;
+    const y = candidate.y * travelY + handleY;
+    return x > protectedRect.left - margin && x < protectedRect.left + protectedRect.width + margin
+      && y > protectedRect.top - margin && y < protectedRect.top + protectedRect.height + margin;
+  };
+  if (!isCovered(note)) return note;
+  const candidates = [
+    { ...note, x: pinboardPosition((protectedRect.left - margin - handleX) / Math.max(1, travelX)) },
+    { ...note, x: pinboardPosition((protectedRect.left + protectedRect.width + margin - handleX) / Math.max(1, travelX)) },
+    { ...note, y: pinboardPosition((protectedRect.top - margin - handleY) / Math.max(1, travelY)) },
+    { ...note, y: pinboardPosition((protectedRect.top + protectedRect.height + margin - handleY) / Math.max(1, travelY)) },
+  ].filter((candidate) => !isCovered(candidate));
+  candidates.sort((a, b) => Math.hypot((a.x - note.x) * travelX, (a.y - note.y) * travelY)
+    - Math.hypot((b.x - note.x) * travelX, (b.y - note.y) * travelY));
+  return candidates[0] ?? note;
+}
+
+/** Place the note's pin at a canvas-local click, keeping responsive paper in bounds. */
+export function pinboardPoint(
+  x: number, y: number, width: number, height: number, shape: PinboardNote["shape"] = "note",
+): { x: number; y: number } {
+  const size = pinboardNoteSize(shape, pinboardScale(width, height));
   return {
-    x: pinboardPosition((x - 105) / Math.max(1, width - 210)),
-    y: pinboardPosition((y - 13) / Math.max(1, height - 216)),
+    x: pinboardPosition((x - size.width / 2) / Math.max(1, width - size.width)),
+    y: pinboardPosition((y - 13) / Math.max(1, height - size.height)),
   };
 }
 
@@ -62,6 +140,7 @@ export function newPinboardNote(id: string, index: number): PinboardNote {
     x: (index % 3) / 2,
     y: [0, 1, 0.5, 0.25, 0.75, 0.125, 0.375, 0.625][Math.floor(index / 3) % 8],
     rotation: [-3, 2, -1, 3, -2][index % 5],
+    size: 1,
   };
 }
 
@@ -104,7 +183,9 @@ export function validatePinboard(value: unknown): PinboardState {
       || typeof note.x !== "number" || !Number.isFinite(note.x) || note.x < 0 || note.x > 1
       || typeof note.y !== "number" || !Number.isFinite(note.y) || note.y < 0 || note.y > 1
       || typeof note.rotation !== "number" || !Number.isFinite(note.rotation)
-      || note.rotation < -12 || note.rotation > 12) {
+      || note.rotation < -12 || note.rotation > 12
+      || (note.size !== undefined && (typeof note.size !== "number" || !Number.isFinite(note.size)
+        || note.size < PINBOARD_SIZE_MIN || note.size > PINBOARD_SIZE_MAX))) {
       throw new Error("Invalid pinboard note");
     }
     const canonicalId = note.id.toLowerCase();
@@ -112,6 +193,7 @@ export function validatePinboard(value: unknown): PinboardState {
     return {
       id: canonicalId, text: note.text, color: note.color as PinboardNote["color"],
       shape: note.shape as PinboardNote["shape"], x: note.x, y: note.y, rotation: note.rotation,
+      size: note.size === undefined ? 1 : note.size as number,
     };
   });
   return { revision: value.revision as number, notes };

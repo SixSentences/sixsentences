@@ -143,8 +143,8 @@ services:
     tmpfs:
       - /tmp:size=512m,mode=1777
     depends_on:
-      api:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD-SHELL
