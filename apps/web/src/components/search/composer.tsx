@@ -625,7 +625,7 @@ export default function Composer({ autoFocus = true, seed = null }: ComposerProp
               type="button"
               onClick={() => setRefineOf(null)}
               aria-label="Detach from the previous search"
-              className="grid size-4.5 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
+              className="pointer-events-auto relative z-20 grid size-4.5 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
             >
               <X className="size-3" />
             </button>
@@ -650,7 +650,7 @@ export default function Composer({ autoFocus = true, seed = null }: ComposerProp
       <div
         {...dropProps}
         className={cn(
-          "relative rounded-[2rem] border bg-card transition-all duration-300",
+          "pointer-events-auto relative z-20 rounded-[2rem] border bg-card transition-all duration-300",
           askMode
             ? "border-moss-soft/60 shadow-[0_2px_16px_rgba(90,137,125,0.14)] focus-within:border-moss focus-within:shadow-[0_2px_24px_rgba(51,84,76,0.16)]"
             : "border-ring/55 shadow-[0_2px_16px_rgba(51,84,76,0.12)] focus-within:border-ring focus-within:shadow-[0_2px_24px_rgba(90,137,125,0.16)]",

@@ -529,10 +529,10 @@
       "sha256": "102a1853f3778a07ee203a88ef03088d0681b9173560cc4c19a5309d0f76338e"
     },
     {
-      "bytes": 3636,
+      "bytes": 5333,
       "mode": "0644",
       "path": "src/sixsentences_server/core/pinboard.py",
-      "sha256": "07be78c4e40d52ad1a47e3d65d647fb3fe624f9ae035010290de24e8f9e5f505"
+      "sha256": "7d0989255906f52edd7e6bff60ae2f382a416c9d04d389ad100d9884e27dd3ab"
     },
     {
       "bytes": 4941,
@@ -2023,10 +2023,10 @@
       "sha256": "c57cffe10c16f2a0fa8803a9e533d34283183c22ba421090f3abbec41e942b1c"
     },
     {
-      "bytes": 10971,
+      "bytes": 17809,
       "mode": "0644",
       "path": "tests/test_pinboard.py",
-      "sha256": "c4c4385e41b560a7186aa3829bc62a7bd0556f1fb521c0b638dc3b563b47e70f"
+      "sha256": "3c5d6ab6992c2a1c34b136830e52e5625bb4e618c035c6677f4f8e8e3d9dfe77"
     },
     {
       "bytes": 7456,

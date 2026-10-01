@@ -1,4 +1,10 @@
-"""Bounded, creator-private notes with optimistic concurrency control."""
+"""Bounded, creator-private notes with optimistic concurrency control.
+
+Older stored JSON remains readable with size=1.0 and is not rewritten on read.
+New writes/receipts contain normalized sizes. This is forward-only for API code:
+pre-size readers reject that extra JSON field, so rollback needs a compatible
+reader rather than destructive removal of users' saved sizes.
+"""
 
 from typing import Literal
 from uuid import UUID
@@ -23,6 +29,7 @@ class PinboardNote(BaseModel):
     x: float = Field(ge=0, le=1)
     y: float = Field(ge=0, le=1)
     rotation: float = Field(ge=-12, le=12)
+    size: float = Field(default=1.0, ge=0.6, le=2.4)
 
     @field_validator("id")
     @classmethod
@@ -67,10 +74,36 @@ def read_pinboard(session: Session, *, user_id: int, org_id: int) -> PinboardSta
 def write_pinboard(
     session: Session, *, user_id: int, org_id: int, state: PinboardState
 ) -> PinboardState:
-    """Compare-and-swap a bounded desk, atomically including the first write."""
+    """Compare-and-swap a bounded desk, atomically including the first write.
+
+    Existing sizes survive legacy clients that omit the field; only new notes
+    default to 1.0. Explicit size values remain deliberate revision-bound edits.
+    The API receipt and JSON storage always use the same normalized notes.
+    """
     if state.revision == 2_147_483_647:
         raise PinboardConflictError
-    notes = [note.model_dump(mode="json") for note in state.notes]
+    normalized_notes = state.notes
+    if state.revision and any("size" not in note.model_fields_set for note in state.notes):
+        # Cached legacy clients omit size even after reading a resized note.
+        # Preserve the value only from this creator's exact requested revision;
+        # the later compare-and-swap still rejects a concurrent newer write.
+        saved_notes = session.scalar(
+            select(PersonalPinboardRow.notes).where(
+                PersonalPinboardRow.user_id == user_id,
+                PersonalPinboardRow.org_id == org_id,
+                PersonalPinboardRow.revision == state.revision,
+            )
+        )
+        if saved_notes is None:
+            raise PinboardConflictError
+        previous = PinboardState.model_validate({"revision": state.revision, "notes": saved_notes})
+        sizes = {note.id: note.size for note in previous.notes}
+        normalized_notes = [
+            note.model_copy(update={"size": sizes.get(note.id, 1.0)})
+            if "size" not in note.model_fields_set else note
+            for note in state.notes
+        ]
+    notes = [note.model_dump(mode="json") for note in normalized_notes]
     next_revision = state.revision + 1
     if state.revision == 0:
         try:
@@ -96,4 +129,4 @@ def write_pinboard(
         ).scalar_one_or_none()
         if saved is None:
             raise PinboardConflictError
-    return PinboardState(revision=next_revision, notes=state.notes)
+    return PinboardState(revision=next_revision, notes=normalized_notes)
