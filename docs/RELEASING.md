@@ -106,6 +106,20 @@ workspace, upgrades it, verifies saved notes/files after backup/restore, and
 separately starts the candidate against an empty database. Its sanitized
 image/revision receipt is a required artifact. This is an API/Compose runtime
 test, not a browser interaction test or proof of research-output quality.
+The original alpha.1 PostgreSQL installer has an invalid `BOOLEAN DEFAULT 0`
+in the baseline migration; the real PostgreSQL regression confirms SQLSTATE
+`42804`. The candidate changes exactly that literal to SQLAlchemy `sa.false()`.
+Before running the unchanged pinned alpha.1 API, the rehearsal uses the
+candidate migrator to apply only the original `20260912_0001` revision to an
+empty database. The original and corrected migration SHA-256 hashes, source
+revision, immutable old API reference and this bootstrap mode are committed in
+`deploy/community/alpha1-baseline-compatibility.json` and copied into the receipt.
+Reconstructing the original bytes by reverting only that literal must match
+the original hash; any other migration change stops the drill. There is no
+`stamp`, metadata `create_all`, replacement old image or waived migration.
+This proves the corrected original-schema upgrade path, not successful fresh
+installation with the unmodified alpha.1 installer. The candidate separately
+has to migrate a completely empty database through its full migration chain.
 The drill additionally creates a second synthetic owner before backup, deletes
 that account through the authenticated API afterwards, and requires its user,
 workspace, sessions, notes and dataset files to remain absent after restore.

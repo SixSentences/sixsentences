@@ -14,6 +14,9 @@ item still requires a scoped issue, review, and the quality gates in
   successful workflow receipt. A separate required phase restores the
   pre-upgrade snapshot under the pinned alpha.1 API, retains newer deletions,
   and verifies the prior schema. This does not preserve post-snapshot writes.
+  Alpha.1's invalid PostgreSQL Boolean default needs an explicitly recorded,
+  hash-bound bootstrap correction; unmodified alpha.1 fresh installation is
+  not claimed to work. Fresh candidate migrations remain a separate gate.
 - Image publication verifies a signed main-branch release and records immutable
   digests, SPDX SBOMs, build provenance and checksums. Initially Linux amd64 and
   localhost web origins only; multi-architecture/TLS generic images are not

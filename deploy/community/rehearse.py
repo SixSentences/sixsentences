@@ -8,6 +8,7 @@ Never starts a daemon, accepts existing environments, or targets existing stacks
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -20,6 +21,35 @@ from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[2]
 COMMUNITY = ROOT / "deploy/community"
+
+
+def baseline_bootstrap_evidence(api_reference: str) -> dict[str, object]:
+    """Require the reviewed single-literal fix before bootstrapping the old schema."""
+    contract = json.loads((COMMUNITY / "alpha1-baseline-compatibility.json").read_text())
+    if (
+        not isinstance(contract, dict)
+        or contract.get("schema_version") != 1
+        or contract.get("mode") != "candidate_migrator_boolean_default_fix"
+        or contract.get("original_api_reference") != api_reference
+        or contract.get("target_database_revision") != "20260912_0001"
+        or contract.get("invalid_default_sqlstate") != "42804"
+        or contract.get("unmodified_original_installer") is not False
+        or contract.get("migration_path")
+        != "services/api/alembic/versions/20260912_0001_community_baseline.py"
+    ):
+        raise RuntimeError("Unsupported historical baseline compatibility contract")
+    compatible = (ROOT / contract["migration_path"]).read_bytes()
+    prefix = b"sa.Column('library_suppressed', sa.Boolean(), "
+    original_literal = prefix + b"server_default=sa.text('0'), nullable=False)"
+    compatible_literal = prefix + b"server_default=sa.false(), nullable=False)"
+    if compatible.count(compatible_literal) != 1:
+        raise RuntimeError("Expected exactly one reviewed Boolean-default correction")
+    original = compatible.replace(compatible_literal, original_literal, 1)
+    if hashlib.sha256(compatible).hexdigest() != contract.get(
+        "compatible_migration_sha256"
+    ) or hashlib.sha256(original).hexdigest() != contract.get("original_migration_sha256"):
+        raise RuntimeError("Historical baseline differs beyond the reviewed Boolean literal")
+    return contract
 
 
 def validate_image(image: str) -> str:
@@ -138,6 +168,7 @@ def main() -> None:
     args = parser.parse_args()
     if args.report.exists():
         parser.error("report already exists; use a fresh path")
+    baseline_bootstrap = baseline_bootstrap_evidence(args.upgrade_from)
     project = f"six-rehearsal-{uuid4().hex[:12]}"
     environment = {
         key: value
@@ -248,14 +279,34 @@ def main() -> None:
             baseline = run(
                 ["docker", "image", "inspect", "--format", "{{.Id}}", args.upgrade_from]
             ).strip()
+            # The published alpha.1 baseline uses BOOLEAN DEFAULT 0, rejected
+            # by PostgreSQL (42804). Apply only the hash-bound literal fix to
+            # the original revision using the candidate's actual Alembic
+            # migrator, then run the unchanged published alpha.1 image.
+            # This is not proof that the unmodified alpha.1 installer works.
+            environment["SIX_API_IMAGE"] = args.api_image
+            run(compose + ["up", "--no-build", "--detach", "--wait", "postgres"])
+            run(
+                compose
+                + [
+                    "run",
+                    "--rm",
+                    "--no-deps",
+                    "-T",
+                    "migrate",
+                    "alembic",
+                    "upgrade",
+                    "20260912_0001",
+                ]
+            )
             environment["SIX_API_IMAGE"] = args.upgrade_from
             run(compose + ["up", "--no-build", "--detach", "--wait", "--wait-timeout", "180"])
             health()
             phase("seed")
             phase("prepare-rollback")
             baseline_revision = phase("database-revision").strip()
-            if not re.fullmatch(r"[a-zA-Z0-9_]+", baseline_revision):
-                raise RuntimeError("Missing released database migration revision")
+            if baseline_revision != baseline_bootstrap["target_database_revision"]:
+                raise RuntimeError("Bootstrap did not produce the original database revision")
             preupgrade_snapshot = backup()
             run(compose + ["stop", "--timeout", "30", "api", "worker"])
             environment["SIX_API_IMAGE"] = args.api_image
@@ -302,6 +353,7 @@ def main() -> None:
                 "source_revision": revision,
                 "seed": 42,
                 "baseline_image": baseline,
+                "baseline_bootstrap": baseline_bootstrap,
                 "api_reference": args.api_image,
                 "web_reference": args.web_image,
                 "api_image": run(

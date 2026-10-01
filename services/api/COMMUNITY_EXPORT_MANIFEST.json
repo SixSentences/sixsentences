@@ -67,10 +67,10 @@
       "sha256": "d38920781b4d31ae1c0a71bc09f41c2ade8feab9e5a087e3f30cb4bbf0c1c9d3"
     },
     {
-      "bytes": 170196,
+      "bytes": 170194,
       "mode": "0644",
       "path": "alembic/versions/20260912_0001_community_baseline.py",
-      "sha256": "0b2acc3adc93a5e9a465d97f9ab0f21b33139aefb2337c945803fbf47fd04a27"
+      "sha256": "fc429fc83fbf510829241310e410900a5f6d18f0b38545d6e1095f22ba795af8"
     },
     {
       "bytes": 1552,
@@ -1693,10 +1693,10 @@
       "sha256": "350dec2b4b3a28258b5546f65cb98ced52a71f3d785231061a8e20dfa5fac181"
     },
     {
-      "bytes": 11769,
+      "bytes": 13880,
       "mode": "0644",
       "path": "tests/test_community_rehearsal_fixture.py",
-      "sha256": "f743e3be61d715c6bd8b64021adb6956b2d22640d757edb9045b17a32911b275"
+      "sha256": "ffc80b42758af070b21249ada96ce83f10eff2fd447c179f46117597e403926a"
     },
     {
       "bytes": 613,

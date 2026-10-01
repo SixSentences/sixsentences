@@ -76,6 +76,17 @@ def prepare(directory: Path, tag: str, revision: str) -> None:
         raise ValueError("missing successful same-revision runtime rehearsal")
     if runtime.get("api_reference") != refs[0] or runtime.get("web_reference") != refs[1]:
         raise ValueError("runtime rehearsal did not execute the published digests")
+    baseline_contract = _document(
+        Path(__file__).resolve().parents[2] / "deploy/community/alpha1-baseline-compatibility.json"
+    )
+    if (
+        runtime.get("baseline_bootstrap") != baseline_contract
+        or runtime.get("rollback_database_revision")
+        != baseline_contract["target_database_revision"]
+        or runtime.get("rollback_data_lossless") is not False
+        or runtime.get("schema_downgrade") is not False
+    ):
+        raise ValueError("missing exact historical baseline compatibility and rollback scope")
     receipt = {
         "schema_version": 1,
         "tag": tag,

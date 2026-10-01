@@ -56,6 +56,10 @@ or production configuration.
       prior version, including its original migration revision, surviving
       files and replay of newer authenticated erasures. Do not infer schema
       downgrade or preservation of post-snapshot writes from that result.
+- [ ] The alpha.1 Boolean-default compatibility bootstrap is explicit and
+      hash-bound in the runtime receipt. It applies the original revision via
+      the corrected migrator, without claiming an unchanged old installer,
+      stamping a schema or bypassing fresh candidate migration.
 - [ ] Companion `/interviews/live/*` and `/companion/paper-chats/*` contracts,
       exact-origin browser handoffs, local-only speech, and complete disconnect
       purge were reviewed with synthetic fixtures.

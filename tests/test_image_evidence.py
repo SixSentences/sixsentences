@@ -52,6 +52,12 @@ def fixture(directory: Path, *, platform_wrapper: bool = False) -> None:
                 "erasure_replay": True,
                 "preupgrade_snapshot_rollback": True,
                 "synthetic_only": True,
+                "baseline_bootstrap": json.loads(
+                    (ROOT / "deploy/community/alpha1-baseline-compatibility.json").read_text()
+                ),
+                "rollback_database_revision": "20260912_0001",
+                "rollback_data_lossless": False,
+                "schema_downgrade": False,
             }
         )
     )
@@ -243,3 +249,25 @@ def test_candidate_images_are_scanned_before_any_source_release(name: str, kind:
     assert 'exit-code: "1"' in scan and "scanners: vuln" in scan
     assert "if:" not in scan and "continue-on-error" not in scan
     assert job.index(scan_name) < job.index("rehearse.py --confirm DISPOSABLE")
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("baseline_bootstrap", {}),
+        ("rollback_database_revision", "unexpected_schema"),
+        ("rollback_data_lossless", True),
+        ("schema_downgrade", True),
+    ],
+)
+def test_image_evidence_requires_explicit_historical_bootstrap_scope(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    fixture(tmp_path)
+    path = tmp_path / "runtime-rehearsal.json"
+    document = json.loads(path.read_text())
+    document[field] = value
+    path.write_text(json.dumps(document))
+    with pytest.raises(ValueError, match="historical baseline compatibility"):
+        EVIDENCE.prepare(tmp_path, "v0.2.0-alpha.2", "c" * 40)
+    assert not (tmp_path / "images.json").exists()

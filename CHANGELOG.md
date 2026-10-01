@@ -45,6 +45,10 @@ equivalents for Python package metadata.
 
 - Update Next.js to 16.3.8 and repair an embedded Python syntax error in the
   self-hosted erasure-journal restore selector, covered by a compile regression.
+- Replace the baseline migration's PostgreSQL-invalid Boolean default `0` with
+  `sa.false()`. The alpha.1-schema upgrade rehearsal records this single-literal
+  compatibility bootstrap and its original/corrected hashes; it does not
+  misrepresent the unmodified historical installer as functional.
 
 - The server package reads its version from the installed distribution metadata
   instead of a second literal in `sixsentences_server/__init__.py`.

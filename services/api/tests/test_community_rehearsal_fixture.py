@@ -148,7 +148,10 @@ def test_driver_restores_distinct_snapshots_with_matching_api_before_receipt(
 ) -> None:
     """Verify orchestration only; actual released-image compatibility needs Docker CI."""
     report = tmp_path / "rehearsal.json"
-    old_image = "ghcr.io/sixsentences/community-api@sha256:" + "1" * 64
+    old_image = (
+        "ghcr.io/sixsentences/community-api@sha256:"
+        "31b374cfb4b45c2cceb6a609d3b0ec8853ee47cd0a3d1588dfa48305bcb3498d"
+    )
     new_image = "sixsentences-community-api:ci"
     history: list[tuple[str, str]] = []
     snapshots: list[Path] = []
@@ -177,7 +180,7 @@ def test_driver_restores_distinct_snapshots_with_matching_api_before_receipt(
             phase = command[command.index("python") + 2]
             history.append((phase, image))
             if phase == "database-revision":
-                output = "alpha1_revision\n"
+                output = "20260912_0001\n"
             elif phase == "erase":
                 output = json.dumps({"signature": "a" * 64})
             elif phase == "verify-rollback" and fail_rollback:
@@ -187,6 +190,8 @@ def test_driver_restores_distinct_snapshots_with_matching_api_before_receipt(
             output = "sha256:" + "2" * 64
         elif command[0] == "git":
             output = "c" * 40
+        elif command[-3:] == ["alembic", "upgrade", "20260912_0001"]:
+            history.append(("bootstrap-original-revision", image))
         elif "ps" in command and "--format" in command:
             output = json.dumps(
                 [
@@ -242,10 +247,12 @@ def test_driver_restores_distinct_snapshots_with_matching_api_before_receipt(
         DRIVER.main()
         receipt = json.loads(report.read_text())
         assert receipt["preupgrade_snapshot_rollback"] is True
-        assert receipt["rollback_database_revision"] == "alpha1_revision"
+        assert receipt["rollback_database_revision"] == "20260912_0001"
+        assert receipt["baseline_bootstrap"] == DRIVER.baseline_bootstrap_evidence(old_image)
         assert receipt["rollback_data_lossless"] is False
         assert receipt["schema_downgrade"] is False
     expected = [
+        ("bootstrap-original-revision", new_image),
         ("seed", old_image),
         ("prepare-rollback", old_image),
         ("database-revision", old_image),
@@ -308,3 +315,38 @@ def test_migration_diagnostics_ignore_unknown_exception_text() -> None:
         "exception_types": [],
         "public_migration_frames": [],
     }
+
+
+def test_historical_bootstrap_changes_only_the_verified_boolean_default() -> None:
+    """Bind the fix to the actual alpha.1 file hash, not just a matching filename."""
+    old_image = (
+        "ghcr.io/sixsentences/community-api@sha256:"
+        "31b374cfb4b45c2cceb6a609d3b0ec8853ee47cd0a3d1588dfa48305bcb3498d"
+    )
+    evidence = DRIVER.baseline_bootstrap_evidence(old_image)
+    assert evidence["original_source_revision"] == "f307c39b68038a4baf639e82cee673a536184ec6"
+    assert evidence["original_migration_sha256"] == (
+        "0b2acc3adc93a5e9a465d97f9ab0f21b33139aefb2337c945803fbf47fd04a27"
+    )
+    assert evidence["compatible_migration_sha256"] == (
+        "fc429fc83fbf510829241310e410900a5f6d18f0b38545d6e1095f22ba795af8"
+    )
+    assert evidence["unmodified_original_installer"] is False
+    with pytest.raises(RuntimeError, match="Unsupported historical baseline"):
+        DRIVER.baseline_bootstrap_evidence("example.invalid/unreviewed:latest")
+
+
+@pytest.mark.parametrize("change", [b"\n", b"# unexpected migration change\n"])
+def test_historical_bootstrap_rejects_any_other_migration_edit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: bytes
+) -> None:
+    relative = Path("services/api/alembic/versions/20260912_0001_community_baseline.py")
+    target = tmp_path / relative
+    target.parent.mkdir(parents=True)
+    target.write_bytes((ROOT / relative).read_bytes() + change)
+    monkeypatch.setattr(DRIVER, "ROOT", tmp_path)
+    old_image = json.loads((DRIVER.COMMUNITY / "alpha1-baseline-compatibility.json").read_text())[
+        "original_api_reference"
+    ]
+    with pytest.raises(RuntimeError, match="differs beyond the reviewed Boolean literal"):
+        DRIVER.baseline_bootstrap_evidence(old_image)
