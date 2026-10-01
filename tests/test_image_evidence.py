@@ -50,6 +50,7 @@ def fixture(directory: Path, *, platform_wrapper: bool = False) -> None:
                 "upgrade": True,
                 "backup_restore": True,
                 "erasure_replay": True,
+                "preupgrade_snapshot_rollback": True,
                 "synthetic_only": True,
             }
         )
@@ -122,6 +123,7 @@ def test_image_publication_requires_main_signature_ancestry_approval_and_no_over
         ("source_revision", "d" * 40),
         ("backup_restore", False),
         ("erasure_replay", False),
+        ("preupgrade_snapshot_rollback", False),
     ],
 )
 def test_rehearsal_must_match_the_executed_published_images(
@@ -133,6 +135,34 @@ def test_rehearsal_must_match_the_executed_published_images(
     document[field] = value
     path.write_text(json.dumps(document))
     with pytest.raises(ValueError):
+        EVIDENCE.prepare(tmp_path, "v0.2.0-alpha.2", "c" * 40)
+    assert not (tmp_path / "images.json").exists()
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "fresh_start",
+        "upgrade",
+        "backup_restore",
+        "erasure_replay",
+        "preupgrade_snapshot_rollback",
+        "synthetic_only",
+    ],
+)
+@pytest.mark.parametrize("value", [None, False, 1, "true"])
+def test_runtime_acceptance_requires_explicit_boolean_evidence(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    fixture(tmp_path)
+    path = tmp_path / "runtime-rehearsal.json"
+    document = json.loads(path.read_text())
+    if value is None:
+        document.pop(field)
+    else:
+        document[field] = value
+    path.write_text(json.dumps(document))
+    with pytest.raises(ValueError, match="successful same-revision runtime rehearsal"):
         EVIDENCE.prepare(tmp_path, "v0.2.0-alpha.2", "c" * 40)
     assert not (tmp_path / "images.json").exists()
 

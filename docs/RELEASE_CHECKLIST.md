@@ -52,7 +52,10 @@ or production configuration.
       retention, and account erasure fail closed under missing prerequisites.
 - [ ] Backup and isolated restore succeed at the release revision, including
       authenticated erasure-journal verification and replay.
-- [ ] Upgrade and rollback instructions were rehearsed for the supported path.
+- [ ] Upgrade and pre-upgrade snapshot rollback were rehearsed for the pinned
+      prior version, including its original migration revision, surviving
+      files and replay of newer authenticated erasures. Do not infer schema
+      downgrade or preservation of post-snapshot writes from that result.
 - [ ] Companion `/interviews/live/*` and `/companion/paper-chats/*` contracts,
       exact-origin browser handoffs, local-only speech, and complete disconnect
       purge were reviewed with synthetic fixtures.

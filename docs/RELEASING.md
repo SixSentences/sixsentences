@@ -105,8 +105,14 @@ that account through the authenticated API afterwards, and requires its user,
 workspace, sessions, notes and dataset files to remain absent after restore.
 The exact authenticated deletion-journal signature must survive the restore.
 Only the successful runtime receipt proves this scenario; source/unit checks
-alone do not. A prior-version rollback drill remains open in #29 and must not be
-checked off from a same-version backup/restore receipt.
+alone do not. A separate rollback phase restores the snapshot taken before the
+upgrade under the pinned alpha.1 API. It verifies the original migration
+revision, surviving owner and files, and replays the newer authenticated
+erasure journal so the subsequently deleted owner remains absent. The receipt
+must explicitly record `preupgrade_snapshot_rollback: true`. This tests only
+snapshot rollback for that supported version pair, not a schema downgrade or
+preservation of writes made after the snapshot. Broader recovery work remains
+tracked in #29.
 
 The preview is checked by a separate job before the environment gate, so a wrong
 or missing preview fails the run before a maintainer is asked to approve
