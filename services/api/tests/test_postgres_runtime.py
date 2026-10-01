@@ -36,6 +36,7 @@ def _postgres_target_url() -> str:
         or target.port != 5432
         or target.database != "community_ci"
         or target.username != "postgres"
+        or target.query
     ):
         raise ValueError("PostgreSQL contracts require the dedicated runner-local community_ci DB")
     return value
@@ -48,6 +49,11 @@ def _postgres_target_url() -> str:
         "postgresql+psycopg://postgres@127.0.0.1:5432/production",
         "postgresql+psycopg://operator@127.0.0.1:5432/community_ci",
         "postgresql+psycopg://postgres@127.0.0.1:5433/community_ci",
+        "postgresql+psycopg://postgres@127.0.0.1:5432/community_ci?host=database.example.invalid",
+        "postgresql+psycopg://postgres@127.0.0.1:5432/community_ci?dbname=production",
+        "postgresql+psycopg://postgres@127.0.0.1:5432/community_ci?service=production",
+        "postgresql+psycopg://postgres@127.0.0.1:5432/community_ci?options=-csearch_path=private",
+        "postgresql+psycopg://postgres@127.0.0.1:5432/community_ci?hostaddr=192.0.2.1",
         "sqlite:///unexpected.db",
     ],
 )
