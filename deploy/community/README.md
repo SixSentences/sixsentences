@@ -52,7 +52,7 @@ runtime evidence, a release supplies an API image and a `localhost` web image.
 Pointing the deployment at them replaces the longest step of a first start:
 
 ```console
-RELEASE=v0.2.0-alpha.2  # use a published release with IMAGE_DIGESTS attached
+RELEASE=v0.2.0-alpha.3  # use a published release with IMAGE_DIGESTS attached
 export SIX_API_IMAGE=ghcr.io/sixsentences/community-api:$RELEASE
 export SIX_WEB_IMAGE=ghcr.io/sixsentences/community-web:$RELEASE-localhost
 bash deploy/community/quickstart.sh --pull

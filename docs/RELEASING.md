@@ -36,9 +36,17 @@ pull request and use a new prerelease version; never move or reuse the tag.
    `Package.resolved` graph is unchanged after resolution.
 8. Complete every item in [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
-For this release, `0.2.0a2` in Python metadata maps to public version
-`0.2.0-alpha.2` and tag `v0.2.0-alpha.2`. Beta and release-candidate suffixes
+For this release, `0.2.0a3` in Python metadata maps to public version
+`0.2.0-alpha.3` and tag `v0.2.0-alpha.3`. Beta and release-candidate suffixes
 map to `-beta.N` and `-rc.N`.
+
+Alpha.3 is a release-evidence format correction, not an application or
+third-party dependency upgrade. The published alpha.2 source release and Python
+artifacts remain valid and unchanged. Its container builds, scans and isolated runtime
+drill passed, but the evidence validator rejected BuildKit's SLSA v1 build-type
+URI before attaching image receipts. Do not replace those existing image tags,
+move the alpha.2 tag or retrofit its release notes. Alpha.3 must complete its own
+source and container workflows before being advertised with verified images.
 
 The release workflow verifies the tag as Git data using the release verifier and
 maintainer keys from protected `main`. Only after signature, syntax, ancestry,
@@ -55,25 +63,25 @@ After the release pull request is merged and all required checks are green:
 ```console
 git switch main
 git pull --ff-only
-git tag -s v0.2.0-alpha.2 -m "SixSentences v0.2.0-alpha.2"
-git push origin v0.2.0-alpha.2
-gh release create v0.2.0-alpha.2 \
+git tag -s v0.2.0-alpha.3 -m "SixSentences v0.2.0-alpha.3"
+git push origin v0.2.0-alpha.3
+gh release create v0.2.0-alpha.3 \
   /absolute/path/to/sixsentences-overview.gif \
   --repo SixSentences/sixsentences \
   --verify-tag \
   --draft \
   --prerelease \
   --latest=false \
-  --title "SixSentences v0.2.0-alpha.2 · release candidate" \
+  --title "SixSentences v0.2.0-alpha.3 · release candidate" \
   --notes "Release automation will replace these draft notes after every gate passes."
 gh workflow run release.yml \
   --repo SixSentences/sixsentences \
   --ref main \
-  -f tag=v0.2.0-alpha.2
+  -f tag=v0.2.0-alpha.3
 ```
 
 Run the three publication commands together in one supervised release session.
-For alpha.2, stage an unchanged copy of the checked-in
+For alpha.3, stage an unchanged copy of the checked-in
 `docs/assets/sixsentences-thesis-overview.gif` under the release filename
 `sixsentences-overview.gif`; its bytes must match
 `docs/assets/sixsentences-overview.sha256`. The owner-supplied thesis-film preview
@@ -108,6 +116,9 @@ workspace, upgrades it, verifies saved notes/files after backup/restore, and
 separately starts the candidate against an empty database. Its sanitized
 image/revision receipt is a required artifact. This is an API/Compose runtime
 test, not a browser interaction test or proof of research-output quality.
+For alpha.3, this required upgrade/rollback pair is the pinned alpha.1 baseline
+and the alpha.3 candidate, with the compatibility bootstrap below. It is not a
+dedicated exact-image alpha.2-to-alpha.3 upgrade or rollback rehearsal.
 The original alpha.1 PostgreSQL installer has an invalid `BOOLEAN DEFAULT 0`
 in the baseline migration; the real PostgreSQL regression confirms SQLSTATE
 `42804`. The candidate changes exactly that literal to SQLAlchemy `sa.false()`.
@@ -124,7 +135,7 @@ installation with the unmodified alpha.1 installer. The candidate separately
 has to migrate a completely empty database through its full migration chain.
 The legacy API also requires a corpus for readiness. Only its baseline receives
 a real, verified one-record synthetic Parquet corpus, recorded as
-`legacy_corpus_fixture` and `synthetic_corpus_bootstrap: true`. The fresh alpha.2
+`legacy_corpus_fixture` and `synthetic_corpus_bootstrap: true`. The fresh alpha.3
 run must instead prove `fresh_candidate_without_corpus: true`: the optional
 literature corpus does not block the wider workspace, while database, storage,
 queue and live-worker health remain mandatory. Corpus searches still fail
@@ -203,7 +214,7 @@ package-writing job requires the protected `community-release` approval:
 gh workflow run publish-images.yml \
   --repo SixSentences/sixsentences \
   --ref main \
-  -f tag=v0.2.0-alpha.2
+  -f tag=v0.2.0-alpha.3
 ```
 
 The workflow checks out the verified commit and publishes Linux amd64 images
@@ -223,6 +234,14 @@ their system packages. Fixable `CRITICAL` vulnerabilities fail publication of
 the evidence, matching the current dependency-gate policy; this is not a claim
 that lesser-severity or currently unfixable findings are absent. Scanner output
 remains in the workflow log and does not replace the full SPDX inventory.
+The provenance validator accepts exact BuildKit schema/build-type pairs:
+SLSA v1 uses `buildDefinition` and `runDetails`, with build type
+`https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md`;
+the legacy SLSA v0.2 form uses `https://mobyproject.org/buildkit@v1` with its
+top-level builder, invocation, metadata and materials. Similar URI prefixes or
+mixed schemas are not accepted. This format support does not weaken the exact
+OCI revision/version, build-digest or runtime-receipt bindings and does not turn
+a provenance VCS hint into independent source verification.
 Only after those checks succeed does it attach `IMAGE_DIGESTS`, `images.json`,
 the two SBOMs, two provenance exports, two OCI identity records,
 `runtime-rehearsal.json` and `IMAGE_SHA256SUMS`, without overwriting existing assets.
@@ -245,10 +264,10 @@ authentication error rather than a missing-image error.
 Download release files into an empty directory:
 
 ```console
-gh release download v0.2.0-alpha.2 --repo SixSentences/sixsentences
+gh release download v0.2.0-alpha.3 --repo SixSentences/sixsentences
 sha256sum --check SHA256SUMS
-gh attestation verify sixsentences_engine-0.2.0a2-py3-none-any.whl --repo SixSentences/sixsentences
-gh attestation verify sixsentences_engine-0.2.0a2.tar.gz --repo SixSentences/sixsentences
+gh attestation verify sixsentences_engine-0.2.0a3-py3-none-any.whl --repo SixSentences/sixsentences
+gh attestation verify sixsentences_engine-0.2.0a3.tar.gz --repo SixSentences/sixsentences
 ```
 
 Build both images from the tag, record their local digests, start a fresh local

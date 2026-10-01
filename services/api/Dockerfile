@@ -48,7 +48,7 @@ RUN useradd --create-home --uid 10001 sixsentences \
     && chown sixsentences:sixsentences /data /privacy
 
 # Install the local public engine and the server from one hash-bound uv lock.
-# The build fails if the root engine is not exactly 0.2.0a2.
+# The build fails if the root engine is not exactly 0.2.0a3.
 WORKDIR /workspace
 COPY pyproject.toml README.md LICENSE NOTICE THIRD_PARTY_NOTICES.md /workspace/
 COPY src /workspace/src
