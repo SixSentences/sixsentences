@@ -168,16 +168,16 @@ jobs:
         env:
           SIX_TEST_POSTGRES_URL: postgresql+psycopg://postgres@127.0.0.1:5432/community_ci
         run: uv run --frozen --no-sync pytest -q -s tests/test_postgres_runtime.py::test_postgres_boolean_default_contract
+      - name: Test fresh PostgreSQL migrations and concurrent queue claims
+        env:
+          SIX_TEST_POSTGRES_URL: postgresql+psycopg://postgres@127.0.0.1:5432/community_ci
+        run: uv run --frozen --no-sync pytest -q tests/test_postgres_runtime.py
       - name: Lint the API, worker, and tests
         run: uv run --frozen --no-sync ruff check src scripts tests
       - name: Type-check the API and worker
         run: uv run --frozen --no-sync mypy src
       - name: Test the API, worker, and migrations
         run: uv run --frozen --no-sync pytest -q
-      - name: Test real PostgreSQL cutover and concurrent queue claims
-        env:
-          SIX_TEST_POSTGRES_URL: postgresql+psycopg://postgres@127.0.0.1:5432/community_ci
-        run: uv run --frozen --no-sync pytest -q tests/test_postgres_runtime.py
       - name: Verify the public source boundary
         run: uv run --frozen --no-sync python scripts/audit_community_export.py .
       - name: Require the complete web contract

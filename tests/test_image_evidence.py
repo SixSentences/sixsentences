@@ -224,13 +224,14 @@ def test_postgres_concurrency_contract_is_not_silently_skipped(name: str, job: s
     assert "POSTGRES_DB: community_ci" in api
     assert "POSTGRES_HOST_AUTH_METHOD: trust" in api
     assert "--health-cmd" in api
-    step = api.split("- name: Test real PostgreSQL cutover and concurrent queue claims\n", 1)[1]
+    step = api.split("- name: Test fresh PostgreSQL migrations and concurrent queue claims\n", 1)[1]
     step = step.split("- name:", 1)[0]
     assert (
         "SIX_TEST_POSTGRES_URL: postgresql+psycopg://postgres@127.0.0.1:5432/community_ci" in step
     )
     assert "uv run --frozen --no-sync pytest -q tests/test_postgres_runtime.py" in step
     assert "if:" not in step and "continue-on-error" not in step
+    assert api.index("Test fresh PostgreSQL migrations") < api.index("ruff check")
 
 
 @pytest.mark.parametrize("name", ["ci.yml", "release.yml"])

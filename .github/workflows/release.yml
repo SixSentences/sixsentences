@@ -260,6 +260,10 @@ jobs:
         env:
           SIX_TEST_POSTGRES_URL: postgresql+psycopg://postgres@127.0.0.1:5432/community_ci
         run: uv run --frozen --no-sync pytest -q -s tests/test_postgres_runtime.py::test_postgres_boolean_default_contract
+      - name: Test fresh PostgreSQL migrations and concurrent queue claims
+        env:
+          SIX_TEST_POSTGRES_URL: postgresql+psycopg://postgres@127.0.0.1:5432/community_ci
+        run: uv run --frozen --no-sync pytest -q tests/test_postgres_runtime.py
       - name: Run API quality, test, and boundary gates
         run: |
           uv run --frozen --no-sync ruff check src scripts tests
@@ -267,10 +271,6 @@ jobs:
           uv run --frozen --no-sync pytest -q
           uv run --frozen --no-sync python scripts/audit_community_export.py .
           uv run --frozen --no-sync python scripts/check_web_contracts.py --require-complete
-      - name: Test real PostgreSQL cutover and concurrent queue claims
-        env:
-          SIX_TEST_POSTGRES_URL: postgresql+psycopg://postgres@127.0.0.1:5432/community_ci
-        run: uv run --frozen --no-sync pytest -q tests/test_postgres_runtime.py
 
   web-source:
     name: Validate tagged web source (not a published artifact)

@@ -2053,10 +2053,10 @@
       "sha256": "20dfcc189dc8c4f1c9948edaa1cce7267c8c4ee4e43dfa13e03ad6274bcbd913"
     },
     {
-      "bytes": 5872,
+      "bytes": 7001,
       "mode": "0644",
       "path": "tests/test_postgres_runtime.py",
-      "sha256": "472976305194cc872e38529ea53bea6cd0988569973e16e8d0c07f64596ead5c"
+      "sha256": "9f68be7ec75154b0e9e0ed008fd27bc885a9c419630543e381232918de3c1666"
     },
     {
       "bytes": 13305,
