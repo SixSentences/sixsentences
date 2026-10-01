@@ -303,6 +303,39 @@ def test_image_publication_requires_main_signature_ancestry_approval_and_no_over
     assert "latest" not in workflow
     assert workflow.index("git verify-tag") < workflow.index("packages: write")
     assert "ref: ${{ needs.validate.outputs.sha }}" in workflow
+    assert "\n  workflow_call:\n" in workflow
+    assert "workflow_dispatch:" not in workflow
+    assert 'test "$sha" = "$EXPECTED_RELEASE_SHA"' in workflow
+    assert "gh release upload" not in workflow
+
+
+def test_validated_image_artifact_retains_only_the_ten_public_evidence_files() -> None:
+    workflow = (ROOT / ".github/workflows/publish-images.yml").read_text()
+    name = "Retain validated image evidence before final release publication"
+    artifact = workflow.split(f"- name: {name}\n", 1)[1].split("- name:", 1)[0]
+    paths = artifact.split("path: |\n", 1)[1].split("if-no-files-found:", 1)[0]
+    expected = {
+        "IMAGE_DIGESTS",
+        "IMAGE_SHA256SUMS",
+        "images.json",
+        "runtime-rehearsal.json",
+        *(
+            f"{kind}.{suffix}.json"
+            for kind in ("api", "web")
+            for suffix in ("sbom", "provenance", "identity")
+        ),
+    }
+    assert {line.strip() for line in paths.splitlines() if line.strip()} == {
+        f"image-evidence/{filename}" for filename in expected
+    }
+    assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in artifact
+    assert "name: community-image-evidence-${{ inputs.tag }}" in artifact
+    assert "if-no-files-found: error" in artifact and "retention-days: 14" in artifact
+    assert "include-hidden-files: false" in artifact
+    assert "if:" not in artifact and "continue-on-error" not in artifact
+    assert "*." not in paths and ".build.json" not in paths
+    assert workflow.index("image_evidence.py --directory") < workflow.index(name)
+    assert workflow.index("rehearse.py --confirm DISPOSABLE") < workflow.index(name)
 
 
 @pytest.mark.parametrize(
@@ -395,7 +428,7 @@ def test_published_images_require_pinned_critical_vulnerability_scans(kind: str)
     assert "if:" not in scan
     assert workflow.index('docker pull "$ref"') < workflow.index(scan_name)
     assert workflow.index(scan_name) < workflow.index("Validate SBOMs and write")
-    assert workflow.index(scan_name) < workflow.index("gh release upload")
+    assert workflow.index(scan_name) < workflow.index("Retain validated image evidence")
     assert 'printf \'%s=%s\\n\' "$kind" "$ref" >> "$GITHUB_OUTPUT"' in workflow
 
 
