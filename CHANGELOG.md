@@ -16,7 +16,9 @@ equivalents for Python package metadata.
   to recover notes obscured by the composer. Old clients preserve saved sizes;
   downgrade compatibility is documented in the self-hosting guide.
 - Required provider-free Compose startup, released-image upgrade and isolated
-  restore rehearsal, plus digest-bound image SBOM/provenance/checksum receipts.
+  restore rehearsal, including authenticated post-backup account-erasure replay
+  and pre-upgrade snapshot rollback under the pinned prior API. Published image
+  SBOM/provenance/checksum receipts require the same runtime checks by digest.
 
 - A personal research pinboard on the workspace homepage: coloured notes, cards
   and circles with editable text, draggable or keyboard-controlled positions,
@@ -133,6 +135,7 @@ equivalents for Python package metadata.
   production artifacts, private configuration, customer data, and proprietary
   datasets.
 
-[Unreleased]: https://github.com/SixSentences/sixsentences/compare/v0.2.0-alpha.1...HEAD
+[Unreleased]: https://github.com/SixSentences/sixsentences/compare/v0.2.0-alpha.2...HEAD
+[0.2.0-alpha.2]: https://github.com/SixSentences/sixsentences/releases/tag/v0.2.0-alpha.2
 [0.2.0-alpha.1]: https://github.com/SixSentences/sixsentences/releases/tag/v0.2.0-alpha.1
 [0.1.0-alpha.1]: https://github.com/SixSentences/sixsentences/releases/tag/v0.1.0-alpha.1

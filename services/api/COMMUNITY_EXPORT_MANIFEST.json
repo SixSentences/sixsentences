@@ -1693,6 +1693,12 @@
       "sha256": "350dec2b4b3a28258b5546f65cb98ced52a71f3d785231061a8e20dfa5fac181"
     },
     {
+      "bytes": 10863,
+      "mode": "0644",
+      "path": "tests/test_community_rehearsal_fixture.py",
+      "sha256": "72fcacf0c6721432066a9f4ad05d5845bd274ac08f21eba95b9a636a31de2cf7"
+    },
+    {
       "bytes": 613,
       "mode": "0644",
       "path": "tests/test_community_release_pipeline.py",
