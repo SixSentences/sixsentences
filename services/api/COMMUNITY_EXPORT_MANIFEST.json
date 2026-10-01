@@ -1693,16 +1693,22 @@
       "sha256": "350dec2b4b3a28258b5546f65cb98ced52a71f3d785231061a8e20dfa5fac181"
     },
     {
-      "bytes": 18929,
+      "bytes": 20547,
       "mode": "0644",
       "path": "tests/test_community_rehearsal_fixture.py",
-      "sha256": "0b361d5e18d045a6198cc9ba9653edeef91db3c3ccb72f19911092ce6ee2d5b6"
+      "sha256": "3767cbe0519fe6549c76b6955dfcb847adf25ee840ccb05c9e0baf357a9457e5"
     },
     {
       "bytes": 613,
       "mode": "0644",
       "path": "tests/test_community_release_pipeline.py",
       "sha256": "70f0b0e629c3669b5545171d61934e0d87513dbcd4371d89302ae4be201d6fd2"
+    },
+    {
+      "bytes": 8359,
+      "mode": "0644",
+      "path": "tests/test_community_restore_journals.py",
+      "sha256": "8a69f7ad30e49e72a076dbbb3ae229a714cf56a122bcfcd4ffa97b5a2cd7a4b8"
     },
     {
       "bytes": 29409,

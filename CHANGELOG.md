@@ -54,6 +54,10 @@ equivalents for Python package metadata.
   database, storage, queue and live-worker health remain required. The immutable
   prior API receives an explicitly recorded synthetic corpus in upgrade tests;
   the fresh candidate is checked without one.
+- Verify and select recovery journals as the ordinary API user, streaming
+  host-owned staging bytes into private temporary files instead of inaccessible
+  root-only container reads. Shutdown failures now stop restore before state
+  replacement; authenticated journal and permission checks remain fail-closed.
 
 - The server package reads its version from the installed distribution metadata
   instead of a second literal in `sixsentences_server/__init__.py`.

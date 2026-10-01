@@ -172,10 +172,16 @@ class SelfHostDeploymentTests(unittest.TestCase):
 
     def test_restore_replays_the_newest_authenticated_erasure_journal(self) -> None:
         source = (COMMUNITY / "restore.sh").read_text(encoding="utf-8")
-        self.assertGreaterEqual(source.count("six-community-erasure api verify"), 2)
+        self.assertIn("inspect_journals verify", source)
+        self.assertIn("inspect_journals select", source)
         self.assertIn("six-community-erasure api replay", source)
-        self.assertIn("current.startswith(candidate)", source)
-        self.assertIn("candidate.startswith(current)", source)
+        helper = (COMMUNITY / "restore_journals.py").read_text(encoding="utf-8")
+        self.assertIn(".startswith(", helper)
+        self.assertIn("read_events", helper)
+        self.assertNotRegex(source, r"--user(?:\s|=)")
+        self.assertNotIn("--cap-add", source)
+        self.assertNotIn("/candidate:ro", source)
+        self.assertIn('<"$JOURNAL_INPUT"', source)
         self.assertIn('LEDGER_SOURCE" == "backup"', source)
         self.assertIn("run --rm --no-deps -T migrate", source)
         replay_at = source.index("six-community-erasure api replay")
@@ -185,12 +191,40 @@ class SelfHostDeploymentTests(unittest.TestCase):
         self.assertLess(replay_at, runtime_start_at)
         self.assertLess(runtime_start_at, proxy_start_at)
 
-    def test_restore_embedded_python_compiles_before_any_state_operation(self) -> None:
+    def test_restore_helper_compiles_before_any_state_operation(self) -> None:
+        helper = (COMMUNITY / "restore_journals.py").read_text(encoding="utf-8")
+        compile(helper, "restore_journals.py", "exec")
+
+    def test_restore_stop_errors_prevent_journal_selection_and_state_changes(self) -> None:
         source = (COMMUNITY / "restore.sh").read_text(encoding="utf-8")
-        snippets = re.findall(r"--entrypoint python api -c '\n(.*?)\n'", source, re.S)
-        self.assertEqual(len(snippets), 1)
-        for snippet in snippets:
-            compile(snippet, "restore.sh:embedded-python", "exec")
+        block = source.split("RESTORE_PHASE=stop_services\n", 1)[1].split(
+            'case "$LEDGER_SOURCE" in', 1
+        )[0]
+        self.assertNotIn("|| true", block)
+        for service in ("proxy web", "worker", "api"):
+            with self.subTest(service=service), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory) / "commands.txt"
+                script = "\n".join(
+                    [
+                        "set -euo pipefail",
+                        'record() { printf "%s\\n" "$*" >> "$TEST_COMMAND_OUTPUT"; [[ "$*" != *"$FAIL_SERVICE" ]]; }',
+                        'inspect_journals() { printf "JOURNAL_SELECT\\n" >> "$TEST_COMMAND_OUTPUT"; printf "current\\n"; }',
+                        "COMPOSE=(record)",
+                        block,
+                        'printf "DATABASE_RESTORE_REPLAY_START\\n" >> "$TEST_COMMAND_OUTPUT"',
+                    ]
+                )
+                result = subprocess.run(
+                    ["bash", "-c", script],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    env={**os.environ, "TEST_COMMAND_OUTPUT": str(output), "FAIL_SERVICE": service},
+                )
+                self.assertNotEqual(result.returncode, 0)
+                commands = output.read_text()
+                self.assertNotIn("JOURNAL_SELECT", commands)
+                self.assertNotIn("DATABASE_RESTORE_REPLAY_START", commands)
 
     def test_backup_dereferences_hardlinks_and_restarts_with_health_waits(self) -> None:
         source = (COMMUNITY / "backup.sh").read_text(encoding="utf-8")

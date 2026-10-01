@@ -274,6 +274,9 @@ def test_driver_restores_distinct_snapshots_with_matching_api_before_receipt(
                 assert (
                     kwargs["input"] == (ROOT / "deploy/community/rehearsal_fixture.py").read_bytes()
                 )
+            if phase == "verify-root-permission-denied":
+                assert command[command.index("--user") + 1] == "0:0"
+                assert "--cap-add" not in command
             if phase == "database-revision":
                 output = "20260912_0001\n"
             elif phase == "erase":
@@ -360,6 +363,7 @@ def test_driver_restores_distinct_snapshots_with_matching_api_before_receipt(
         ("backup", new_image),
         ("mutate", new_image),
         ("erase", new_image),
+        ("verify-root-permission-denied", new_image),
         ("restore-1", new_image),
         ("verify", new_image),
         ("verify-erasure", new_image),
@@ -418,6 +422,41 @@ def test_migration_diagnostics_ignore_unknown_exception_text() -> None:
         "exception_types": [],
         "public_migration_frames": [],
     }
+
+
+def test_restore_diagnostics_only_include_fixed_phase_labels() -> None:
+    assert DRIVER.sanitized_restore_failure(
+        "SIX_RESTORE_FAILURE_PHASE=live_journal_selection\n"
+        "SIX_RESTORE_FAILURE_PHASE=private_secret\n"
+        "SIX_RESTORE_FAILURE_PHASE=erasure_replay credentials\n"
+        "private command and journal bytes\n"
+    ) == ["live_journal_selection"]
+
+
+@pytest.mark.parametrize("outcome", ["denied", "readable", "missing"])
+def test_unprivileged_root_probe_requires_permission_denial(
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+) -> None:
+    monkeypatch.setenv("SIX_COMMUNITY_REHEARSAL", "DISPOSABLE")
+    monkeypatch.setattr(FIXTURE.os, "geteuid", lambda: 0)
+    monkeypatch.setattr("sys.argv", ["fixture", "verify-root-permission-denied"])
+
+    def read_bytes(path: Path) -> bytes:
+        assert path == settings.resolved_erasure_ledger_path
+        if outcome == "denied":
+            raise PermissionError("synthetic permission refusal")
+        if outcome == "missing":
+            raise FileNotFoundError("synthetic absent journal")
+        return b"synthetic-readable-journal"
+
+    monkeypatch.setattr(Path, "read_bytes", read_bytes)
+    if outcome == "denied":
+        FIXTURE.main()
+    else:
+        with pytest.raises(AssertionError if outcome == "readable" else FileNotFoundError):
+            FIXTURE.main()
 
 
 def test_historical_bootstrap_changes_only_the_verified_boolean_default() -> None:

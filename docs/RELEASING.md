@@ -130,6 +130,12 @@ literature corpus does not block the wider workspace, while database, storage,
 queue and live-worker health remain mandatory. Corpus searches still fail
 closed without an imported corpus. API and worker resume together after backup
 or authenticated erasure replay; the public proxy waits for healthy services.
+Journal verification runs as the normal API user, with host-owned candidate
+bytes streamed through stdin into private temporary files. No extra container
+capability or root recovery process is needed. The isolated drill also requires
+an unprivileged UID-0 read of the synthetic private journal to fail before the
+real restore succeeds as its owning user. Restore diagnostics expose only fixed
+phase labels; failed writer shutdown prevents journal selection and state replacement.
 The drill additionally creates a second synthetic owner before backup, deletes
 that account through the authenticated API afterwards, and requires its user,
 workspace, sessions, notes and dataset files to remain absent after restore.

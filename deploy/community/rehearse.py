@@ -163,6 +163,31 @@ def sanitized_migration_failure(payload: str) -> dict[str, object]:
     }
 
 
+def sanitized_restore_failure(payload: str) -> list[str]:
+    """Keep only fixed restore-phase labels, never shell commands or journal bytes."""
+    allowed = {
+        "configuration",
+        "backup_manifest",
+        "archive_validation",
+        "staging",
+        "candidate_journal_verification",
+        "stop_services",
+        "live_journal_selection",
+        "database_restore",
+        "application_restore",
+        "erasure_replay",
+        "service_restart",
+        "cleanup",
+    }
+    return sorted(
+        {
+            match
+            for match in re.findall(r"(?m)^SIX_RESTORE_FAILURE_PHASE=([a-z_]+)$", payload)
+            if match in allowed
+        }
+    )
+
+
 def main() -> None:
     """Run the rehearsals and retain only a sanitized success receipt."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -191,6 +216,16 @@ def main() -> None:
             command, cwd=ROOT, env=environment, input=data, capture_output=True, timeout=600
         )
         if result.returncode:
+            if command[:2] == ["bash", str(COMMUNITY / "restore.sh")]:
+                print(
+                    json.dumps(
+                        {
+                            "restore_failure_phases": sanitized_restore_failure(
+                                result.stderr.decode(errors="replace")
+                            ),
+                        }
+                    )
+                )
             # Do not leak env, database URLs, credentials or HTTP responses.
             raise RuntimeError(f"Rehearsal command failed: {command[0]} (exit {result.returncode})")
         return result.stdout.decode()
@@ -223,13 +258,14 @@ def main() -> None:
         ]
         fixture = (COMMUNITY / "rehearsal_fixture.py").read_bytes()
 
-        def phase(name: str, *arguments: str) -> str:
+        def phase(name: str, *arguments: str, user: str | None = None) -> str:
             try:
                 return run(
                     compose
                     + [
                         "exec",
                         "-T",
+                        *(["--user", user] if user is not None else []),
                         "--env",
                         "SIX_COMMUNITY_REHEARSAL=DISPOSABLE",
                         "api",
@@ -350,6 +386,8 @@ def main() -> None:
                 or not re.fullmatch(r"[0-9a-f]{64}", erasure["signature"])
             ):
                 raise RuntimeError("Missing authenticated synthetic post-backup erasure")
+            phase("verify-root-permission-denied", user="0:0")
+            print("Synthetic journal read is denied to UID 0 without capabilities.")
             restore(candidate_snapshot)
             phase("verify")
             phase("verify-erasure", erasure["signature"])

@@ -296,6 +296,16 @@ def main() -> None:
     if os.environ.get("SIX_COMMUNITY_REHEARSAL") != "DISPOSABLE":
         raise SystemExit("Refusing fixture outside an explicitly disposable container")
     phase = sys.argv[1]
+    if phase == "verify-root-permission-denied":
+        from sixsentences_server.config import get_settings
+
+        assert os.geteuid() == 0
+        try:
+            get_settings().resolved_erasure_ledger_path.read_bytes()
+        except PermissionError:
+            print("Synthetic private journal permission boundary verified")
+            return
+        raise AssertionError("Unprivileged root unexpectedly read the private journal")
     if phase == "bootstrap-corpus":
         bootstrap_corpus()
         print("Synthetic legacy corpus built and verified; no research-quality approval")
