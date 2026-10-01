@@ -88,7 +88,10 @@ without moving or reusing the tag.
 
 The workflow rebuilds and retests from the tag. Python wheels are built from the
 source distribution and installed in isolation. API and web sources are tested
-from locked environments. Browser-extension contracts and an origin-bound
+from locked environments. The existing PostgreSQL cutover and concurrent queue
+claim contract runs explicitly against a pinned, disposable runner-local
+PostgreSQL service in both pull-request and tag CI; the regular SQLite suite's
+skip is not accepted as that evidence. Browser-extension contracts and an origin-bound
 unpacked build are validated without a store identity. The macOS Companion's
 boundary, exact dependency resolution, tests, and release compilation run on
 pinned Xcode 26.1.1 without signing or notarization credentials. The exact tag

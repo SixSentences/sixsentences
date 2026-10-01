@@ -133,6 +133,19 @@ jobs:
       PYTHONHASHSEED: "42"
       RUFF_CACHE_DIR: /tmp/sixsentences-api-ruff
       UV_PROJECT_ENVIRONMENT: /tmp/sixsentences-api-env
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+        env:
+          POSTGRES_DB: community_ci
+          POSTGRES_USER: postgres
+          # Disposable runner-local synthetic database; no reusable credential.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d community_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -157,6 +170,10 @@ jobs:
         run: uv run --frozen --no-sync mypy src
       - name: Test the API, worker, and migrations
         run: uv run --frozen --no-sync pytest -q
+      - name: Test real PostgreSQL cutover and concurrent queue claims
+        env:
+          SIX_TEST_POSTGRES_URL: postgresql+psycopg://postgres@127.0.0.1:5432/community_ci
+        run: uv run --frozen --no-sync pytest -q tests/test_postgres_runtime.py
       - name: Verify the public source boundary
         run: uv run --frozen --no-sync python scripts/audit_community_export.py .
       - name: Require the complete web contract

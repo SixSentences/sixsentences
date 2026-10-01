@@ -206,3 +206,22 @@ def test_published_images_require_pinned_critical_vulnerability_scans(kind: str)
     assert workflow.index(scan_name) < workflow.index("Validate SBOMs and write")
     assert workflow.index(scan_name) < workflow.index("gh release upload")
     assert 'printf \'%s=%s\\n\' "$kind" "$ref" >> "$GITHUB_OUTPUT"' in workflow
+
+
+@pytest.mark.parametrize("name,job", [("ci.yml", "api"), ("release.yml", "application-api")])
+def test_postgres_concurrency_contract_is_not_silently_skipped(name: str, job: str) -> None:
+    workflow = (ROOT / ".github/workflows" / name).read_text()
+    api = workflow.split(f"\n  {job}:\n", 1)[1].split("\n  web", 1)[0]
+    assert "postgres:16-alpine@sha256:" in api
+    assert "57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777" in api
+    assert "127.0.0.1:5432:5432" in api
+    assert "POSTGRES_DB: community_ci" in api
+    assert "POSTGRES_HOST_AUTH_METHOD: trust" in api
+    assert "--health-cmd" in api
+    step = api.split("- name: Test real PostgreSQL cutover and concurrent queue claims\n", 1)[1]
+    step = step.split("- name:", 1)[0]
+    assert (
+        "SIX_TEST_POSTGRES_URL: postgresql+psycopg://postgres@127.0.0.1:5432/community_ci" in step
+    )
+    assert "uv run --frozen --no-sync pytest -q tests/test_postgres_runtime.py" in step
+    assert "if:" not in step and "continue-on-error" not in step
