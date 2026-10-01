@@ -141,6 +141,30 @@ def erasure_files(state: dict[str, int]) -> tuple[Path, Path]:
     )
 
 
+def accept_synthetic_operator_notices(email: str) -> None:
+    """Exercise real account declarations for the two disposable fixture owners."""
+    assert email in {EMAIL, ERASURE_EMAIL}
+    login = request("/auth/login", method="POST", body={"email": email, "password": PASSWORD})
+    accepted = request(
+        "/auth/legal-acceptance",
+        method="POST",
+        token=login["token"],
+        body={
+            "age_requirement_confirmed": True,
+            "terms_accepted": True,
+            "terms_version": CURRENT_TERMS_VERSION,
+            "privacy_version": CURRENT_PRIVACY_VERSION,
+            "dpa_accepted": True,
+            "dpa_version": CURRENT_DPA_VERSION,
+            "controller_name": "Synthetic rehearsal controller, not a real legal entity",
+            "controller_authority_confirmed": True,
+        },
+    )
+    assert accepted["terms_version"] == CURRENT_TERMS_VERSION
+    assert accepted["privacy_version"] == CURRENT_PRIVACY_VERSION
+    assert accepted["dpa_version"] == CURRENT_DPA_VERSION
+
+
 def prepare_erasure(*, pinboard_supported: bool = True) -> None:
     """Create a second synthetic owner and real persisted state before backup."""
     from sixsentences_server.config import get_settings
@@ -152,9 +176,6 @@ def prepare_erasure(*, pinboard_supported: bool = True) -> None:
     with db_session() as session:
         assert session.scalars(select(User.email)).all() == [EMAIL]
         user = provision_owner(session, ERASURE_EMAIL, PASSWORD, "Synthetic erasure workspace")
-        user.terms_version = CURRENT_TERMS_VERSION
-        user.privacy_version = CURRENT_PRIVACY_VERSION
-        user.dpa_version = CURRENT_DPA_VERSION
         dataset = ResearchDatasetRow(
             org_id=user.org_id,
             name="Synthetic erasure dataset",
@@ -166,6 +187,7 @@ def prepare_erasure(*, pinboard_supported: bool = True) -> None:
         session.add(dataset)
         session.flush()
         state = {"user_id": user.id, "org_id": user.org_id, "dataset_id": dataset.id}
+    accept_synthetic_operator_notices(ERASURE_EMAIL)
     for path in erasure_files(state):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(ERASURE_BYTES)
@@ -311,10 +333,8 @@ def main() -> None:
         with db_session() as session:
             if session.scalar(select(User.id).limit(1)) is not None:
                 raise SystemExit("Refusing to seed a database that already contains users")
-            user = provision_owner(session, EMAIL, PASSWORD, "Synthetic release workspace")
-            user.terms_version = CURRENT_TERMS_VERSION
-            user.privacy_version = CURRENT_PRIVACY_VERSION
-            user.dpa_version = CURRENT_DPA_VERSION
+            provision_owner(session, EMAIL, PASSWORD, "Synthetic release workspace")
+        accept_synthetic_operator_notices(EMAIL)
         MARKER.write_text("synthetic-state-42\n", encoding="utf-8")
         return
     login = request("/auth/login", method="POST", body={"email": EMAIL, "password": PASSWORD})

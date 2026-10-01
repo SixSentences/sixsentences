@@ -12,10 +12,12 @@ from urllib.error import HTTPError
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from sixsentences_server.api.app import create_app
 from sixsentences_server.config import Settings
-from sixsentences_server.core.db import User, db_session, get_engine, init_db
+from sixsentences_server.core.db import User, UserLegalEventRow, db_session, get_engine, init_db
+from sixsentences_server.core.legal import legal_reaccept_required
 from sixsentences_server.ops.erasure import (
     cleanup_replayed_erasure_artifacts,
     replay_erasure_events,
@@ -112,12 +114,19 @@ def test_post_backup_erasure_replays_without_resurrection(
     preupgrade: bool,
 ) -> None:
     del corpus
+    # Match the real rehearsal Compose gate. Version strings alone are not
+    # acceptance: age confirmation and the owner agreement event are required.
+    settings.enforce_legal_acceptance = True
+    # The actual restore also restores the database-backed rate-limit windows;
+    # a process-local limiter would incorrectly survive the snapshot rollback.
+    settings.rate_limit_backend = "database"
     init_db()
     client = TestClient(create_app())
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(FIXTURE, "MARKER", settings.data_dir / "rehearsal.txt")
     monkeypatch.setattr(FIXTURE, "ERASURE_STATE", settings.data_dir / "erasure-fixture.json")
     monkeypatch.setenv("SIX_COMMUNITY_REHEARSAL", "DISPOSABLE")
+    acceptance_calls: list[str] = []
 
     def request(
         path: str,
@@ -127,6 +136,11 @@ def test_post_backup_erasure_replays_without_resurrection(
         method: str = "GET",
     ) -> Any:
         headers = {"Authorization": f"Bearer {token}"} if token else {}
+        if path == "/auth/legal-acceptance":
+            # Neither newly provisioned owner can use protected product routes
+            # until the real acceptance endpoint records all declarations.
+            assert client.get("/auth/pinboard", headers=headers).status_code == 428
+            acceptance_calls.append(path)
         response = client.request(method, path, headers=headers, json=body)
         if response.status_code >= 400:
             raise HTTPError(path, response.status_code, "synthetic API refusal", None, None)
@@ -146,6 +160,24 @@ def test_post_backup_erasure_replays_without_resurrection(
     else:
         phase("upgrade")
         phase("prepare-erasure")
+    assert acceptance_calls == ["/auth/legal-acceptance", "/auth/legal-acceptance"]
+    with db_session() as session:
+        for email in (FIXTURE.EMAIL, FIXTURE.ERASURE_EMAIL):
+            user = session.scalar(select(User).where(User.email == email))
+            assert user is not None and user.age_requirement_confirmed_at is not None
+            assert not legal_reaccept_required(user)
+            events = session.scalars(
+                select(UserLegalEventRow).where(UserLegalEventRow.user_id == user.id)
+            ).all()
+            assert {(event.document_id, event.event_kind) for event in events} == {
+                ("minimum_age", "age_confirmed"),
+                ("terms", "contract_accepted"),
+                ("privacy", "notice_presented"),
+                ("operator_agreement", "contract_accepted"),
+            }
+            agreement = next(event for event in events if event.document_id == "operator_agreement")
+            assert agreement.actor_role == "owner"
+            assert agreement.controller_name.startswith("Synthetic rehearsal controller")
     state = FIXTURE.erasure_state()
     files = (FIXTURE.MARKER, FIXTURE.ERASURE_STATE, *FIXTURE.erasure_files(state))
     saved_files = {path: path.read_bytes() for path in files}
