@@ -71,6 +71,8 @@ def prepare(directory: Path, tag: str, revision: str) -> None:
             "erasure_replay",
             "preupgrade_snapshot_rollback",
             "synthetic_only",
+            "synthetic_corpus_bootstrap",
+            "fresh_candidate_without_corpus",
         )
     ):
         raise ValueError("missing successful same-revision runtime rehearsal")

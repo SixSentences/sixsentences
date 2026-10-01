@@ -49,6 +49,11 @@ equivalents for Python package metadata.
   `sa.false()`. The alpha.1-schema upgrade rehearsal records this single-literal
   compatibility bootstrap and its original/corrected hashes; it does not
   misrepresent the unmodified historical installer as functional.
+- Remove the API/worker readiness cycle during fresh startup and backup/restore.
+  The optional literature corpus no longer blocks the wider workspace; actual
+  database, storage, queue and live-worker health remain required. The immutable
+  prior API receives an explicitly recorded synthetic corpus in upgrade tests;
+  the fresh candidate is checked without one.
 
 - The server package reads its version from the installed distribution metadata
   instead of a second literal in `sixsentences_server/__init__.py`.

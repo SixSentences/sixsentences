@@ -52,6 +52,8 @@ def fixture(directory: Path, *, platform_wrapper: bool = False) -> None:
                 "erasure_replay": True,
                 "preupgrade_snapshot_rollback": True,
                 "synthetic_only": True,
+                "synthetic_corpus_bootstrap": True,
+                "fresh_candidate_without_corpus": True,
                 "baseline_bootstrap": json.loads(
                     (ROOT / "deploy/community/alpha1-baseline-compatibility.json").read_text()
                 ),
@@ -154,6 +156,8 @@ def test_rehearsal_must_match_the_executed_published_images(
         "erasure_replay",
         "preupgrade_snapshot_rollback",
         "synthetic_only",
+        "synthetic_corpus_bootstrap",
+        "fresh_candidate_without_corpus",
     ],
 )
 @pytest.mark.parametrize("value", [None, False, 1, "true"])

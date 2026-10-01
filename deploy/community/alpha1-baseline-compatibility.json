@@ -9,5 +9,10 @@
   "original_migration_sha256": "0b2acc3adc93a5e9a465d97f9ab0f21b33139aefb2337c945803fbf47fd04a27",
   "compatible_migration_sha256": "fc429fc83fbf510829241310e410900a5f6d18f0b38545d6e1095f22ba795af8",
   "invalid_default_sqlstate": "42804",
-  "unmodified_original_installer": false
+  "unmodified_original_installer": false,
+  "legacy_corpus_fixture": {
+    "mode": "synthetic_duckdb_build",
+    "records": 1,
+    "seed": 42
+  }
 }

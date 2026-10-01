@@ -76,15 +76,25 @@ FINAL_DIR="$BACKUP_ROOT/$TIMESTAMP"
 }
 TEMP_DIR="$(mktemp -d "$BACKUP_ROOT/.pending-$TIMESTAMP.XXXXXX")"
 
+start_previously_running_services() {
+  local services=()
+  if [[ "$API_WAS_RUNNING" == "1" ]]; then
+    services+=(api)
+  fi
+  if [[ "$WORKER_WAS_RUNNING" == "1" ]]; then
+    services+=(worker)
+  fi
+  # API readiness requires a live worker. Start both together, without pulling
+  # in any service that was stopped before this backup began.
+  if [[ ${#services[@]} -gt 0 ]]; then
+    "${COMPOSE[@]}" up --no-deps --detach --wait --wait-timeout 180 "${services[@]}" >/dev/null
+  fi
+}
+
 resume_services() {
   local status=$?
   trap - EXIT HUP INT TERM
-  if [[ "$API_WAS_RUNNING" == "1" ]]; then
-    "${COMPOSE[@]}" up --detach --wait --wait-timeout 180 api >/dev/null || true
-  fi
-  if [[ "$WORKER_WAS_RUNNING" == "1" ]]; then
-    "${COMPOSE[@]}" up --detach --wait --wait-timeout 180 worker >/dev/null || true
-  fi
+  start_previously_running_services || true
   if [[ $status -ne 0 ]]; then
     if [[ -n "$TEMP_DIR" ]]; then
       rm -rf -- "$TEMP_DIR"
@@ -166,12 +176,7 @@ fi
 chmod -R go-rwx "$TEMP_DIR"
 mv -- "$TEMP_DIR" "$FINAL_DIR"
 
-if [[ "$API_WAS_RUNNING" == "1" ]]; then
-  "${COMPOSE[@]}" up --detach --wait --wait-timeout 180 api >/dev/null
-fi
-if [[ "$WORKER_WAS_RUNNING" == "1" ]]; then
-  "${COMPOSE[@]}" up --detach --wait --wait-timeout 180 worker >/dev/null
-fi
+start_previously_running_services
 rmdir -- "$LOCK_DIR"
 trap - EXIT HUP INT TERM
 

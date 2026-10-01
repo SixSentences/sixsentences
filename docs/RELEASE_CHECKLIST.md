@@ -60,6 +60,10 @@ or production configuration.
       hash-bound in the runtime receipt. It applies the original revision via
       the corrected migrator, without claiming an unchanged old installer,
       stamping a schema or bypassing fresh candidate migration.
+- [ ] The legacy synthetic-corpus prerequisite is explicit; the fresh candidate
+      starts without a corpus, while database/storage/queue/worker readiness and
+      corpus-dependent search guards remain effective. Backup/restore restart
+      API and worker together after the necessary state checks.
 - [ ] Companion `/interviews/live/*` and `/companion/paper-chats/*` contracts,
       exact-origin browser handoffs, local-only speech, and complete disconnect
       purge were reviewed with synthetic fixtures.

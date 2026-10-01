@@ -31,10 +31,10 @@
       "sha256": "e0bfeec4f11af50244091b2a1323faaeb056ef1e3ee5d4a94d91e40fb9706b2e"
     },
     {
-      "bytes": 4626,
+      "bytes": 4925,
       "mode": "0644",
       "path": "README.md",
-      "sha256": "d6770892b17e5a14635ea7ea5dc759af75951ed75a7d68dcae28220283a66eab"
+      "sha256": "6f5a761c39bcd6fa6bbdf54f03d3dacc201f121a91b0715ab00e85ddc8cbeaf6"
     },
     {
       "bytes": 142910,
@@ -295,10 +295,10 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
-      "bytes": 1525511,
+      "bytes": 1525546,
       "mode": "0644",
       "path": "src/sixsentences_server/api/app.py",
-      "sha256": "3eed893b2727fa151ea6d961b9da052b72081e1f06bb771f9a7f3ff828d7e44b"
+      "sha256": "8976b5af8ae8c35dad1dff4e2116e9179ecc45084b18e8fb039eb6ae49d7dbcd"
     },
     {
       "bytes": 18781,
@@ -1531,10 +1531,10 @@
       "sha256": "7826b7d0c14a74fc868a175a1e5551eb41e21bf6ea1f15a45a8b7ec4d13063d5"
     },
     {
-      "bytes": 115635,
+      "bytes": 117557,
       "mode": "0644",
       "path": "tests/test_api.py",
-      "sha256": "eff677b4e4a511548ff6330746f8550a65e1115453c7a988d78a3c15e389e184"
+      "sha256": "f6fd14f0dac7baa0d0b91f256d83f35403d71fa8511947ae9972612898ead2f9"
     },
     {
       "bytes": 103937,
@@ -1693,10 +1693,10 @@
       "sha256": "350dec2b4b3a28258b5546f65cb98ced52a71f3d785231061a8e20dfa5fac181"
     },
     {
-      "bytes": 13880,
+      "bytes": 16964,
       "mode": "0644",
       "path": "tests/test_community_rehearsal_fixture.py",
-      "sha256": "ffc80b42758af070b21249ada96ce83f10eff2fd447c179f46117597e403926a"
+      "sha256": "9be6954bd9a28bb89271c4b948053c5079781a5719fe195f3058075bbcec774c"
     },
     {
       "bytes": 613,

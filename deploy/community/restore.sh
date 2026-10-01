@@ -283,8 +283,9 @@ fi
 "${COMPOSE[@]}" run --rm --no-deps -T \
   --entrypoint six-community-erasure api replay
 
-"${COMPOSE[@]}" up --detach --wait --wait-timeout 180 postgres api
-"${COMPOSE[@]}" up --detach --wait --wait-timeout 180 worker web proxy
+# The API requires a live worker; start them together only after erasure replay.
+"${COMPOSE[@]}" up --detach --wait --wait-timeout 180 postgres api worker
+"${COMPOSE[@]}" up --detach --wait --wait-timeout 180 web proxy
 
 rm -rf -- "$RESTORE_STAGE"
 rmdir -- "$LOCK_DIR"

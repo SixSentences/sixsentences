@@ -41,6 +41,12 @@ bash deploy/community/quickstart.sh --domain research.example.org
 An existing environment file is reused, never overwritten, so re-running the
 script is a safe way to restart a deployment after a configuration change.
 
+The workspace starts without downloading a literature corpus or contacting a
+model provider. Corpus-dependent literature searches remain unavailable until
+the operator imports a corpus; its status remains visible in operator diagnostics.
+API readiness requires the database, storage, queue and a live background worker.
+Both API and worker start after migration, without waiting on each other.
+
 After separately approved image publication attaches `IMAGE_DIGESTS` and its
 runtime evidence, a release supplies an API image and a `localhost` web image.
 Pointing the deployment at them replaces the longest step of a first start:

@@ -122,6 +122,14 @@ the original hash; any other migration change stops the drill. There is no
 This proves the corrected original-schema upgrade path, not successful fresh
 installation with the unmodified alpha.1 installer. The candidate separately
 has to migrate a completely empty database through its full migration chain.
+The legacy API also requires a corpus for readiness. Only its baseline receives
+a real, verified one-record synthetic Parquet corpus, recorded as
+`legacy_corpus_fixture` and `synthetic_corpus_bootstrap: true`. The fresh alpha.2
+run must instead prove `fresh_candidate_without_corpus: true`: the optional
+literature corpus does not block the wider workspace, while database, storage,
+queue and live-worker health remain mandatory. Corpus searches still fail
+closed without an imported corpus. API and worker resume together after backup
+or authenticated erasure replay; the public proxy waits for healthy services.
 The drill additionally creates a second synthetic owner before backup, deletes
 that account through the authenticated API afterwards, and requires its user,
 workspace, sessions, notes and dataset files to remain absent after restore.

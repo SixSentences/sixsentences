@@ -147,6 +147,55 @@ def test_readiness_protects_emergency_disk_reserve(
     assert client.get("/health/ready").status_code == 503
 
 
+def test_readiness_allows_healthy_workspace_without_optional_corpus(settings: Settings) -> None:
+    client = TestClient(create_app())
+    store = DuckDBCorpus(settings.corpus_dir)
+    assert not store.exists()
+    assert client.get("/health/ready").json() == {"status": "ready"}
+    assert client.get("/health/ready").status_code == 200
+    from sixsentences_server.corpus.duckdb_store import CorpusNotSyncedError
+    from sixsentences_server.querylang.ast import Term
+
+    with pytest.raises(CorpusNotSyncedError):
+        store.search(Term(text="synthetic"))
+
+
+def test_readiness_requires_live_database_worker_without_optional_corpus(
+    settings: Settings,
+) -> None:
+    settings.jobs_backend = "database"
+    client = TestClient(create_app())
+    assert not DuckDBCorpus(settings.corpus_dir).exists()
+    assert client.get("/health/ready").status_code == 503
+    assert client.get("/health/ready").json() == {"status": "not_ready"}
+
+
+def test_readiness_checks_real_worker_liveness_without_optional_corpus(settings: Settings) -> None:
+    from sixsentences_server.core.db import WorkerReplicaRow
+
+    settings.jobs_backend = "database"
+    client = TestClient(create_app())
+    assert not DuckDBCorpus(settings.corpus_dir).exists()
+    with db_session() as session:
+        session.add(
+            WorkerReplicaRow(
+                worker_id="synthetic-readiness-42",
+                lane="all",
+                hostname="test-host",
+                pid=42,
+                release_revision="test-release",
+                concurrency=1,
+                heartbeat_at=datetime.now(UTC),
+            )
+        )
+    assert client.get("/health/ready").status_code == 200
+    with db_session() as session:
+        worker = session.get(WorkerReplicaRow, "synthetic-readiness-42")
+        assert worker is not None
+        worker.stopped_at = datetime.now(UTC)
+    assert client.get("/health/ready").status_code == 503
+
+
 def test_unauthenticated_requests_are_rejected(corpus: DuckDBCorpus) -> None:
     client = TestClient(create_app())
     assert client.get("/projects").status_code == 401
