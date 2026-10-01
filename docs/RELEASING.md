@@ -97,7 +97,10 @@ boundary, exact dependency resolution, tests, and release compilation run on
 pinned Xcode 26.1.1 without signing or notarization credentials. The exact tag
 is scanned again for current and historical secrets, critical dependency
 vulnerabilities, and deployment misconfiguration. The self-hosting definition
-and both container builds are validated from the tag. A provider-free rehearsal
+and both container builds are validated from the tag. Pinned Trivy image scans
+of both local candidate images reject fixable critical vulnerabilities before
+runtime acceptance and before publishing the source release; pull-request CI
+applies the same image policy. A provider-free rehearsal
 starts the published `v0.2.0-alpha.1` API in isolated volumes, seeds a synthetic
 workspace, upgrades it, verifies saved notes/files after backup/restore, and
 separately starts the candidate against an empty database. Its sanitized

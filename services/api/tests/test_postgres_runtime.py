@@ -15,13 +15,38 @@ import threading
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
 import sixsentences_server.core.db as dbmod
 import sixsentences_server.jobs as jobs
 from sixsentences_server.config import get_settings
 from sixsentences_server.core.db import BackgroundJobRow, Base, Org, Project
+
+
+@pytest.mark.skipif(
+    not os.environ.get("SIX_TEST_POSTGRES_URL"),
+    reason="requires the dedicated CI PostgreSQL service",
+)
+def test_postgres_boolean_default_contract() -> None:
+    """Reproduce the old baseline's invalid SQL using only temporary tables."""
+    engine = create_engine(os.environ["SIX_TEST_POSTGRES_URL"])
+    try:
+        with pytest.raises(ProgrammingError) as failure, engine.begin() as connection:
+            connection.execute(
+                text("CREATE TEMP TABLE six_boolean_invalid (value BOOLEAN DEFAULT 0)")
+            )
+        assert getattr(failure.value.orig, "sqlstate", None) == "42804"
+        print("baseline_boolean_default_sqlstate=42804")
+        with engine.begin() as connection:
+            connection.execute(
+                text("CREATE TEMP TABLE six_boolean_valid (value BOOLEAN DEFAULT false)")
+            )
+            connection.execute(text("INSERT INTO six_boolean_valid DEFAULT VALUES"))
+            assert connection.scalar(text("SELECT value FROM six_boolean_valid")) is False
+    finally:
+        engine.dispose()
 
 
 @pytest.mark.skipif(

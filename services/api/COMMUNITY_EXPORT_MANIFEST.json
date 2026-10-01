@@ -1693,10 +1693,10 @@
       "sha256": "350dec2b4b3a28258b5546f65cb98ced52a71f3d785231061a8e20dfa5fac181"
     },
     {
-      "bytes": 10863,
+      "bytes": 11769,
       "mode": "0644",
       "path": "tests/test_community_rehearsal_fixture.py",
-      "sha256": "72fcacf0c6721432066a9f4ad05d5845bd274ac08f21eba95b9a636a31de2cf7"
+      "sha256": "f743e3be61d715c6bd8b64021adb6956b2d22640d757edb9045b17a32911b275"
     },
     {
       "bytes": 613,
@@ -2053,10 +2053,10 @@
       "sha256": "20dfcc189dc8c4f1c9948edaa1cce7267c8c4ee4e43dfa13e03ad6274bcbd913"
     },
     {
-      "bytes": 4739,
+      "bytes": 5872,
       "mode": "0644",
       "path": "tests/test_postgres_runtime.py",
-      "sha256": "e6113171229244e069d8cd9eb33fc8c1f906650396836ba255f3dee732cb2819"
+      "sha256": "472976305194cc872e38529ea53bea6cd0988569973e16e8d0c07f64596ead5c"
     },
     {
       "bytes": 13305,

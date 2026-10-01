@@ -164,6 +164,10 @@ jobs:
             services/api/uv.lock
       - name: Install the locked API environment
         run: uv sync --frozen --extra dev
+      - name: Reproduce the legacy PostgreSQL Boolean default with temporary tables
+        env:
+          SIX_TEST_POSTGRES_URL: postgresql+psycopg://postgres@127.0.0.1:5432/community_ci
+        run: uv run --frozen --no-sync pytest -q -s tests/test_postgres_runtime.py::test_postgres_boolean_default_contract
       - name: Lint the API, worker, and tests
         run: uv run --frozen --no-sync ruff check src scripts tests
       - name: Type-check the API and worker
@@ -335,6 +339,30 @@ jobs:
             --build-arg NEXT_PUBLIC_PRIVACY_VERSION=community-operator-v1 \
             --build-arg NEXT_PUBLIC_DPA_VERSION=community-operator-v1 \
             apps/web
+      - name: Scan the candidate API image for fixable critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: sixsentences-community-api:ci
+          scanners: vuln
+          severity: CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+          hide-progress: true
+          version: v0.69.3
+      - name: Scan the candidate web image for fixable critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: sixsentences-community-web:ci
+          scanners: vuln
+          severity: CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+          hide-progress: true
+          version: v0.69.3
       - name: Rehearse fresh startup, released-image upgrade and isolated restore
         run: |
           python deploy/community/rehearse.py --confirm DISPOSABLE \

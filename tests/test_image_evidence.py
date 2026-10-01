@@ -225,3 +225,21 @@ def test_postgres_concurrency_contract_is_not_silently_skipped(name: str, job: s
     )
     assert "uv run --frozen --no-sync pytest -q tests/test_postgres_runtime.py" in step
     assert "if:" not in step and "continue-on-error" not in step
+
+
+@pytest.mark.parametrize("name", ["ci.yml", "release.yml"])
+@pytest.mark.parametrize("kind", ["API", "web"])
+def test_candidate_images_are_scanned_before_any_source_release(name: str, kind: str) -> None:
+    workflow = (ROOT / ".github/workflows" / name).read_text()
+    job = workflow.split("\n  self-hosting:\n", 1)[1].split("\n  tag-security:", 1)[0]
+    scan_name = f"Scan the candidate {kind} image for fixable critical vulnerabilities"
+    scan = job.split(f"- name: {scan_name}\n", 1)[1].split("- name:", 1)[0]
+    assert "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25" in scan
+    assert "version: v0.69.3" in scan
+    assert "scan-type: image" in scan
+    tag = "ci" if name == "ci.yml" else "${{ needs.validate.outputs.public-version }}"
+    assert f"image-ref: sixsentences-community-{kind.lower()}:{tag}" in scan
+    assert "severity: CRITICAL" in scan and "ignore-unfixed: true" in scan
+    assert 'exit-code: "1"' in scan and "scanners: vuln" in scan
+    assert "if:" not in scan and "continue-on-error" not in scan
+    assert job.index(scan_name) < job.index("rehearse.py --confirm DISPOSABLE")

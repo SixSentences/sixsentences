@@ -86,6 +86,47 @@ def sanitized_service_states(payload: str) -> list[dict[str, object]]:
     return result
 
 
+def sanitized_migration_failure(payload: str) -> dict[str, object]:
+    """Expose only known exception names and public migration source locations."""
+    exceptions = (
+        "AttributeError",
+        "ConnectionRefusedError",
+        "FileNotFoundError",
+        "ImportError",
+        "IntegrityError",
+        "KeyError",
+        "ModuleNotFoundError",
+        "NameError",
+        "OperationalError",
+        "PermissionError",
+        "ProgrammingError",
+        "RuntimeError",
+        "SyntaxError",
+        "TypeError",
+        "ValueError",
+        "DuplicateTable",
+        "DuplicateColumn",
+        "UndefinedTable",
+        "UndefinedColumn",
+        "InvalidSchemaName",
+        "InsufficientPrivilege",
+        "ReadOnlySqlTransaction",
+        "InvalidPassword",
+    )
+    migrations = ROOT / "services/api/alembic"
+    public_filenames = {path.name for path in migrations.rglob("*.py")}
+    frames = []
+    for filename, line in re.findall(r'File "[^"\n]*/([^/"\n]+\.py)", line ([0-9]{1,6})', payload):
+        if filename in public_filenames:
+            frames.append({"file": filename, "line": int(line)})
+    return {
+        "exception_types": [
+            name for name in exceptions if re.search(rf"\b{re.escape(name)}[\s:(]", payload)
+        ],
+        "public_migration_frames": frames[-20:],
+    }
+
+
 def main() -> None:
     """Run the rehearsals and retain only a sanitized success receipt."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -291,6 +332,10 @@ def main() -> None:
             try:
                 status = run(compose + ["ps", "--all", "--format", "json"])
                 print(json.dumps({"service_states": sanitized_service_states(status)}))
+                migration_output = run(compose + ["logs", "--no-color", "--tail", "200", "migrate"])
+                print(
+                    json.dumps({"migration_failure": sanitized_migration_failure(migration_output)})
+                )
             except Exception:
                 print("Service-state diagnostics unavailable")
             raise

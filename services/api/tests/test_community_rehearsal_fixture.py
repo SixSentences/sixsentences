@@ -287,3 +287,24 @@ def test_service_diagnostics_allowlist_fields(payload: str) -> None:
 @pytest.mark.parametrize("payload", ["not-json", "null", "42", '{"Service":[]}', "[]"])
 def test_service_diagnostics_reject_unexpected_records(payload: str) -> None:
     assert DRIVER.sanitized_service_states(payload) == []
+
+
+def test_migration_diagnostics_never_export_messages_queries_or_private_paths() -> None:
+    payload = (
+        'File "/workspace/services/api/alembic/env.py", line 42, in run_migrations\n'
+        'File "/private/secret/customer.py", line 7, in private_function\n'
+        "sqlalchemy.exc.ProgrammingError: private query and private credential\n"
+        "psycopg.errors.DuplicateTable: private table exists\n"
+        "SECRET_VALUE=must-not-escape\n"
+    )
+    assert DRIVER.sanitized_migration_failure(payload) == {
+        "exception_types": ["ProgrammingError", "DuplicateTable"],
+        "public_migration_frames": [{"file": "env.py", "line": 42}],
+    }
+
+
+def test_migration_diagnostics_ignore_unknown_exception_text() -> None:
+    assert DRIVER.sanitized_migration_failure("UnknownCustomerError: private-content") == {
+        "exception_types": [],
+        "public_migration_frames": [],
+    }
