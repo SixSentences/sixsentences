@@ -64,7 +64,7 @@ def prepare(directory: Path, tag: str, revision: str) -> None:
     runtime = _document(directory / "runtime-rehearsal.json")
     if runtime.get("source_revision") != revision or any(
         runtime.get(key) is not True
-        for key in ("fresh_start", "upgrade", "backup_restore", "synthetic_only")
+        for key in ("fresh_start", "upgrade", "backup_restore", "erasure_replay", "synthetic_only")
     ):
         raise ValueError("missing successful same-revision runtime rehearsal")
     if runtime.get("api_reference") != refs[0] or runtime.get("web_reference") != refs[1]:

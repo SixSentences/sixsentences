@@ -36,8 +36,8 @@ pull request and use a new prerelease version; never move or reuse the tag.
    `Package.resolved` graph is unchanged after resolution.
 8. Complete every item in [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
-For this release, `0.2.0a1` in Python metadata maps to public version
-`0.2.0-alpha.1` and tag `v0.2.0-alpha.1`. Beta and release-candidate suffixes
+For this release, `0.2.0a2` in Python metadata maps to public version
+`0.2.0-alpha.2` and tag `v0.2.0-alpha.2`. Beta and release-candidate suffixes
 map to `-beta.N` and `-rc.N`.
 
 The release workflow verifies the tag as Git data using the release verifier and
@@ -55,24 +55,30 @@ After the release pull request is merged and all required checks are green:
 ```console
 git switch main
 git pull --ff-only
-git tag -s v0.2.0-alpha.1 -m "SixSentences v0.2.0-alpha.1"
-git push origin v0.2.0-alpha.1
-gh release create v0.2.0-alpha.1 \
+git tag -s v0.2.0-alpha.2 -m "SixSentences v0.2.0-alpha.2"
+git push origin v0.2.0-alpha.2
+gh release create v0.2.0-alpha.2 \
   /absolute/path/to/sixsentences-overview.gif \
   --repo SixSentences/sixsentences \
   --verify-tag \
   --draft \
   --prerelease \
   --latest=false \
-  --title "SixSentences v0.2.0-alpha.1 · release candidate" \
+  --title "SixSentences v0.2.0-alpha.2 · release candidate" \
   --notes "Release automation will replace these draft notes after every gate passes."
 gh workflow run release.yml \
   --repo SixSentences/sixsentences \
   --ref main \
-  -f tag=v0.2.0-alpha.1
+  -f tag=v0.2.0-alpha.2
 ```
 
 Run the three publication commands together in one supervised release session.
+For alpha.2, stage an unchanged copy of the checked-in
+`docs/assets/sixsentences-thesis-overview.gif` under the release filename
+`sixsentences-overview.gif`; its bytes must match
+`docs/assets/sixsentences-overview.sha256`. The owner-supplied thesis-film preview
+entered the public tree in reviewed PR #171; this release does not import new
+media or reuse the older alpha.1 preview checksum.
 The explicit workflow dispatch occurs only after the signed tag and draft both
 exist, so there is no tag-push/draft-creation race. The workflow verifies the
 tag before executing its source and fails closed unless the draft contains only
@@ -94,6 +100,10 @@ workspace, upgrades it, verifies saved notes/files after backup/restore, and
 separately starts the candidate against an empty database. Its sanitized
 image/revision receipt is a required artifact. This is an API/Compose runtime
 test, not a browser interaction test or proof of research-output quality.
+The initial drill verifies an empty authenticated erasure journal; it does not
+yet prove that a user deleted after backup stays deleted after restore. That
+non-resurrection scenario and an actual rollback drill remain open in #29.
+Do not check those release-checklist items off from this receipt alone.
 
 The preview is checked by a separate job before the environment gate, so a wrong
 or missing preview fails the run before a maintainer is asked to approve
@@ -148,7 +158,7 @@ package-writing job requires the protected `community-release` approval:
 gh workflow run publish-images.yml \
   --repo SixSentences/sixsentences \
   --ref main \
-  -f tag=v0.2.0-alpha.1
+  -f tag=v0.2.0-alpha.2
 ```
 
 The workflow checks out the verified commit and publishes Linux amd64 images
@@ -185,10 +195,10 @@ authentication error rather than a missing-image error.
 Download release files into an empty directory:
 
 ```console
-gh release download v0.2.0-alpha.1 --repo SixSentences/sixsentences
+gh release download v0.2.0-alpha.2 --repo SixSentences/sixsentences
 sha256sum --check SHA256SUMS
-gh attestation verify sixsentences_engine-0.2.0a1-py3-none-any.whl --repo SixSentences/sixsentences
-gh attestation verify sixsentences_engine-0.2.0a1.tar.gz --repo SixSentences/sixsentences
+gh attestation verify sixsentences_engine-0.2.0a2-py3-none-any.whl --repo SixSentences/sixsentences
+gh attestation verify sixsentences_engine-0.2.0a2.tar.gz --repo SixSentences/sixsentences
 ```
 
 Build both images from the tag, record their local digests, start a fresh local

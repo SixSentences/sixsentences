@@ -1,6 +1,6 @@
 {
   "name": "@sixsentences/browser-extension",
-  "version": "0.2.0-alpha.1",
+  "version": "0.2.0-alpha.2",
   "private": true,
   "type": "module",
   "description": "Self-hostable Manifest V3 capture client for SixSentences",

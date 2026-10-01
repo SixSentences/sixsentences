@@ -4,8 +4,8 @@ message: >-
   surrounding search, screening, and analysis method.
 title: SixSentences
 type: software
-version: 0.2.0-alpha.1
-date-released: 2026-09-14
+version: 0.2.0-alpha.2
+date-released: 2026-10-01
 authors:
   - name: SixSentences contributors
 repository-code: https://github.com/SixSentences/sixsentences

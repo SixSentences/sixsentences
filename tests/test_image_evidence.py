@@ -49,6 +49,7 @@ def fixture(directory: Path, *, platform_wrapper: bool = False) -> None:
                 "fresh_start": True,
                 "upgrade": True,
                 "backup_restore": True,
+                "erasure_replay": True,
                 "synthetic_only": True,
             }
         )
@@ -120,6 +121,7 @@ def test_image_publication_requires_main_signature_ancestry_approval_and_no_over
         ("api_reference", "ghcr.io/example/community-api@sha256:" + "d" * 64),
         ("source_revision", "d" * 40),
         ("backup_restore", False),
+        ("erasure_replay", False),
     ],
 )
 def test_rehearsal_must_match_the_executed_published_images(
@@ -141,8 +143,7 @@ def test_runtime_rehearsal_is_a_required_ci_and_release_step() -> None:
         assert "rehearse.py --confirm DISPOSABLE" in workflow
         assert (
             "--upgrade-from ghcr.io/sixsentences/community-api@sha256:"
-            "31b374cfb4b45c2cceb6a609d3b0ec8853ee47cd0a3d1588dfa48305bcb3498d"
-            in workflow
+            "31b374cfb4b45c2cceb6a609d3b0ec8853ee47cd0a3d1588dfa48305bcb3498d" in workflow
         )
         assert "NEXT_PUBLIC_APP_URL=http://localhost " in workflow
         assert "localhost:18080" not in workflow

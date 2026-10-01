@@ -8,6 +8,8 @@ equivalents for Python package metadata.
 
 ## [Unreleased]
 
+## [0.2.0-alpha.2] - 2026-10-01
+
 ### Added
 
 - Persistent pinboard resizing, compact mobile editing and a no-write action
