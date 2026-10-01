@@ -80,7 +80,7 @@ jobs:
           ref: ${{ needs.validate.outputs.release-sha }}
           persist-credentials: false
       - name: Set up pinned uv and Python
-        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           python-version: "3.12"
           version: "0.10.12"
@@ -157,7 +157,7 @@ jobs:
           name: python-engine-release-candidate-${{ inputs.tag }}
           path: release
       - name: Set up pinned uv and Python
-        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           python-version: "3.12"
           version: "0.10.12"
@@ -249,7 +249,7 @@ jobs:
           ref: ${{ needs.validate.outputs.release-sha }}
           persist-credentials: false
       - name: Set up pinned uv and Python
-        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           python-version: "3.12"
           version: "0.10.12"
@@ -472,7 +472,7 @@ jobs:
       - name: Reject credential-bearing URIs across reachable history
         run: python .github/scripts/check_history_credential_uris.py
       - name: Scan every reachable commit without credential verification
-        uses: trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c # v3.97.4
+        uses: trufflesecurity/trufflehog@4dd8831c5f12599465d4d45c3c447b4018a34c85 # v3.97.9
         with:
           path: ./
           base: ""
