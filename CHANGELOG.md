@@ -8,6 +8,19 @@ equivalents for Python package metadata.
 
 ## [Unreleased]
 
+## [0.2.0-alpha.3] - 2026-10-01
+
+### Fixed
+
+- Accept BuildKit's exact SLSA v1 provenance format when validating published
+  container evidence, while preserving strict schema, digest, OCI source/tag
+  and runtime-receipt checks. No application behavior, migration or third-party
+  dependency version changes are included.
+- Keep the published alpha.2 source release and Python artifacts valid and
+  unchanged. Its image builds, scans and isolated drill passed, but provenance
+  metadata validation prevented image-evidence publication; existing image tags
+  are not overwritten. Alpha.3 uses new immutable tags and requires fresh evidence.
+
 ## [0.2.0-alpha.2] - 2026-10-01
 
 ### Added
@@ -148,7 +161,8 @@ equivalents for Python package metadata.
   production artifacts, private configuration, customer data, and proprietary
   datasets.
 
-[Unreleased]: https://github.com/SixSentences/sixsentences/compare/v0.2.0-alpha.2...HEAD
+[Unreleased]: https://github.com/SixSentences/sixsentences/compare/v0.2.0-alpha.3...HEAD
+[0.2.0-alpha.3]: https://github.com/SixSentences/sixsentences/releases/tag/v0.2.0-alpha.3
 [0.2.0-alpha.2]: https://github.com/SixSentences/sixsentences/releases/tag/v0.2.0-alpha.2
 [0.2.0-alpha.1]: https://github.com/SixSentences/sixsentences/releases/tag/v0.2.0-alpha.1
 [0.1.0-alpha.1]: https://github.com/SixSentences/sixsentences/releases/tag/v0.1.0-alpha.1

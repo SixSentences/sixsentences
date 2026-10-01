@@ -4,7 +4,7 @@ message: >-
   surrounding search, screening, and analysis method.
 title: SixSentences
 type: software
-version: 0.2.0-alpha.2
+version: 0.2.0-alpha.3
 date-released: 2026-10-01
 authors:
   - name: SixSentences contributors

@@ -1096,7 +1096,7 @@ wheels = [
 
 [[package]]
 name = "sixsentences-community-api"
-version = "0.2.0a2"
+version = "0.2.0a3"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
@@ -1156,7 +1156,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "sixsentences-engine"
-version = "0.2.0a2"
+version = "0.2.0a3"
 source = { directory = "../../" }
 dependencies = [
     { name = "duckdb" },
