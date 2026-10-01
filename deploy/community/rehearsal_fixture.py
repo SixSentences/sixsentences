@@ -16,7 +16,7 @@ from sixsentences_server.core.legal import (
     CURRENT_PRIVACY_VERSION,
     CURRENT_TERMS_VERSION,
 )
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 EMAIL = "release-rehearsal@example.invalid"
 ERASURE_EMAIL = "release-erasure@example.invalid"
@@ -69,7 +69,7 @@ def erasure_files(state: dict[str, int]) -> tuple[Path, Path]:
     )
 
 
-def prepare_erasure() -> None:
+def prepare_erasure(*, pinboard_supported: bool = True) -> None:
     """Create a second synthetic owner and real persisted state before backup."""
     from sixsentences_server.config import get_settings
     from sixsentences_server.core.db import ResearchDatasetRow
@@ -84,8 +84,12 @@ def prepare_erasure() -> None:
         user.privacy_version = CURRENT_PRIVACY_VERSION
         user.dpa_version = CURRENT_DPA_VERSION
         dataset = ResearchDatasetRow(
-            org_id=user.org_id, name="Synthetic erasure dataset", filename=ERASURE_FILENAME,
-            format="csv", row_count=1, byte_size=len(ERASURE_BYTES),
+            org_id=user.org_id,
+            name="Synthetic erasure dataset",
+            filename=ERASURE_FILENAME,
+            format="csv",
+            row_count=1,
+            byte_size=len(ERASURE_BYTES),
         )
         session.add(dataset)
         session.flush()
@@ -96,22 +100,32 @@ def prepare_erasure() -> None:
     # Only synthetic numeric IDs are retained; no password or bearer token.
     with ERASURE_STATE.open("x", encoding="utf-8") as handle:
         json.dump(state, handle)
-    login = request(
-        "/auth/login", method="POST", body={"email": ERASURE_EMAIL, "password": PASSWORD},
-    )
-    note = {**NOTE, "text": "Synthetic note that must remain erased"}
-    saved = request(
-        "/auth/pinboard", method="PUT", token=login["token"],
-        body={"revision": 0, "notes": [note]},
-    )
-    assert saved == {"revision": 1, "notes": [note]}
+    if pinboard_supported:
+        prepare_erasure_pinboard()
     assert all(path.read_bytes() == ERASURE_BYTES for path in erasure_files(state))
 
 
-def verify_erased(signature: str) -> None:
+def prepare_erasure_pinboard() -> None:
+    """Add candidate-only state after the released schema has been upgraded."""
+    login = request(
+        "/auth/login",
+        method="POST",
+        body={"email": ERASURE_EMAIL, "password": PASSWORD},
+    )
+    note = {**NOTE, "text": "Synthetic note that must remain erased"}
+    saved = request(
+        "/auth/pinboard",
+        method="PUT",
+        token=login["token"],
+        body={"revision": 0, "notes": [note]},
+    )
+    assert saved == {"revision": 1, "notes": [note]}
+
+
+def verify_erased(signature: str, *, pinboard_supported: bool = True) -> None:
     """Require journal continuity, absent owned state and denied authentication."""
     from sixsentences_server.config import get_settings
-    from sixsentences_server.core.db import AuthToken, Org, PersonalPinboardRow, ResearchDatasetRow
+    from sixsentences_server.core.db import AuthToken, Org, ResearchDatasetRow
     from sixsentences_server.ops.erasure_ledger import email_digest, read_events
 
     assert re.fullmatch(r"[0-9a-f]{64}", signature)
@@ -128,11 +142,14 @@ def verify_erased(signature: str) -> None:
         assert session.get(User, state["user_id"]) is None
         assert session.scalar(select(User.id).where(User.email == ERASURE_EMAIL)) is None
         assert session.get(Org, state["org_id"]) is None
-        assert session.get(PersonalPinboardRow, state["user_id"]) is None
+        if pinboard_supported:
+            from sixsentences_server.core.db import PersonalPinboardRow
+
+            assert session.get(PersonalPinboardRow, state["user_id"]) is None
         assert session.get(ResearchDatasetRow, state["dataset_id"]) is None
-        assert session.scalar(
-            select(AuthToken.id).where(AuthToken.org_id == state["org_id"])
-        ) is None
+        assert (
+            session.scalar(select(AuthToken.id).where(AuthToken.org_id == state["org_id"])) is None
+        )
         assert session.scalars(select(User.email)).all() == [EMAIL]
     assert all(not path.exists() for path in erasure_files(state))
     try:
@@ -160,11 +177,16 @@ def erase_after_backup() -> str:
         assert session.get(ResearchDatasetRow, state["dataset_id"]) is not None
         assert session.scalar(select(AuthToken.id).where(AuthToken.org_id == state["org_id"]))
     login = request(
-        "/auth/login", method="POST", body={"email": ERASURE_EMAIL, "password": PASSWORD},
+        "/auth/login",
+        method="POST",
+        body={"email": ERASURE_EMAIL, "password": PASSWORD},
     )
     assert request("/auth/me", token=login["token"])["email"] == ERASURE_EMAIL
     deleted = request(
-        "/auth/account", method="DELETE", token=login["token"], body={"password": PASSWORD},
+        "/auth/account",
+        method="DELETE",
+        token=login["token"],
+        body={"password": PASSWORD},
     )
     assert deleted == {"deleted": "workspace", "storage_cleanup": "complete"}
     events = read_events(get_settings())
@@ -180,6 +202,20 @@ def main() -> None:
     if os.environ.get("SIX_COMMUNITY_REHEARSAL") != "DISPOSABLE":
         raise SystemExit("Refusing fixture outside an explicitly disposable container")
     phase = sys.argv[1]
+    if phase == "database-revision":
+        with db_session() as session:
+            revisions = session.scalars(text("SELECT version_num FROM alembic_version")).all()
+        assert len(revisions) == 1 and re.fullmatch(r"[a-zA-Z0-9_]+", revisions[0])
+        print(revisions[0])
+        return
+    if phase == "prepare-rollback":
+        prepare_erasure(pinboard_supported=False)
+        print("Synthetic pre-upgrade rollback fixture prepared")
+        return
+    if phase == "prepare-erasure-pinboard":
+        prepare_erasure_pinboard()
+        print("Synthetic candidate-only erasure fixture prepared")
+        return
     if phase == "prepare-erasure":
         prepare_erasure()
         print("Synthetic pre-backup erasure fixture prepared")
@@ -204,6 +240,11 @@ def main() -> None:
     login = request("/auth/login", method="POST", body={"email": EMAIL, "password": PASSWORD})
     token = login["token"]
     assert request("/auth/me", token=token)["email"] == EMAIL
+    if phase == "verify-rollback":
+        assert MARKER.read_text(encoding="utf-8") == "synthetic-state-42\n"
+        verify_erased(sys.argv[2], pinboard_supported=False)
+        print("Synthetic pre-upgrade snapshot rollback verified")
+        return
     current = request("/auth/pinboard", token=token)
     if phase == "upgrade":
         assert MARKER.read_text(encoding="utf-8") == "synthetic-state-42\n"

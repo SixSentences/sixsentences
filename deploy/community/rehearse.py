@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise fresh startup, released-image upgrade and restore in isolated volumes.
+"""Exercise startup, upgrade, restore and snapshot rollback in isolated volumes.
 
 Requires an already running Docker engine and explicit disposable confirmation.
 Never starts a daemon, accepts existing environments, or targets existing stacks.
@@ -27,6 +27,63 @@ def validate_image(image: str) -> str:
     if not re.fullmatch(r"[a-z0-9][a-z0-9./_-]*(?::[A-Za-z0-9_.-]+|@sha256:[0-9a-f]{64})", image):
         raise ValueError("an explicit image tag or digest is required")
     return image
+
+
+def sanitized_service_states(payload: str) -> list[dict[str, object]]:
+    """Allowlist Compose status fields without exposing container configuration."""
+    try:
+        document = json.loads(payload)
+        rows = document if isinstance(document, list) else [document]
+    except ValueError:
+        try:
+            rows = [json.loads(line) for line in payload.splitlines() if line.strip()]
+        except ValueError:
+            return []
+    result: list[dict[str, object]] = []
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("Service"), str):
+            continue
+        if row["Service"] not in {
+            "api",
+            "worker",
+            "migrate",
+            "postgres",
+            "web",
+            "proxy",
+        }:
+            continue
+        state = row.get("State")
+        health = row.get("Health")
+        exit_code = row.get("ExitCode")
+        result.append(
+            {
+                "service": row["Service"],
+                "state": state
+                if isinstance(state, str)
+                and state
+                in {
+                    "created",
+                    "running",
+                    "paused",
+                    "restarting",
+                    "removing",
+                    "exited",
+                    "dead",
+                }
+                else "unavailable",
+                "health": health
+                if isinstance(health, str)
+                and health
+                in {
+                    "healthy",
+                    "unhealthy",
+                    "starting",
+                }
+                else "unavailable",
+                "exit_code": exit_code if type(exit_code) is int else "unavailable",
+            }
+        )
+    return result
 
 
 def main() -> None:
@@ -123,6 +180,27 @@ def main() -> None:
                         raise RuntimeError("Loopback health did not become ready")
                     time.sleep(1)
 
+        def backup() -> Path:
+            before = set((directory / "backups").glob("[0-9]*"))
+            run(["bash", str(COMMUNITY / "backup.sh")])
+            created = set((directory / "backups").glob("[0-9]*")) - before
+            if len(created) != 1 or not (snapshot := created.pop()).is_dir():
+                raise RuntimeError("Expected one new complete isolated backup")
+            return snapshot
+
+        def restore(snapshot: Path) -> None:
+            run(
+                [
+                    "bash",
+                    str(COMMUNITY / "restore.sh"),
+                    "--backup",
+                    str(snapshot),
+                    "--confirm",
+                    "RESTORE",
+                ]
+            )
+            health()
+
         try:
             # Resolve the old release once and record its immutable local image ID.
             run(["docker", "pull", args.upgrade_from])
@@ -133,17 +211,19 @@ def main() -> None:
             run(compose + ["up", "--no-build", "--detach", "--wait", "--wait-timeout", "180"])
             health()
             phase("seed")
+            phase("prepare-rollback")
+            baseline_revision = phase("database-revision").strip()
+            if not re.fullmatch(r"[a-zA-Z0-9_]+", baseline_revision):
+                raise RuntimeError("Missing released database migration revision")
+            preupgrade_snapshot = backup()
             run(compose + ["stop", "--timeout", "30", "api", "worker"])
             environment["SIX_API_IMAGE"] = args.api_image
             run(compose + ["run", "--rm", "--no-deps", "-T", "migrate"])
             run(compose + ["up", "--no-build", "--detach", "--wait", "--wait-timeout", "180"])
             health()
             phase("upgrade")
-            phase("prepare-erasure")
-            run(["bash", str(COMMUNITY / "backup.sh")])
-            backups = sorted((directory / "backups").glob("[0-9]*"))
-            if len(backups) != 1 or not backups[0].is_dir():
-                raise RuntimeError("Expected one complete isolated backup")
+            phase("prepare-erasure-pinboard")
+            candidate_snapshot = backup()
             phase("mutate")
             erasure = json.loads(phase("erase"))
             if (
@@ -153,22 +233,23 @@ def main() -> None:
                 or not re.fullmatch(r"[0-9a-f]{64}", erasure["signature"])
             ):
                 raise RuntimeError("Missing authenticated synthetic post-backup erasure")
-            run(
-                [
-                    "bash",
-                    str(COMMUNITY / "restore.sh"),
-                    "--backup",
-                    str(backups[0]),
-                    "--confirm",
-                    "RESTORE",
-                ]
-            )
-            health()
+            restore(candidate_snapshot)
             phase("verify")
             phase("verify-erasure", erasure["signature"])
+            # Supported rollback means restoring the complete pre-upgrade
+            # snapshot with the released API, not downgrading a migrated DB.
+            # Keep the independent privacy volume: post-snapshot erasures must
+            # still be applied by the released API before traffic resumes.
+            run(compose + ["stop", "--timeout", "30", "api", "worker"])
+            environment["SIX_API_IMAGE"] = args.upgrade_from
+            restore(preupgrade_snapshot)
+            if phase("database-revision").strip() != baseline_revision:
+                raise RuntimeError("Rollback did not restore the released database revision")
+            phase("verify-rollback", erasure["signature"])
             # Separately prove the candidate migrates an empty database, not
             # merely the released database used by the upgrade path above.
             run(compose + ["down", "--volumes", "--remove-orphans", "--timeout", "30"])
+            environment["SIX_API_IMAGE"] = args.api_image
             run(compose + ["up", "--no-build", "--detach", "--wait", "--wait-timeout", "180"])
             health()
             phase("seed")
@@ -192,6 +273,10 @@ def main() -> None:
                 "upgrade": True,
                 "backup_restore": True,
                 "erasure_replay": True,
+                "preupgrade_snapshot_rollback": True,
+                "rollback_database_revision": baseline_revision,
+                "rollback_data_lossless": False,
+                "schema_downgrade": False,
                 "synthetic_only": True,
                 "provider_calls": 0,
             }
@@ -199,7 +284,16 @@ def main() -> None:
             with args.report.open("x", encoding="utf-8") as handle:
                 json.dump(receipt, handle, indent=2, sort_keys=True)
                 handle.write("\n")
-            print("Fresh startup, released-image upgrade and isolated restore passed.")
+            print("Fresh startup, upgrade, restore and pre-upgrade snapshot rollback passed.")
+        except Exception:
+            # No container logs, environment, labels, URLs or raw Docker error
+            # text: retain just enough status to identify the failing service.
+            try:
+                status = run(compose + ["ps", "--all", "--format", "json"])
+                print(json.dumps({"service_states": sanitized_service_states(status)}))
+            except Exception:
+                print("Service-state diagnostics unavailable")
+            raise
         finally:
             # The random project was verified absent before creation. These are
             # only this invocation's synthetic volumes, never operator state.
