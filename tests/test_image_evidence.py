@@ -17,7 +17,50 @@ EVIDENCE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(EVIDENCE)
 
 
-def fixture(directory: Path, *, platform_wrapper: bool = False) -> None:
+def provenance_fixture(
+    *, legacy: bool = False, frontend: str = "dockerfile.v0"
+) -> dict[str, object]:
+    """Use the observed public v1 shape or BuildKit's documented legacy shape with inert data."""
+    # Actual alpha.2 registry predicates have buildDefinition/runDetails and an empty builder ID.
+    # Legacy fields: github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md
+    request = {"frontend": frontend, "args": {}, "locals": [{"name": "context"}]}
+    dependencies = [{"uri": "pkg:docker/example@1", "digest": {"sha256": "d" * 64}}]
+    if legacy:
+        return {
+            "buildType": "https://mobyproject.org/buildkit@v1",
+            "builder": {"id": ""},
+            "invocation": {
+                "configSource": {"entryPoint": "Dockerfile"},
+                "parameters": request,
+                "environment": {"platform": "linux/amd64"},
+            },
+            "metadata": {
+                "buildStartedOn": "2026-10-01T00:00:00Z",
+                "buildFinishedOn": "2026-10-01T00:01:00Z",
+            },
+            "materials": dependencies,
+        }
+    return {
+        "buildDefinition": {
+            "buildType": "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md",
+            "externalParameters": {"configSource": {"path": "Dockerfile"}, "request": request},
+            "internalParameters": {"builderPlatform": "linux/amd64"},
+            "resolvedDependencies": dependencies,
+        },
+        "runDetails": {
+            "builder": {"id": ""},
+            "metadata": {
+                "startedOn": "2026-10-01T00:00:00Z",
+                "finishedOn": "2026-10-01T00:01:00Z",
+                "invocationId": "synthetic-build",
+            },
+        },
+    }
+
+
+def fixture(
+    directory: Path, *, platform_wrapper: bool = False, legacy_provenance: bool = False
+) -> None:
     """Create only inert evidence, never a real registry or API credential."""
     references = []
     for kind, digest in (("api", "a" * 64), ("web", "b" * 64)):
@@ -34,7 +77,7 @@ def fixture(directory: Path, *, platform_wrapper: bool = False) -> None:
             )
         )
         sbom = {"SPDX": {"spdxVersion": "SPDX-2.3", "packages": [{"name": "synthetic"}]}}
-        provenance = {"SLSA": {"buildType": "https://mobyproject.org/buildkit@v1"}}
+        provenance = {"SLSA": provenance_fixture(legacy=legacy_provenance)}
         for suffix, value in (("sbom", sbom), ("provenance", provenance)):
             if platform_wrapper:
                 value = {"linux/amd64": value}
@@ -66,10 +109,11 @@ def fixture(directory: Path, *, platform_wrapper: bool = False) -> None:
 
 
 @pytest.mark.parametrize("wrapped", [False, True])
+@pytest.mark.parametrize("legacy", [False, True])
 def test_complete_evidence_is_bound_to_revision_without_overwriting(
-    tmp_path: Path, wrapped: bool
+    tmp_path: Path, wrapped: bool, legacy: bool
 ) -> None:
-    fixture(tmp_path, platform_wrapper=wrapped)
+    fixture(tmp_path, platform_wrapper=wrapped, legacy_provenance=legacy)
     EVIDENCE.prepare(tmp_path, "v0.2.0-alpha.2", "c" * 40)
     receipt = json.loads((tmp_path / "images.json").read_text())
     assert receipt["source_revision"] == "c" * 40
@@ -77,6 +121,143 @@ def test_complete_evidence_is_bound_to_revision_without_overwriting(
     assert len((tmp_path / "IMAGE_SHA256SUMS").read_text().splitlines()) == 9
     with pytest.raises(FileExistsError):
         EVIDENCE.prepare(tmp_path, "v0.2.0-alpha.2", "c" * 40)
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+@pytest.mark.parametrize("frontend", ["dockerfile.v0", "gateway.v0"])
+def test_documented_buildkit_shapes_allow_actual_frontends_and_empty_builder_id(
+    legacy: bool, frontend: str
+) -> None:
+    EVIDENCE._validate_buildkit_provenance(provenance_fixture(legacy=legacy, frontend=frontend))
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+@pytest.mark.parametrize(
+    "build_type",
+    [
+        None,
+        {},
+        "",
+        "https://example.invalid/buildkit",
+        "https://mobyproject.org/buildkit@v10",
+        "https://mobyproject.org/buildkit-attacker",
+        "https://mobyproject.org/buildkit@v1?other=1",
+        "https://mobyproject.org/buildkit@v1#other",
+        "https://mobyproject.org.evil.invalid/buildkit@v1",
+        "https://github.com.evil.invalid/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md",
+        "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md.evil",
+        "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md?other=1",
+        "http://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md",
+    ],
+)
+def test_unknown_build_types_fail_before_receipt(
+    tmp_path: Path, legacy: bool, build_type: object
+) -> None:
+    fixture(tmp_path)
+    provenance = provenance_fixture(legacy=legacy)
+    container = provenance if legacy else provenance["buildDefinition"]
+    assert isinstance(container, dict)
+    container["buildType"] = build_type
+    (tmp_path / "api.provenance.json").write_text(json.dumps({"SLSA": provenance}))
+    with pytest.raises(ValueError, match="BuildKit provenance"):
+        EVIDENCE.prepare(tmp_path, "v0.2.0-alpha.2", "c" * 40)
+    assert not (tmp_path / "images.json").exists()
+    assert not (tmp_path / "IMAGE_SHA256SUMS").exists()
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_known_build_types_cannot_be_relocated_to_the_other_schema(legacy: bool) -> None:
+    provenance = provenance_fixture(legacy=legacy)
+    if legacy:
+        provenance["buildType"] = (
+            "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md"
+        )
+    else:
+        provenance["buildDefinition"]["buildType"] = "https://mobyproject.org/buildkit@v1"
+    with pytest.raises(ValueError, match="unsupported BuildKit provenance"):
+        EVIDENCE._validate_buildkit_provenance(provenance)
+
+
+@pytest.mark.parametrize("key", ["buildType", "builder", "invocation", "materials", "metadata"])
+def test_legacy_fields_cannot_be_mixed_into_v1(key: str) -> None:
+    provenance = provenance_fixture()
+    provenance[key] = provenance_fixture(legacy=True)[key]
+    with pytest.raises(ValueError, match="mixed BuildKit provenance schemas"):
+        EVIDENCE._validate_buildkit_provenance(provenance)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        ("buildDefinition",),
+        ("buildDefinition", "externalParameters"),
+        ("buildDefinition", "externalParameters", "configSource"),
+        ("buildDefinition", "externalParameters", "configSource", "path"),
+        ("buildDefinition", "externalParameters", "request"),
+        ("buildDefinition", "externalParameters", "request", "frontend"),
+        ("buildDefinition", "internalParameters"),
+        ("buildDefinition", "resolvedDependencies"),
+        ("runDetails",),
+        ("runDetails", "builder"),
+        ("runDetails", "metadata"),
+        ("runDetails", "metadata", "startedOn"),
+        ("runDetails", "metadata", "finishedOn"),
+    ],
+)
+@pytest.mark.parametrize("value", [None, {}, [], "", False])
+def test_v1_requires_well_formed_observed_structure(field: tuple[str, ...], value: object) -> None:
+    provenance = provenance_fixture()
+    container = provenance
+    for key in field[:-1]:
+        container = container[key]
+    container[field[-1]] = value
+    with pytest.raises(ValueError, match="BuildKit provenance"):
+        EVIDENCE._validate_buildkit_provenance(provenance)
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+@pytest.mark.parametrize("value", [None, [], "", False])
+def test_request_arguments_require_an_object(legacy: bool, value: object) -> None:
+    provenance = provenance_fixture(legacy=legacy)
+    request = (
+        provenance["invocation"]["parameters"]
+        if legacy
+        else provenance["buildDefinition"]["externalParameters"]["request"]
+    )
+    request["args"] = value
+    with pytest.raises(ValueError, match="BuildKit provenance"):
+        EVIDENCE._validate_buildkit_provenance(provenance)
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+@pytest.mark.parametrize("value", [None, {}, [], False])
+def test_builder_id_must_be_a_string_even_when_empty_is_valid(legacy: bool, value: object) -> None:
+    provenance = provenance_fixture(legacy=legacy)
+    builder = provenance["builder"] if legacy else provenance["runDetails"]["builder"]
+    builder["id"] = value
+    with pytest.raises(ValueError, match="BuildKit provenance"):
+        EVIDENCE._validate_buildkit_provenance(provenance)
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        {},
+        [],
+        [{}],
+        [{"uri": "", "digest": {"sha256": "a" * 64}}],
+        [{"uri": "pkg:docker/example@1", "digest": {}}],
+        [{"uri": "pkg:docker/example@1", "digest": {"sha256": False}}],
+    ],
+)
+def test_dependencies_cannot_be_empty_or_malformed(legacy: bool, value: object) -> None:
+    provenance = provenance_fixture(legacy=legacy)
+    container = provenance if legacy else provenance["buildDefinition"]
+    container["materials" if legacy else "resolvedDependencies"] = value
+    with pytest.raises(ValueError, match="BuildKit provenance"):
+        EVIDENCE._validate_buildkit_provenance(provenance)
 
 
 @pytest.mark.parametrize(

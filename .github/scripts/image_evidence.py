@@ -9,6 +9,9 @@ import json
 import re
 from pathlib import Path
 
+_BUILDKIT_V0_2 = "https://mobyproject.org/buildkit@v1"
+_BUILDKIT_V1 = "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md"
+
 
 def _document(path: Path) -> dict[str, object]:
     if path.is_symlink() or not path.is_file() or path.stat().st_size > 64 * 1024 * 1024:
@@ -25,6 +28,70 @@ def _predicate(document: dict[str, object], name: str) -> dict[str, object]:
     if not isinstance(predicate, dict) or not predicate:
         raise ValueError(f"missing linux/amd64 {name} predicate")
     return predicate
+
+
+def _provenance_object(value: object) -> dict[str, object]:
+    if not isinstance(value, dict) or not value:
+        raise ValueError("missing or malformed BuildKit provenance object")
+    return value
+
+
+def _validate_buildkit_provenance(provenance: dict[str, object]) -> None:
+    """Accept only the documented BuildKit v0.2/v1 URI and matching schema pair."""
+    # https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md
+    if "buildDefinition" in provenance or "runDetails" in provenance:
+        if any(
+            key in provenance
+            for key in ("buildType", "builder", "invocation", "materials", "metadata")
+        ):
+            raise ValueError("mixed BuildKit provenance schemas")
+        definition = _provenance_object(provenance.get("buildDefinition"))
+        if definition.get("buildType") != _BUILDKIT_V1:
+            raise ValueError("unsupported BuildKit provenance build type")
+        external = _provenance_object(definition.get("externalParameters"))
+        _provenance_object(definition.get("internalParameters"))
+        config = _provenance_object(external.get("configSource"))
+        request = _provenance_object(external.get("request"))
+        details = _provenance_object(provenance.get("runDetails"))
+        builder = _provenance_object(details.get("builder"))
+        metadata = _provenance_object(details.get("metadata"))
+        dependencies = definition.get("resolvedDependencies")
+        path_key, started_key, finished_key = "path", "startedOn", "finishedOn"
+    else:
+        if provenance.get("buildType") != _BUILDKIT_V0_2:
+            raise ValueError("unsupported BuildKit provenance build type")
+        builder = _provenance_object(provenance.get("builder"))
+        invocation = _provenance_object(provenance.get("invocation"))
+        config = _provenance_object(invocation.get("configSource"))
+        request = _provenance_object(invocation.get("parameters"))
+        metadata = _provenance_object(provenance.get("metadata"))
+        dependencies = provenance.get("materials")
+        path_key, started_key, finished_key = "entryPoint", "buildStartedOn", "buildFinishedOn"
+    # BuildKit legitimately emits an empty builder.id when no builder URL was supplied.
+    if not isinstance(builder.get("id"), str):
+        raise ValueError("malformed BuildKit provenance builder")
+    if (
+        not isinstance(config.get(path_key), str)
+        or not config[path_key]
+        or request.get("frontend") not in ("dockerfile.v0", "gateway.v0")
+        or not isinstance(request.get("args"), dict)
+        or any(
+            not isinstance(metadata.get(key), str) or not metadata[key]
+            for key in (started_key, finished_key)
+        )
+    ):
+        raise ValueError("malformed BuildKit provenance build inputs or metadata")
+    if not isinstance(dependencies, list) or not dependencies:
+        raise ValueError("missing BuildKit provenance dependencies")
+    for entry in dependencies:
+        dependency = _provenance_object(entry)
+        digest = _provenance_object(dependency.get("digest"))
+        if (
+            not isinstance(dependency.get("uri"), str)
+            or not dependency["uri"]
+            or any(not isinstance(value, str) or not value for value in digest.values())
+        ):
+            raise ValueError("malformed BuildKit provenance dependency")
 
 
 def prepare(directory: Path, tag: str, revision: str) -> None:
@@ -53,13 +120,7 @@ def prepare(directory: Path, tag: str, revision: str) -> None:
         if not str(sbom.get("spdxVersion", "")).startswith("SPDX-") or not sbom.get("packages"):
             raise ValueError(f"{kind} SBOM has no package inventory")
         provenance = _predicate(_document(directory / f"{kind}.provenance.json"), "SLSA")
-        build_type = provenance.get("buildType")
-        if build_type is None and isinstance(provenance.get("buildDefinition"), dict):
-            build_type = provenance["buildDefinition"].get("buildType")
-        if not isinstance(build_type, str) or not build_type.startswith(
-            "https://mobyproject.org/buildkit"
-        ):
-            raise ValueError(f"{kind} build provenance is missing")
+        _validate_buildkit_provenance(provenance)
         images[kind] = {"reference": ref, "platform": "linux/amd64"}
     runtime = _document(directory / "runtime-rehearsal.json")
     if runtime.get("source_revision") != revision or any(
