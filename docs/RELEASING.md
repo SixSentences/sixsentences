@@ -46,8 +46,11 @@ For this release, `0.2.0a4` in Python metadata maps to public version
 `0.2.0-alpha.4` and tag `v0.2.0-alpha.4`. Beta and release-candidate suffixes
 map to `-beta.N` and `-rc.N`.
 
-Alpha.4 corrects publication order, not application behavior, migrations or
-third-party dependencies. Alpha.3's source/Python release was published on
+Alpha.4 corrects publication order and updates the API's pypdf runtime dependency
+from 6.18.1 to 6.19.0 for security fixes. Application logic, migrations and other
+canonical third-party dependency versions are unchanged; see
+[dependency triage](DEPENDENCY-TRIAGE-2026-10-01.md).
+Alpha.3's source/Python release was published on
 2026-10-01; its image builds, scans, isolated drill and metadata validation also
 passed. The later evidence upload was rejected with HTTP 422 because the release
 was already immutable. Those image receipts are absent from alpha.3's release;

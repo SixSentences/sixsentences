@@ -15,8 +15,11 @@ equivalents for Python package metadata.
 - Orchestrate source and image evidence in one release workflow: prepare and
   validate the complete draft inventory before publishing the immutable release.
   This addresses #185 without overwriting images, clobbering assets or disabling
-  release protection. Application behavior, migrations and third-party
-  dependency versions are unchanged.
+  release protection. Application logic and migrations are unchanged.
+- Update the API's runtime PDF parser from pypdf 6.18.1 to 6.19.0 for three
+  denial-of-service advisories. The specific vulnerable features are not used
+  by the current API, but it processes untrusted PDFs. No other canonical
+  third-party dependency versions change; see the dated dependency triage.
 - Preserve the published alpha.3 source/Python release and its successful image
   builds, scans and isolated drill. GitHub rejected its later image-evidence
   upload because the release was already immutable; those assets remain absent.
