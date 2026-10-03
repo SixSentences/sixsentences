@@ -145,7 +145,49 @@ BACKUP_DIR="$(required_value SIX_BACKUP_DIR)"
   || fail "SIX_ERASURE_LEDGER_HMAC_KEY must be a distinct 32-byte hex value"
 [[ "$POSTGRES_SECRET" != "$ERASURE_SECRET" ]] || fail "database and journal keys must differ"
 [[ "$BACKUP_DIR" == /* ]] || fail "SIX_BACKUP_DIR must be absolute and outside the checkout"
-case "$BACKUP_DIR/" in
+
+canonical_backup_directory() {
+  local remaining="${1#/}"
+  local resolved="/"
+  local component
+  # Resolve existing parents physically, but keep missing directory components
+  # in memory. Preflight must not create directories or change their permissions.
+  while [[ -n "$remaining" ]]; do
+    component="${remaining%%/*}"
+    if [[ "$remaining" == */* ]]; then
+      remaining="${remaining#*/}"
+    else
+      remaining=""
+    fi
+    case "$component" in
+      ""|.) ;;
+      ..)
+        resolved="${resolved%/*}"
+        [[ -n "$resolved" ]] || resolved="/"
+        ;;
+      *)
+        resolved="${resolved%/}/$component"
+        if [[ -d "$resolved" ]]; then
+          # A slash sentinel preserves trailing newlines in a physical parent
+          # until they can be rejected instead of silently changing the path.
+          resolved="$(CDPATH= cd -P -- "$resolved" 2>/dev/null && printf '%s/' "$PWD")" \
+            || return 1
+          resolved="${resolved%/}"
+          [[ ! "$resolved" =~ [[:cntrl:]] ]] \
+            || fail "SIX_BACKUP_DIR must not resolve through control characters"
+        elif [[ -e "$resolved" || -L "$resolved" ]]; then
+          return 1
+        fi
+        ;;
+    esac
+  done
+  CANONICAL_BACKUP_DIR="$resolved"
+}
+
+canonical_backup_directory "$BACKUP_DIR" \
+  || fail "SIX_BACKUP_DIR must resolve through valid directories"
+[[ "$CANONICAL_BACKUP_DIR" != "/" ]] || fail "SIX_BACKUP_DIR must not be the filesystem root"
+case "$CANONICAL_BACKUP_DIR/" in
   "$REPOSITORY_ROOT"/*) fail "SIX_BACKUP_DIR must be outside the checkout" ;;
 esac
 

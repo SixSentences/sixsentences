@@ -173,12 +173,12 @@ tar -tzf "$TEMP_DIR/privacy-data.tar.gz" >/dev/null
 
 if command -v sha256sum >/dev/null 2>&1; then
   (
-    cd "$TEMP_DIR"
+    cd -P -- "$TEMP_DIR"
     sha256sum database.dump app-data.tar.gz privacy-data.tar.gz METADATA >SHA256SUMS
   )
 else
   (
-    cd "$TEMP_DIR"
+    cd -P -- "$TEMP_DIR"
     shasum -a 256 database.dump app-data.tar.gz privacy-data.tar.gz METADATA >SHA256SUMS
   )
 fi

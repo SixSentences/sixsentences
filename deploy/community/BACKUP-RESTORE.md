@@ -20,8 +20,21 @@ backup under the same credentials.
 
 ## Create a backup
 
-Set `SIX_BACKUP_DIR` in `.env.selfhost` to an absolute directory outside the
-checkout, owned by the deployment administrator. Then run:
+Set `SIX_BACKUP_DIR` in `.env.selfhost` to a dedicated absolute directory outside
+the checkout, owned by the deployment administrator. Preflight resolves existing
+directory links and parent components before rejecting the filesystem root,
+the checkout itself or any of its descendants. Broken links, existing
+non-directory components and physical parent names containing control characters
+also fail before any backup operation. New external
+directories and safe parent aliases remain supported; preflight creates nothing
+and changes no permissions. Keep the directory and its parents under trusted
+administrator control throughout backup and restore.
+
+Backup checksums and restore selection use physical directory resolution as
+well; symlink-plus-parent paths must not select a different directory during
+execution than they did during validation.
+
+Then run:
 
 ```console
 bash deploy/community/backup.sh
