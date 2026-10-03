@@ -9,6 +9,10 @@ took `websockets` from 16.1.1 to 17.1 on the library carrying live interview
 audio: the suite passed, and said nothing about the layer the major version
 changed.
 
+Abnormal closes and failed handshakes retain the public/persisted reason
+`unavailable`. Fixed operator diagnostics distinguish them from internal errors;
+provider exception text and redirect targets never cross that boundary.
+
 Everything here talks to a `websockets` server bound to 127.0.0.1 on a port the
 kernel picks. No provider, no credential, no outbound connection, no opt-in
 marker. The relay still believes it is dialling `PROVIDER_WS_URL`: the connector
@@ -58,18 +62,23 @@ class Browser:
         self.closed = False
 
     async def receive(self) -> dict[str, Any]:
+        """Read the next synthetic browser frame."""
         return await self.incoming.get()
 
     async def send_json(self, payload: dict[str, Any]) -> None:
+        """Capture a participant-visible relay message."""
         self.sent.append(payload)
 
     async def close(self, code: int = 1000) -> None:
+        """Record closure of the participant side."""
         self.closed = True
 
     def send(self, payload: dict[str, Any]) -> None:
+        """Queue one synthetic participant message for the relay."""
         self.incoming.put_nowait({"type": "websocket.receive", "text": json.dumps(payload)})
 
     def kinds(self) -> list[str]:
+        """Return the top-level keys of captured relay messages."""
         return [next(iter(message), "") for message in self.sent]
 
 
@@ -83,11 +92,13 @@ class Run:
 
     @property
     def terminal(self) -> RelayResult:
+        """Return the terminal receipt after a completed relay run."""
         assert self.result is not None
         return self.result
 
 
 def config(session_id: str, **overrides: Any) -> LiveRelayConfig:
+    """Build fixed synthetic authorization without any real provider key."""
     values: dict[str, Any] = {
         "session_id": session_id,
         "api_key": "transport-test-key-not-real",
@@ -113,6 +124,7 @@ def audio(size: int = 3200) -> dict[str, Any]:
 
 
 def receipt(prompt: int, response: int = 0) -> dict[str, int]:
+    """Construct deterministic provider token counts for an offline turn."""
     return {
         "promptTokenCount": prompt,
         "responseTokenCount": response,
@@ -167,6 +179,7 @@ async def drive(
     """Run one relay against a local provider and return what happened."""
 
     run = Run(browser=browser or Browser())
+    closed_results: list[RelayResult] = []
 
     def connect(requested: str, headers: dict[str, str]) -> Any:
         # The relay must not be told it is talking to anything but the provider.
@@ -177,7 +190,8 @@ async def drive(
         run.checkpoints.append(value)
 
     async def on_closed(value: RelayResult) -> None:
-        run.result = value
+        assert not any("relayEnd" in item for item in run.browser.sent)
+        closed_results.append(value)
 
     run.result = await asyncio.wait_for(
         run_gemini_relay(
@@ -190,6 +204,7 @@ async def drive(
         ),
         timeout=timeout,
     )
+    assert closed_results == [run.result]
     return run
 
 
@@ -295,7 +310,7 @@ def test_a_provider_that_closes_mid_stream_ends_the_participant_session() -> Non
     [("internal error", 1011), ("policy violation", 1008)],
 )
 def test_an_unexpected_close_code_still_ends_the_session(label: str, close_code: int) -> None:
-    """An abnormal close is defined and bounded — but see the diagnostic below."""
+    """Keep participant behavior while identifying an upstream transport failure."""
 
     async def scenario() -> None:
         async def provider(connection: ServerConnection) -> None:
@@ -312,13 +327,10 @@ def test_an_unexpected_close_code_still_ends_the_session(label: str, close_code:
         assert run.terminal.diagnostic_stage == "provider_receive"
         assert "relayEnd" in run.browser.kinds()
         assert run.browser.closed is True
-        # What the operator is told does not. `websockets` raises
-        # `ConnectionClosedError`, which is not a `RelayPolicyError`, so the
-        # catch-all in `_Relay.run` claims it and reports a provider
-        # disconnection as an internal failure of this deployment. Pinned as it
-        # behaves today rather than changed here; see the follow-up issue linked
-        # from the pull request.
-        assert run.terminal.diagnostic_code == "internal_failure"
+        assert run.terminal.diagnostic_code == "provider_connection_closed"
+        assert label not in repr(run.terminal)
+        assert label not in json.dumps(run.browser.sent)
+        assert "diagnostic" not in json.dumps(run.browser.sent)
 
     asyncio.run(scenario())
 
@@ -337,8 +349,8 @@ def test_a_connection_dropped_without_a_close_frame_ends_the_session() -> None:
 
         assert run.terminal.reason == "unavailable"
         assert run.terminal.diagnostic_stage == "provider_receive"
-        assert run.terminal.diagnostic_code == "internal_failure"  # as above
-        assert "relayEnd" in run.browser.kinds()
+        assert run.terminal.diagnostic_code == "provider_connection_closed"
+        assert run.browser.sent[-1] == {"relayEnd": {"reason": "unavailable"}}
         assert run.browser.closed is True
 
     asyncio.run(scenario())
@@ -449,7 +461,8 @@ def test_a_provider_that_stops_reading_is_only_noticed_at_the_session_deadline()
     asyncio.run(scenario())
 
 
-def test_the_api_key_is_never_re_sent_to_a_redirect_target() -> None:
+@pytest.mark.parametrize("status_code", [300, 301, 302, 303, 307, 308])
+def test_the_api_key_is_never_re_sent_to_a_redirect_target(status_code: int) -> None:
     """The end-to-end form of the `NoRedirectConnect` guarantee."""
 
     async def scenario() -> None:
@@ -466,7 +479,11 @@ def test_the_api_key_is_never_re_sent_to_a_redirect_target() -> None:
             port = target.rsplit(":", maxsplit=1)[1]
 
             def redirect(connection: ServerConnection, request: Request) -> Response:
-                return Response(302, "Found", Headers({"Location": f"ws://127.0.0.1:{port}/moved"}))
+                return Response(
+                    status_code,
+                    "Redirect",
+                    Headers({"Location": f"ws://127.0.0.1:{port}/private-redirect-sentinel"}),
+                )
 
             async with local_provider(unreachable, process_request=redirect) as url:
                 run = await drive(url, session_id="transport-redirect")
@@ -474,8 +491,64 @@ def test_the_api_key_is_never_re_sent_to_a_redirect_target() -> None:
         # Nothing reached the target: no handshake, and therefore no API key.
         assert followed == []
         assert run.terminal.reason == "unavailable"
+        assert run.terminal.diagnostic_code == "provider_redirect_refused"
+        assert "private-redirect-sentinel" not in repr(run.terminal)
+        assert "private-redirect-sentinel" not in json.dumps(run.browser.sent)
+        assert "diagnostic" not in json.dumps(run.browser.sent)
         assert run.terminal.diagnostic_stage == "provider_receive"
+        assert run.browser.sent[-1] == {"relayEnd": {"reason": "unavailable"}}
         assert run.browser.closed is True
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    ("status_code", "headers"),
+    [
+        (200, {}),
+        (403, {}),
+        (503, {}),
+        (302, {}),  # A status alone isn't a usable redirect.
+        (304, {"Location": "https://private-handshake-sentinel.invalid/"}),
+        (
+            101,
+            {
+                "Connection": "Upgrade",
+                "Upgrade": "websocket",
+                "Sec-WebSocket-Accept": "private-handshake-sentinel",
+            },
+        ),
+    ],
+)
+def test_handshake_failures_are_sanitized_operator_diagnostics(
+    status_code: int,
+    headers: dict[str, str],
+) -> None:
+    """Reject bad HTTP status or upgrade headers without exposing the response."""
+
+    async def scenario() -> None:
+        async def provider(connection: ServerConnection) -> None:
+            await connection.wait_closed()
+
+        def reject(connection: ServerConnection, request: Request) -> Response:
+            return Response(
+                status_code,
+                "private-handshake-sentinel",
+                Headers(headers),
+                body=b"private-handshake-sentinel",
+            )
+
+        async with local_provider(provider, process_request=reject) as url:
+            run = await drive(url, session_id="transport-handshake")
+
+        assert run.terminal.reason == "unavailable"
+        assert run.terminal.diagnostic_code == "provider_handshake_failed"
+        assert run.terminal.diagnostic_stage == "provider_receive"
+        assert run.browser.sent[-1] == {"relayEnd": {"reason": "unavailable"}}
+        assert run.browser.closed
+        assert "private-handshake-sentinel" not in repr(run.terminal)
+        assert "private-handshake-sentinel" not in json.dumps(run.browser.sent)
+        assert "diagnostic" not in json.dumps(run.browser.sent)
 
     asyncio.run(scenario())
 
@@ -492,8 +565,10 @@ def test_a_provider_frame_above_the_transport_limit_ends_the_session() -> None:
         async with local_provider(oversized) as url:
             run = await drive(url, session_id="transport-oversize")
 
-        assert run.terminal.reason in {"connection", "unavailable"}
+        assert run.terminal.reason == "unavailable"
+        assert run.terminal.diagnostic_code == "provider_connection_closed"
         assert run.terminal.diagnostic_stage == "provider_receive"
+        assert run.browser.sent[-1] == {"relayEnd": {"reason": "unavailable"}}
         assert run.browser.closed is True
 
     asyncio.run(scenario())

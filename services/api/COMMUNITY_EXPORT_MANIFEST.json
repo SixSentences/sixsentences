@@ -1297,10 +1297,10 @@
       "sha256": "f5b9165ae259ac39b52af310294949c9c631c799826f78898c2cdcea87cd62bc"
     },
     {
-      "bytes": 35683,
+      "bytes": 36829,
       "mode": "0644",
       "path": "src/sixsentences_server/voice/relay.py",
-      "sha256": "424450360d53e40fab70e47463538e9698b9ba5ea0896daffce3f9e231d24408"
+      "sha256": "e5c8f3f691ff924fb5e214e516b6407558fab58c3dbc5e03b794b39b5a168e26"
     },
     {
       "bytes": 14408,
@@ -2371,10 +2371,10 @@
       "sha256": "bd888115cfa33650305a3071bad7666c2be77c36807dd39c54effff0b6cc1748"
     },
     {
-      "bytes": 29583,
+      "bytes": 34337,
       "mode": "0644",
       "path": "tests/test_voice_relay.py",
-      "sha256": "7c354c64a904fcb9808a90e3b0d2d73fe47a7233cc86110f725403426d1f0549"
+      "sha256": "b5dcaae099b9224f1db374d9f1faf93edc4844f8e4eaf1a4c328b1f87be30e2a"
     },
     {
       "bytes": 34585,
@@ -2383,10 +2383,10 @@
       "sha256": "da076c40efb10a5242a84d0ba367e3fe41f00f743e53b7f8212c0181e3b6a345"
     },
     {
-      "bytes": 19563,
+      "bytes": 22811,
       "mode": "0644",
       "path": "tests/test_voice_relay_transport.py",
-      "sha256": "5d465272b941d9b83c6d3ce929dccfdfdb2d0cda1320b4bc18651969c5d70409"
+      "sha256": "dfacc3154a9b66c15a153c6fb099549e0e04a8c6aab4928d9a78a99132f94e51"
     },
     {
       "bytes": 7283,

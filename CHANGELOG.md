@@ -17,6 +17,9 @@ equivalents for Python package metadata.
   metadata updates no longer mark unsaved source text as saved. Final authorized
   drafts drain on route changes, while auth boundaries block subsequent requests
   and stale callbacks. This does not add offline or crash-recovery storage.
+- Distinguish voice-provider disconnects, failed handshakes and refused redirects
+  from internal relay failures with fixed operator diagnostics. Public session-end
+  reasons, settlement and the no-redirect credential boundary remain unchanged.
 - Extract article HTML with the HTML parser instead of the weak JATS/XML
   heuristic, preserving explicit XML and entity protections. Missing-MIME
   HTML roots now yield text sidecars without changing PDF landing-page policy;
