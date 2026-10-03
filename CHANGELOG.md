@@ -10,6 +10,10 @@ equivalents for Python package metadata.
 
 ### Fixed
 
+- Extract article HTML with the HTML parser instead of the weak JATS/XML
+  heuristic, preserving explicit XML and entity protections. Missing-MIME
+  HTML roots now yield text sidecars without changing PDF landing-page policy;
+  known HTML parser input errors fail closed without keeping partial text.
 - Preserve parenthesized DOI suffixes when resolving uploaded PDFs, including
   suffix text after a closing parenthesis. Do not resolve an identifier prefix
   cut off by the bounded metadata scan. Contextual prose-wrapper handling remains
