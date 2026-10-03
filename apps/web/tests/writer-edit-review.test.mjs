@@ -173,9 +173,9 @@ test("source editor exposes unified red-green review and accessible decisions", 
     new URL("../src/app/(app)/writer/[id]/page.tsx", import.meta.url),
     "utf8",
   );
-  assert.match(writerPage, /revisionRef\.current\.set\(activeFileIdRef\.current/);
-  assert.match(writerPage, /baseContentRef\.current\.set\(activeFileIdRef\.current/);
-  assert.match(writerPage, /readOnly=\{!canEdit \|\| Boolean\(reviewBusyId\)\}/);
+  assert.match(writerPage, /sourceSaves\.observe\(file\.id, landed\)/);
+  assert.match(writerPage, /withSourceOperation\(async \(\) => \{\s*const result = await api\.writerApplyEdits/);
+  assert.match(writerPage, /readOnly=\{!canEdit \|\| sourceOperationBusy \|\| Boolean\(reviewBusyId\)\}/);
   assert.match(writerPage, /Reject stale proposal/);
   assert.match(writerPage, /pendingReviewTargetMissing/);
   const pdfPreview = await readFile(

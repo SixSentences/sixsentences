@@ -144,6 +144,7 @@ import {
   fetchWriterAssetImageUrl,
   fetchWriterPdfUrl,
   fileToBase64,
+  getToken,
   retryTransientApiQuery,
   transientApiRetryDelay,
 } from "@/lib/api";
@@ -155,6 +156,7 @@ import {
   isWorkspaceSplitFeasible,
 } from "@/lib/workspace-split-layout.mjs";
 import { countLatexWords } from "@/lib/writer-word-count";
+import { WriterSourceSaves } from "@/lib/writer-source-saves";
 import {
   buildWriterSourceSelection,
   writerPdfPageLabel,
@@ -1478,11 +1480,13 @@ function FigureList({
 
 function SnapshotList({
   docId,
+  restoreSource,
   onRestored,
   canRestore,
 }: {
   docId: string;
-  onRestored: (content: string) => void;
+  restoreSource: (snapshotId: number) => Promise<WriterDocument>;
+  onRestored: (restored: WriterDocument) => void;
   canRestore: boolean;
 }) {
   const queryClient = useQueryClient();
@@ -1492,9 +1496,9 @@ function SnapshotList({
     queryFn: () => api.writerSnapshots(docId),
   });
   const restore = useMutation({
-    mutationFn: (snapshotId: number) => api.writerRestore(docId, snapshotId),
+    mutationFn: restoreSource,
     onSuccess: (restored) => {
-      onRestored(restored.content);
+      onRestored(restored);
       toast.success("Restored. The previous state was snapshotted first.");
       void queryClient.invalidateQueries({ queryKey: ["writer-doc", docId] });
       void queryClient.invalidateQueries({ queryKey: ["writer-files", docId] });
@@ -3371,7 +3375,10 @@ function WriterRetargetDialog({
 export default function WriterEditorPage() {
   const params = useParams<{ id: string }>();
   // the opaque public_id from the URL (older numeric links still resolve)
-  const docId = params.id;
+  return <WriterEditorWorkspace key={params.id} docId={params.id} />;
+}
+
+function WriterEditorWorkspace({ docId }: { docId: string }) {
   const queryClient = useQueryClient();
   const { setActiveProjectId } = useActiveProject();
   const editorRef = useRef<ReactCodeMirrorRef>(null);
@@ -3745,17 +3752,24 @@ export default function WriterEditorPage() {
     width: number;
     height: number;
   } | null>(null);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousStatus = useRef<string | null>(null);
+  const documentInitializedRef = useRef(false);
   const activeFileIdRef = useRef(0);
-  const baseContentRef = useRef(new Map<number, string>());
-  const revisionRef = useRef(new Map<number, number>());
   useEffect(() => {
     activeFileIdRef.current = activeFileId;
   }, [activeFileId]);
   const accessRole = collaborators?.my_role ?? doc?.access_role ?? "viewer";
   const canEdit = accessRole === "owner" || accessRole === "editor";
   const canManage = accessRole === "owner";
+  const canEditRef = useRef(canEdit);
+  const sourceTokenRef = useRef(getToken());
+  const sourceAuthBoundaryRef = useRef(false);
+  const sourceAccessRef = useRef(canEdit);
+  canEditRef.current = canEdit && !sourceAuthBoundaryRef.current
+    && Boolean(sourceTokenRef.current) && getToken() === sourceTokenRef.current;
+  sourceAccessRef.current = canEditRef.current;
+  const sourceOperationBusyRef = useRef(false);
+  const [sourceOperationBusy, setSourceOperationBusy] = useState(false);
 
   const createComment = useMutation({
     mutationFn: (input: ReviewCommentInput) =>
@@ -3850,40 +3864,6 @@ export default function WriterEditorPage() {
   );
 
   useEffect(() => {
-    if (doc && content === null) {
-      setContent(doc.content);
-      setTitle(doc.title);
-      baseContentRef.current.set(0, doc.content);
-      revisionRef.current.set(0, doc.revision);
-      previousStatus.current = doc.compile_status;
-      if (doc.compile_status === "ok") {
-        void fetchWriterPdfUrl(docId).then(setPdfUrl).catch(() => {});
-      }
-    }
-  }, [doc, content, docId]);
-
-  useEffect(() => {
-    if (!projectFiles?.length) return;
-    for (const file of projectFiles) {
-      const knownRevision = revisionRef.current.get(file.id);
-      if (knownRevision === undefined) {
-        revisionRef.current.set(file.id, file.revision);
-        baseContentRef.current.set(file.id, file.content);
-        continue;
-      }
-      if (file.revision <= knownRevision) continue;
-      revisionRef.current.set(file.id, file.revision);
-      baseContentRef.current.set(file.id, file.content);
-      if (file.id === activeFileIdRef.current && saveState === "saved") {
-        setContent(file.content);
-        toast.message("A coauthor updated this file.", {
-          description: "The latest saved revision is now in the editor.",
-        });
-      }
-    }
-  }, [projectFiles, saveState]);
-
-  useEffect(() => {
     const path = activeProjectFile?.path ?? "main.tex";
     const mode = view === "source" ? "source" : view === "preview" ? "preview" : "log";
     const heartbeat = () => {
@@ -3937,37 +3917,27 @@ export default function WriterEditorPage() {
   const persist = useMutation({
     mutationFn: (body: {
       title?: string;
-      content?: string;
       run_ids?: number[];
       dataset_ids?: string[];
     }) => api.writerPatch(docId, body),
     onSuccess: () => {
-      setSaveState("saved");
       void queryClient.invalidateQueries({ queryKey: ["writer-docs"] });
     },
     onError: (error) => {
-      setSaveState("unsaved");
       toast.error(error instanceof Error ? error.message : "Save failed.");
     },
   });
 
-  const persistSource = useMutation({
-    mutationFn: async ({
-      fileId,
-      source,
-      expectedRevision,
-      baseContent,
-    }: {
-      fileId: number;
-      source: string;
-      expectedRevision: number;
-      baseContent: string;
-    }) => {
+  const [sourceSaves] = useState(() => new WriterSourceSaves({
+    save: async (fileId, source, basis) => {
+      if (!sourceAccessRef.current || !sourceTokenRef.current || getToken() !== sourceTokenRef.current) {
+        throw new Error("The manuscript session is no longer available for saving.");
+      }
       if (fileId === 0) {
         const saved = await api.writerPatch(docId, {
           content: source,
-          expected_revision: expectedRevision,
-          base_content: baseContent,
+          expected_revision: basis.revision,
+          base_content: basis.content,
         });
         return {
           content: saved.content,
@@ -3980,42 +3950,42 @@ export default function WriterEditorPage() {
         docId,
         fileId,
         source,
-        expectedRevision,
-        baseContent,
+        basis.revision,
+        basis.content,
       );
       return { ...saved, merged: Boolean((saved as WriterProjectFile & { merged?: boolean }).merged) };
     },
-    onSuccess: (saved, variables) => {
-      setSaveState("saved");
-      revisionRef.current.set(variables.fileId, saved.revision);
-      baseContentRef.current.set(variables.fileId, saved.content);
-      if (activeFileIdRef.current === variables.fileId) {
-        setContent(saved.content);
+    onChange: (fileId, draft) => {
+      if (activeFileIdRef.current === fileId) {
+        setContent(draft.content);
+        setSaveState(draft.status);
       }
+    },
+    onSaved: (fileId, saved) => {
       queryClient.setQueryData<WriterProjectFile[]>(
         ["writer-files", docId],
         (old) =>
           old?.map((file) =>
-            file.id === variables.fileId
+            file.id === fileId && file.revision <= saved.revision
               ? {
                   ...file,
                   content: saved.content,
                   revision: saved.revision,
-                  updated_by: saved.updated_by,
+                  updated_by: saved.updated_by === undefined ? file.updated_by : saved.updated_by,
                 }
               : file,
           ),
       );
-      if (variables.fileId === 0) {
+      if (fileId === 0) {
         queryClient.setQueryData<WriterDocument>(
           ["writer-doc", docId],
           (old) =>
-            old
+            old && old.revision <= saved.revision
               ? {
                   ...old,
                   content: saved.content,
                   revision: saved.revision,
-                  updated_by: saved.updated_by,
+                  updated_by: saved.updated_by === undefined ? old.updated_by : saved.updated_by,
                 }
               : old,
         );
@@ -4025,8 +3995,8 @@ export default function WriterEditorPage() {
         toast.success("Saved with your coauthor's independent changes.");
       }
     },
-    onError: (error, variables) => {
-      setSaveState("unsaved");
+    isConflict: (error) => error instanceof ApiError && error.status === 409,
+    onError: (fileId, error, draft) => {
       if (error instanceof ApiError && error.status === 409) {
         const detail = error.detail as {
           code?: string;
@@ -4040,72 +4010,146 @@ export default function WriterEditorPage() {
           typeof detail.content === "string"
         ) {
           setSourceConflict({
-            fileId: variables.fileId,
+            fileId,
             path: detail.path ?? "main.tex",
-            local: variables.source,
+            local: draft.content,
             remote: detail.content,
             revision: detail.revision,
-            reviewed: variables.source,
+            reviewed: draft.content,
           });
           return;
         }
       }
       toast.error(error instanceof Error ? error.message : "Save failed.");
     },
-  });
+  }));
 
-  const saveVariables = useCallback((fileId: number, source: string) => {
-    return {
-      fileId,
-      source,
-      expectedRevision: revisionRef.current.get(fileId) ?? 1,
-      baseContent: baseContentRef.current.get(fileId) ?? source,
+  useEffect(() => {
+    const allowed = canEdit && !sourceAuthBoundaryRef.current
+      && Boolean(sourceTokenRef.current) && getToken() === sourceTokenRef.current;
+    canEditRef.current = allowed;
+    sourceAccessRef.current = allowed;
+    sourceSaves.setActive(allowed);
+    const clearSession = () => {
+      sourceAuthBoundaryRef.current = true;
+      canEditRef.current = false;
+      sourceAccessRef.current = false;
+      sourceSaves.setActive(false);
     };
-  }, []);
+    const checkSession = () => {
+      if (getToken() !== sourceTokenRef.current) clearSession();
+    };
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!sourceSaves.hasPending() && !sourceOperationBusyRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("six:auth-boundary", clearSession);
+    window.addEventListener("storage", checkSession);
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => {
+      canEditRef.current = false;
+      // Preserve the already-authorized final draft on SPA navigation. Each
+      // dispatch still checks the captured session; detached callbacks stay off.
+      // Keep auth-boundary protection until the final writes have settled.
+      void sourceSaves.finish().finally(() => {
+        window.removeEventListener("six:auth-boundary", clearSession);
+        window.removeEventListener("storage", checkSession);
+        window.removeEventListener("beforeunload", warnBeforeUnload);
+      }).catch(() => {});
+    };
+  }, [canEdit, sourceSaves]);
+
+  useEffect(() => {
+    if (!doc) return;
+    sourceSaves.observe(0, doc);
+    if (!documentInitializedRef.current) {
+      documentInitializedRef.current = true;
+      setTitle(doc.title);
+      previousStatus.current = doc.compile_status;
+      if (doc.compile_status === "ok") {
+        void fetchWriterPdfUrl(docId).then(setPdfUrl).catch(() => {});
+      }
+    }
+    if (activeFileIdRef.current === 0) {
+      const draft = sourceSaves.get(0)!;
+      setContent(draft.content);
+      setSaveState(draft.status);
+    }
+  }, [doc, docId, sourceSaves]);
+
+  useEffect(() => {
+    for (const file of projectFiles ?? []) sourceSaves.observe(file.id, file);
+    const draft = sourceSaves.get(activeFileIdRef.current);
+    if (draft) {
+      setContent(draft.content);
+      setSaveState(draft.status);
+    }
+  }, [projectFiles, sourceSaves]);
 
   const flushActiveSource = useCallback(async (): Promise<void> => {
-    if (saveTimer.current) {
-      clearTimeout(saveTimer.current);
-      saveTimer.current = null;
+    if (sourceOperationBusyRef.current) throw new Error("Wait for the manuscript update to finish.");
+    // Builds and agents consume the whole project, including files just left.
+    await sourceSaves.flushAll();
+  }, [sourceSaves]);
+
+  const withSourceOperation = useCallback(async <T,>(operation: () => Promise<T>): Promise<T> => {
+    if (!canEditRef.current || sourceOperationBusyRef.current) {
+      throw new Error("The manuscript cannot be updated right now.");
     }
-    if (content === null || saveState === "saved") return;
-    setSaveState("saving");
-    await persistSource.mutateAsync(saveVariables(activeFileIdRef.current, content));
-    setSaveState("saved");
-  }, [content, persistSource, saveState, saveVariables]);
+    sourceOperationBusyRef.current = true;
+    setSourceOperationBusy(true);
+    try {
+      await sourceSaves.flushAll();
+      if (!canEditRef.current) throw new Error("This manuscript is read-only.");
+      return await operation();
+    } finally {
+      sourceOperationBusyRef.current = false;
+      setSourceOperationBusy(false);
+    }
+  }, [sourceSaves]);
+
+  const restoreSource = useCallback((snapshotId: number) => withSourceOperation(async () => {
+    const restored = await api.writerRestore(docId, snapshotId);
+    if (!canEditRef.current) return restored;
+    sourceSaves.observe(0, restored);
+    // Snapshots include auxiliary files and may remove files created since then.
+    // Refresh their revisions before allowing another source edit.
+    try {
+      const files = await api.writerFiles(docId);
+      if (!canEditRef.current) return restored;
+      for (const file of projectFiles ?? []) {
+        if (!files.some((current) => current.id === file.id)) sourceSaves.remove(file.id);
+      }
+      for (const file of files) sourceSaves.observe(file.id, file);
+      queryClient.setQueryData(["writer-files", docId], files);
+    } catch {
+      if (canEditRef.current) toast.error("Version restored, but the project file list could not be refreshed. Reload it before editing another file.");
+    }
+    return restored;
+  }), [docId, projectFiles, queryClient, sourceSaves, withSourceOperation]);
 
   const scheduleSave = useCallback(
     (next: string) => {
-      if (!canEdit) return;
-      setContent(next);
-      setSaveState("unsaved");
+      if (!canEditRef.current || sourceOperationBusyRef.current) return;
+      sourceSaves.edit(activeFileIdRef.current, next);
       scheduleAutoCompile();
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => {
-        setSaveState("saving");
-        persistSource.mutate(saveVariables(activeFileIdRef.current, next));
-      }, 1200);
     },
-    [canEdit, persistSource, saveVariables, scheduleAutoCompile],
+    [sourceSaves, scheduleAutoCompile],
   );
 
   const openProjectFile = useCallback(
     (file: WriterProjectFile) => {
       if (file.id === activeFileIdRef.current) return;
-      if (saveTimer.current && content !== null) {
-        clearTimeout(saveTimer.current);
-        saveTimer.current = null;
-        persistSource.mutate(saveVariables(activeFileIdRef.current, content));
-      }
+      sourceSaves.observe(file.id, file);
       setActiveFileId(file.id);
       activeFileIdRef.current = file.id;
-      revisionRef.current.set(file.id, file.revision);
-      baseContentRef.current.set(file.id, file.content);
-      setContent(file.content);
-      setSaveState("saved");
+      const draft = sourceSaves.get(file.id)!;
+      setContent(draft.content);
+      setSaveState(draft.status);
       setView("source");
     },
-    [content, persistSource, saveVariables],
+    [sourceSaves],
   );
 
   const openEditReview = useCallback(
@@ -4123,16 +4167,9 @@ export default function WriterEditorPage() {
   const compiling = doc?.compile_status === "running";
   const compile = useMutation({
     mutationFn: async () => {
-      if (saveTimer.current) {
-        clearTimeout(saveTimer.current);
-        saveTimer.current = null;
-      }
-      if (content !== null) {
-        await persistSource.mutateAsync(
-          saveVariables(activeFileIdRef.current, content),
-        );
-      }
-      setSaveState("saved");
+      if (!canEditRef.current) throw new Error("This manuscript is read-only.");
+      await flushActiveSource();
+      if (!canEditRef.current) throw new Error("This manuscript is read-only.");
       return api.writerCompile(docId);
     },
     onSuccess: () => {
@@ -4230,17 +4267,14 @@ export default function WriterEditorPage() {
     async (
       edits: WriterEdit[],
       opts?: { auto?: boolean; messageId?: number | null },
-    ): Promise<number[]> => {
-      await flushActiveSource();
+    ): Promise<number[]> => withSourceOperation(async () => {
       const result = await api.writerApplyEdits(docId, edits, opts);
+      if (!canEditRef.current) return result.applied;
       void queryClient.invalidateQueries({ queryKey: ["writer-chat", docId] });
       if (result.applied.length === 0) return [];
-      const activePath = activeProjectFile?.path ?? "main.tex";
-      const activeSource = result.files.find((file) => file.path === activePath);
-      if (activeSource) {
-        revisionRef.current.set(activeFileIdRef.current, activeSource.revision);
-        baseContentRef.current.set(activeFileIdRef.current, activeSource.content);
-        setContent(activeSource.content);
+      for (const landed of result.files) {
+        const file = projectFiles?.find((candidate) => candidate.path === landed.path);
+        if (file) sourceSaves.observe(file.id, landed);
       }
       queryClient.setQueryData<WriterProjectFile[]>(
         ["writer-files", docId],
@@ -4249,9 +4283,7 @@ export default function WriterEditorPage() {
             const landed = result.files.find(
               (candidate) => candidate.path === file.path,
             );
-            if (!landed) return file;
-            revisionRef.current.set(file.id, landed.revision);
-            baseContentRef.current.set(file.id, landed.content);
+            if (!landed || landed.revision < file.revision) return file;
             return {
               ...file,
               content: landed.content,
@@ -4261,10 +4293,11 @@ export default function WriterEditorPage() {
       );
       const main = result.files.find((file) => file.path === "main.tex");
       if (main) {
+        sourceSaves.observe(0, main);
         queryClient.setQueryData<WriterDocument>(
           ["writer-doc", docId],
           (old) =>
-            old
+            old && old.revision <= main.revision
               ? {
                   ...old,
                   content: main.content,
@@ -4276,7 +4309,6 @@ export default function WriterEditorPage() {
               : old,
         );
       }
-      setSaveState("saved");
       setPdfUrl((previous) => {
         if (previous) URL.revokeObjectURL(previous);
         return null;
@@ -4289,13 +4321,14 @@ export default function WriterEditorPage() {
       void queryClient.invalidateQueries({ queryKey: ["writer-contribution-log", docId] });
       void queryClient.invalidateQueries({ queryKey: ["writer-audit", docId] });
       return result.applied;
-    },
+    }),
     [
-      activeProjectFile?.path,
       docId,
-      flushActiveSource,
+      projectFiles,
       queryClient,
       scheduleAutoCompile,
+      sourceSaves,
+      withSourceOperation,
     ],
   );
 
@@ -4523,8 +4556,9 @@ export default function WriterEditorPage() {
     setDeleteFileTarget(null);
   }, [docId]);
   const createProjectFile = useMutation({
-    mutationFn: () => api.writerFileCreate(docId, newFileName.trim()),
+    mutationFn: () => withSourceOperation(() => api.writerFileCreate(docId, newFileName.trim())),
     onSuccess: (file) => {
+      if (!canEditRef.current) return;
       setNewFileName("");
       void queryClient.invalidateQueries({ queryKey: ["writer-files", docId] });
       openProjectFile(file);
@@ -4537,8 +4571,12 @@ export default function WriterEditorPage() {
     createProjectFile.mutate();
   };
   const deleteProjectFile = useMutation({
-    mutationFn: (fileId: number) => api.writerFileDelete(docId, fileId),
+    mutationFn: (fileId: number) => withSourceOperation(async () => {
+      await api.writerFileDelete(docId, fileId);
+      sourceSaves.remove(fileId);
+    }),
     onSuccess: () => {
+      if (!canEditRef.current) return;
       deleteFileInFlightRef.current = false;
       setDeleteFileTarget(null);
       const main = projectFiles?.find((file) => file.main);
@@ -4558,13 +4596,13 @@ export default function WriterEditorPage() {
     }: {
       fileId: number;
       path: string;
-    }) => {
-      if (fileId === activeFileIdRef.current) await flushActiveSource();
-      return api.writerFileRename(docId, fileId, path);
-    },
+    }) => withSourceOperation(async () => {
+      const renamed = await api.writerFileRename(docId, fileId, path);
+      sourceSaves.observe(renamed.id, renamed);
+      return renamed;
+    }),
     onSuccess: (renamed) => {
-      revisionRef.current.set(renamed.id, renamed.revision);
-      baseContentRef.current.set(renamed.id, renamed.content);
+      if (!canEditRef.current) return;
       queryClient.setQueryData<WriterProjectFile[]>(
         ["writer-files", docId],
         (current) =>
@@ -4876,12 +4914,15 @@ export default function WriterEditorPage() {
             <PopoverContent align="end" className="w-[22rem] p-3">
               <SnapshotList
                 docId={docId}
-                canRestore={canEdit}
-                onRestored={(restoredContent) => {
+                restoreSource={restoreSource}
+                canRestore={canEdit && !sourceOperationBusy}
+                onRestored={() => {
+                  if (!canEditRef.current) return;
                   setActiveFileId(0);
                   activeFileIdRef.current = 0;
-                  setContent(restoredContent);
-                  setSaveState("saved");
+                  const draft = sourceSaves.get(0)!;
+                  setContent(draft.content);
+                  setSaveState(draft.status);
                   if (autoRef.current) compileNowRef.current();
                 }}
               />
@@ -5437,12 +5478,15 @@ export default function WriterEditorPage() {
                 ) : (
                   <SnapshotList
                     docId={docId}
-                    canRestore={canEdit}
-                    onRestored={(restoredContent) => {
+                    restoreSource={restoreSource}
+                    canRestore={canEdit && !sourceOperationBusy}
+                    onRestored={() => {
+                      if (!canEditRef.current) return;
                       setActiveFileId(0);
                       activeFileIdRef.current = 0;
-                      setContent(restoredContent);
-                      setSaveState("saved");
+                      const draft = sourceSaves.get(0)!;
+                      setContent(draft.content);
+                      setSaveState(draft.status);
                       setToolbarPanel(null);
                       if (autoRef.current) compileNowRef.current();
                     }}
@@ -5951,7 +5995,7 @@ export default function WriterEditorPage() {
                   ref={editorRef}
                   value={content}
                   onChange={scheduleSave}
-                  readOnly={!canEdit || Boolean(reviewBusyId)}
+                  readOnly={!canEdit || sourceOperationBusy || Boolean(reviewBusyId)}
                   onCursor={setCursor}
                   citations={editorCitations ?? []}
                   remoteCursors={presence
@@ -6304,19 +6348,17 @@ export default function WriterEditorPage() {
                   type="button"
                   variant="outline"
                   className="rounded-full"
+                  disabled={!canEdit || sourceOperationBusy}
                   onClick={() => {
-                    revisionRef.current.set(
-                      sourceConflict.fileId,
-                      sourceConflict.revision,
-                    );
-                    baseContentRef.current.set(
-                      sourceConflict.fileId,
-                      sourceConflict.remote,
-                    );
-                    if (activeFileIdRef.current === sourceConflict.fileId) {
-                      setContent(sourceConflict.remote);
-                    }
-                    setSaveState("saved");
+                    if (!canEditRef.current || sourceOperationBusyRef.current) return;
+                    const observed = sourceSaves.getLatest(sourceConflict.fileId);
+                    const remote = {
+                      content: sourceConflict.remote,
+                      revision: sourceConflict.revision,
+                    };
+                    if (!sourceSaves.accept(sourceConflict.fileId,
+                      observed && observed.revision > remote.revision ? observed : remote,
+                    )) return;
                     setSourceConflict(null);
                     void queryClient.invalidateQueries({
                       queryKey: ["writer-files", docId],
@@ -6328,17 +6370,16 @@ export default function WriterEditorPage() {
                 <Button
                   type="button"
                   className="rounded-full"
-                  disabled={persistSource.isPending}
+                  disabled={!canEdit || sourceOperationBusy}
                   onClick={() => {
+                    if (!canEditRef.current || sourceOperationBusyRef.current) return;
                     const conflict = sourceConflict;
+                    if (!sourceSaves.review(conflict.fileId, conflict.reviewed, {
+                      content: conflict.remote,
+                      revision: conflict.revision,
+                    })) return;
                     setSourceConflict(null);
-                    setSaveState("saving");
-                    persistSource.mutate({
-                      fileId: conflict.fileId,
-                      source: conflict.reviewed,
-                      expectedRevision: conflict.revision,
-                      baseContent: conflict.remote,
-                    });
+                    void sourceSaves.flush(conflict.fileId).catch(() => {});
                   }}
                 >
                   Save reviewed revision

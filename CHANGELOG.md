@@ -10,6 +10,13 @@ equivalents for Python package metadata.
 
 ### Fixed
 
+- Preserve newer Writer drafts when autosave responses arrive late. Serialize
+  writes per file, retain unsaved text across file switches, and keep each
+  draft's legitimate revision basis for the existing server-side merge/conflict
+  checks. Compile and source-replacement actions await pending project saves;
+  metadata updates no longer mark unsaved source text as saved. Final authorized
+  drafts drain on route changes, while auth boundaries block subsequent requests
+  and stale callbacks. This does not add offline or crash-recovery storage.
 - Extract article HTML with the HTML parser instead of the weak JATS/XML
   heuristic, preserving explicit XML and entity protections. Missing-MIME
   HTML roots now yield text sidecars without changing PDF landing-page policy;

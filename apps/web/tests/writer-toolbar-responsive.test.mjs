@@ -117,5 +117,6 @@ test("a failed manuscript refresh does not remove the loaded editor or overwrite
   const errorView = page.slice(page.indexOf("if (loadError && !doc)"), page.indexOf("if (isLoading || !doc || content === null)"));
   assert.doesNotMatch(errorView, /setContent|removeQueries|clear\(/);
   assert.match(page, /\{Boolean\(loadError\) && \([\s\S]*?Your current text is still here; recent changes may not be saved yet\./);
-  assert.match(page, /if \(doc && content === null\) \{\s*setContent\(doc\.content\)/);
+  assert.match(page, /if \(!doc\) return;\s*sourceSaves\.observe\(0, doc\)/);
+  assert.doesNotMatch(page, /setContent\(doc\.content\)/);
 });
