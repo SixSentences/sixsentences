@@ -10,6 +10,10 @@ equivalents for Python package metadata.
 
 ### Fixed
 
+- Reject conflicting inherited values and ambiguous environment-file syntax
+  for self-host preflight settings, including disabled feature prerequisites,
+  and redact Compose validation diagnostics. Document the literal configuration
+  contract while preserving release-image overrides.
 - Honor the explicit environment-file argument in the self-hosted backup
   command and its Makefile shortcut, including paths with spaces. Reject empty
   or extra arguments before preflight, while preserving the existing optional
