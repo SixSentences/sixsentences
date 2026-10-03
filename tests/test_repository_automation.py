@@ -1231,6 +1231,8 @@ def test_claim_request_parses_unknown_length_json_without_losing_empty_controls(
     body: bytes,
     expected: object,
 ) -> None:
+    """Distinguish unknown response length from an explicitly empty response."""
+
     def urlopen(request: urllib.request.Request, *, timeout: int) -> _ClaimResponse:
         assert request.full_url == "https://api.github.test/repos/example/project/issues/7"
         assert request.method == "GET"
@@ -1258,7 +1260,11 @@ def _claim_http_response(body: bytes, *, chunked: bool) -> http.client.HTTPRespo
     wire = b"HTTP/1.1 200 OK\r\n" + headers + b"\r\n" + wire_body
 
     class Socket:
+        """Expose an in-memory socket interface without opening a connection."""
+
         def makefile(self, mode: str) -> io.BytesIO:
+            """Return the synthetic HTTP wire data as a buffered stream."""
+
             return io.BytesIO(wire)
 
     response = http.client.HTTPResponse(Socket())
@@ -1271,6 +1277,8 @@ def _claim_http_response(body: bytes, *, chunked: bool) -> http.client.HTTPRespo
 def test_claim_request_parses_real_unknown_length_http_json(
     monkeypatch: pytest.MonkeyPatch, chunked: bool
 ) -> None:
+    """Decode actual chunked and EOF-delimited HTTPResponse objects."""
+
     response = _claim_http_response(b'{"assignees": [{"login": "newcomer"}]}', chunked=chunked)
     monkeypatch.setattr(CLAIM.urllib.request, "urlopen", lambda *args, **kwargs: response)
 
@@ -1284,6 +1292,8 @@ def test_claim_request_parses_real_unknown_length_http_json(
 def test_claim_request_unknown_length_invalid_json_fails_closed(
     monkeypatch: pytest.MonkeyPatch, chunked: bool, body: bytes
 ) -> None:
+    """Never treat malformed unknown-length bodies as successful API data."""
+
     response = _claim_http_response(body, chunked=chunked)
     monkeypatch.setattr(CLAIM.urllib.request, "urlopen", lambda *args, **kwargs: response)
 
@@ -1295,6 +1305,8 @@ def test_claim_request_unknown_length_invalid_json_fails_closed(
 def test_claim_request_preserves_permission_errors(
     monkeypatch: pytest.MonkeyPatch, status: int
 ) -> None:
+    """Preserve HTTP permission and validation failures without body logging."""
+
     url = "https://api.github.test/repos/example/project/issues/7/assignees"
 
     def urlopen(request: urllib.request.Request, *, timeout: int) -> _ClaimResponse:
@@ -1333,6 +1345,8 @@ def test_claim_command_uses_assignment_readback_before_label_or_success(
     capsys: pytest.CaptureFixture[str],
     readback_holders: tuple[str, ...],
 ) -> None:
+    """Require the separate GET to confirm ownership before publishing a claim."""
+
     args = _claim_command_args(monkeypatch)
     issue_url = "https://api.github.test/repos/example/project/issues/7"
     calls: list[tuple[str, str, object]] = []
@@ -1401,6 +1415,8 @@ def test_claim_command_assignment_errors_fail_closed(
     failed_stage: str,
     status: int,
 ) -> None:
+    """Fail each API stage without false success or an unsafe assignment rollback."""
+
     args = _claim_command_args(monkeypatch)
     calls: list[tuple[str, str]] = []
     issue_reads = 0
@@ -1449,6 +1465,8 @@ def test_claim_command_preserves_repeat_ownership_and_three_claim_limit(
     claims: list[int],
     expected_reply: str,
 ) -> None:
+    """Keep ordinary repeat, ownership and limit decisions free of claim writes."""
+
     args = _claim_command_args(monkeypatch)
     comments: list[str] = []
 
