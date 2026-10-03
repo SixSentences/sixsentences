@@ -10,6 +10,11 @@ equivalents for Python package metadata.
 
 ### Fixed
 
+- Resolve complete legacy arXiv identifiers from explicit labels and canonical
+  links in uploaded PDFs. Preserve label priority, remove supported legacy
+  subject-class/version decorations, and reject truncated or malformed tokens
+  before metadata lookup. Modern IDs remain supported; extraction is not proof
+  of historical validity or article availability.
 - Preserve parenthesized DOI suffixes when resolving uploaded PDFs, including
   suffix text after a closing parenthesis. Do not resolve an identifier prefix
   cut off by the bounded metadata scan. Contextual prose-wrapper handling remains
