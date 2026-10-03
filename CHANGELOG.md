@@ -10,6 +10,10 @@ equivalents for Python package metadata.
 
 ### Fixed
 
+- Preserve parenthesized DOI suffixes when resolving uploaded PDFs, including
+  suffix text after a closing parenthesis. Do not resolve an identifier prefix
+  cut off by the bounded metadata scan. Contextual prose-wrapper handling remains
+  a candidate-extraction heuristic, not full DOI validation.
 - Keep files dropped in the Data Hub import dialog staged until confirmation;
   modal drops no longer trigger the page's immediate import action. Direct
   page and dataset-card imports remain available when no dialog is open.
