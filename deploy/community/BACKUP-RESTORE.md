@@ -20,12 +20,36 @@ backup under the same credentials.
 
 ## Create a backup
 
-Set `SIX_BACKUP_DIR` in `.env.selfhost` to an absolute directory outside the
-checkout, owned by the deployment administrator. Then run:
+Set `SIX_BACKUP_DIR` in `.env.selfhost` to a dedicated absolute directory outside
+the checkout, owned by the deployment administrator. Preflight resolves existing
+directory links and parent components before rejecting the filesystem root,
+the checkout itself or any of its descendants. Broken links, existing
+non-directory components and physical parent names containing control characters
+also fail before any backup operation. New external
+directories and safe parent aliases remain supported; preflight creates nothing
+and changes no permissions. Keep the directory and its parents under trusted
+administrator control throughout backup and restore.
+
+Backup checksums and restore selection use physical directory resolution as
+well; symlink-plus-parent paths must not select a different directory during
+execution than they did during validation.
+
+Then run:
 
 ```console
 bash deploy/community/backup.sh
 ```
+
+For another deployment, select its configuration explicitly:
+
+```console
+bash deploy/community/backup.sh "/srv/six/custom deployment.env"
+make backup ENV_FILE="/srv/six/custom deployment.env"
+```
+
+The optional argument takes precedence over `SIX_SELFHOST_ENV_FILE`; without
+either, the script uses the checkout's `.env.selfhost`. An empty argument or
+additional arguments are rejected before preflight or any backup operation.
 
 The script validates configuration, records which write services were running,
 drains the worker, stops the API, dumps PostgreSQL, rejects links and special

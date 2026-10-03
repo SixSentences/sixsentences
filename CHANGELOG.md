@@ -10,6 +10,18 @@ equivalents for Python package metadata.
 
 ### Fixed
 
+- Reject filesystem-root and checkout-contained self-host backup destinations
+  after resolving existing directory links and parent components, without
+  creating directories or changing permissions during preflight. Use the same
+  physical directory semantics when hashing backups and locating a restore.
+- Reject conflicting inherited values and ambiguous environment-file syntax
+  for self-host preflight settings, including disabled feature prerequisites,
+  and redact Compose validation diagnostics. Document the literal configuration
+  contract while preserving release-image overrides.
+- Honor the explicit environment-file argument in the self-hosted backup
+  command and its Makefile shortcut, including paths with spaces. Reject empty
+  or extra arguments before preflight, while preserving the existing optional
+  environment-variable and checkout-default selection.
 - Distinguish voice-provider disconnects, failed handshakes and refused redirects
   from internal relay failures with fixed operator diagnostics. Public session-end
   reasons, settlement and the no-redirect credential boundary remain unchanged.

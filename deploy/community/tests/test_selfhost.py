@@ -118,6 +118,17 @@ class SelfHostDeploymentTests(unittest.TestCase):
             second = subprocess.run(command, check=False, capture_output=True, text=True)
             self.assertNotEqual(second.returncode, 0)
 
+            # Validate the generated configuration against an isolated backup parent,
+            # not the host's administrator-owned default backup directory.
+            self.assertEqual(values["SIX_BACKUP_DIR"], "/var/backups/sixsentences-community")
+            target.write_text(
+                target.read_text(encoding="utf-8").replace(
+                    f"SIX_BACKUP_DIR={values['SIX_BACKUP_DIR']}",
+                    f"SIX_BACKUP_DIR={Path(directory).resolve() / 'backups'}",
+                ),
+                encoding="utf-8",
+            )
+
             if shutil.which("docker") is not None:
                 version = subprocess.run(
                     ["docker", "compose", "version"],
@@ -207,8 +218,14 @@ class SelfHostDeploymentTests(unittest.TestCase):
                 script = "\n".join(
                     [
                         "set -euo pipefail",
-                        'record() { printf "%s\\n" "$*" >> "$TEST_COMMAND_OUTPUT"; [[ "$*" != *"$FAIL_SERVICE" ]]; }',
-                        'inspect_journals() { printf "JOURNAL_SELECT\\n" >> "$TEST_COMMAND_OUTPUT"; printf "current\\n"; }',
+                        (
+                            'record() { printf "%s\\n" "$*" >> "$TEST_COMMAND_OUTPUT"; '
+                            '[[ "$*" != *"$FAIL_SERVICE" ]]; }'
+                        ),
+                        (
+                            'inspect_journals() { printf "JOURNAL_SELECT\\n" '
+                            '>> "$TEST_COMMAND_OUTPUT"; printf "current\\n"; }'
+                        ),
                         "COMPOSE=(record)",
                         block,
                         'printf "DATABASE_RESTORE_REPLAY_START\\n" >> "$TEST_COMMAND_OUTPUT"',
@@ -403,6 +420,10 @@ class SelfHostDeploymentTests(unittest.TestCase):
             source = target.read_text(encoding="utf-8")
             source = source.replace("SIX_PUBMED_ENABLED=false", "SIX_PUBMED_ENABLED=true")
             source = source.replace("SIX_PUBMED_EMAIL=", "SIX_PUBMED_EMAIL=private-invalid-token")
+            source = source.replace(
+                "SIX_BACKUP_DIR=/var/backups/sixsentences-community",
+                f"SIX_BACKUP_DIR={Path(directory).resolve() / 'backups'}",
+            )
             target.write_text(source, encoding="utf-8")
             target.chmod(0o600)
 

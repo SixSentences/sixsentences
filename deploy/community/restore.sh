@@ -66,8 +66,11 @@ env_value() {
 
 CONFIGURED_BACKUP_ROOT="$(env_value SIX_BACKUP_DIR)"
 RESTORE_PHASE=backup_manifest
-CANONICAL_ROOT="$(CDPATH= cd -- "$CONFIGURED_BACKUP_ROOT" && pwd -P)"
-CANONICAL_BACKUP="$(CDPATH= cd -- "$BACKUP_DIR" && pwd -P)"
+# A slash sentinel preserves physical path bytes across command substitution.
+CANONICAL_ROOT="$(CDPATH= cd -P -- "$CONFIGURED_BACKUP_ROOT" && printf '%s/' "$PWD")"
+CANONICAL_ROOT="${CANONICAL_ROOT%/}"
+CANONICAL_BACKUP="$(CDPATH= cd -P -- "$BACKUP_DIR" && printf '%s/' "$PWD")"
+CANONICAL_BACKUP="${CANONICAL_BACKUP%/}"
 case "$CANONICAL_BACKUP/" in
   "$CANONICAL_ROOT"/*) ;;
   *) echo "Backup must be a direct descendant of SIX_BACKUP_DIR." >&2; exit 1 ;;
