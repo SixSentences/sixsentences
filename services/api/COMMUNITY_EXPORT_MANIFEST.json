@@ -163,10 +163,10 @@
       "sha256": "2baf389442723f5e2e8c54cf89e7239fa53a3e5af19d2446d471092af84f9465"
     },
     {
-      "bytes": 3318,
+      "bytes": 6243,
       "mode": "0644",
       "path": "src/sixsentences_server/acquisition/extract.py",
-      "sha256": "967d7b8e5a14117785a848f79438a45a4726aa2d63472dd69076fdc048329011"
+      "sha256": "0792fd9b4e000bda5cc72bcf9fbc8f32e880ee8a05fb8cbe45714e2d4433ae8e"
     },
     {
       "bytes": 5224,
@@ -1465,10 +1465,10 @@
       "sha256": "42e1d43f18b092c2e0c44f72ec57c8ecdbb7ec16ff811a3f75d0f33b3e19b3f7"
     },
     {
-      "bytes": 34785,
+      "bytes": 47083,
       "mode": "0644",
       "path": "tests/test_acquisition.py",
-      "sha256": "38d69486f72f9ce6f2a4eff6edd72240022d8a741b605566c5562be797d70bfd"
+      "sha256": "bbadc44b257935fdae029ac00896f40e006a41d27ba30afe51267be87ca244f3"
     },
     {
       "bytes": 2287,
