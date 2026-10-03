@@ -663,6 +663,8 @@ class _Relay:
             await asyncio.sleep(0.05)
 
     async def run(self) -> RelayResult:
+        from websockets.exceptions import ConnectionClosed, InvalidHandshake, InvalidStatus
+
         tasks: list[asyncio.Task[Any]] = []
         stage = "relay"
         try:
@@ -717,6 +719,27 @@ class _Relay:
             self.diagnostic_code = "cancelled"
             self.diagnostic_stage = stage
             self.stop("connection")
+        except ConnectionClosed:
+            # Preserve the public/persisted reason; only operator diagnostics
+            # distinguish an upstream close from a local implementation error.
+            self.diagnostic_code = "provider_connection_closed"
+            self.diagnostic_stage = stage
+            self.stop("unavailable")
+        except InvalidStatus as exc:
+            # Match the redirects NoRedirectConnect refuses without reading
+            # or persisting their target, headers, body, or exception text.
+            self.diagnostic_code = (
+                "provider_redirect_refused"
+                if exc.response.status_code in {300, 301, 302, 303, 307, 308}
+                and "Location" in exc.response.headers
+                else "provider_handshake_failed"
+            )
+            self.diagnostic_stage = stage
+            self.stop("unavailable")
+        except InvalidHandshake:
+            self.diagnostic_code = "provider_handshake_failed"
+            self.diagnostic_stage = stage
+            self.stop("unavailable")
         except Exception:
             # No provider exception text, payload, URL, or key is logged or
             # returned to the participant. A persistence failure is terminal.

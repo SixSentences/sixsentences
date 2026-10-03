@@ -12,6 +12,14 @@ from typing import Any, cast
 
 import pytest
 from starlette.websockets import WebSocket
+from websockets.exceptions import (
+    ConcurrencyError,
+    ConnectionClosed,
+    ConnectionClosedError,
+    ConnectionClosedOK,
+    InvalidState,
+)
+from websockets.frames import Close
 
 from sixsentences_server.voice.relay import (
     PROVIDER_WS_URL,
@@ -385,6 +393,114 @@ def test_customer_meter_reaches_content_free_checkpoint_and_terminal_result() ->
         assert result.observed_cost_usd == 0.0042
         assert result.accounted_cost_usd == 1.0
         assert "customer_observed_cost_usd" not in json.dumps(harness.browser.sent)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("error_type", [ConnectionClosedError, ConnectionClosedOK])
+@pytest.mark.parametrize(
+    ("send_kind", "stage"),
+    [("setup", "provider_receive"), ("audio", "audio_send"), ("activityEnd", "watchdog")],
+)
+def test_provider_send_closures_keep_public_reason_and_actual_stage(
+    error_type: type[ConnectionClosed],
+    send_kind: str,
+    stage: str,
+) -> None:
+    """Classify upstream writes without conflating their owning relay tasks."""
+
+    async def scenario() -> None:
+        close = Close(1000 if error_type is ConnectionClosedOK else 1011, "private-close-sentinel")
+
+        def fail_send(payload: dict[str, Any]) -> None:
+            if send_kind in payload or send_kind in payload.get("realtimeInput", {}):
+                raise error_type(close, close, True)
+
+        harness = Harness([Provider(on_send=fail_send)])
+        if send_kind != "setup":
+            harness.browser.send(audio_message())
+        result = await asyncio.wait_for(harness.start(), 3)
+
+        assert result.reason == "unavailable"
+        assert result.diagnostic_code == "provider_connection_closed"
+        assert result.diagnostic_stage == stage
+        assert harness.results == [result]
+        assert harness.providers[0].closed
+        assert harness.browser.closed
+        assert harness.browser.sent[-1] == {"relayEnd": {"reason": "unavailable"}}
+        assert "private-close-sentinel" not in repr(result)
+        assert "private-close-sentinel" not in json.dumps(harness.browser.sent)
+        assert "diagnostic" not in json.dumps(harness.browser.sent)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "error_type",
+    [RuntimeError, OSError, TimeoutError, ConcurrencyError, InvalidState],
+)
+@pytest.mark.parametrize("failure_site", ["checkpoint", "setup_send"])
+def test_internal_failures_are_not_relabelled_as_provider_transport(
+    error_type: type[Exception],
+    failure_site: str,
+) -> None:
+    """A provider task can fail in local persistence or programming, too."""
+
+    async def scenario() -> None:
+        def fail_send(_payload: dict[str, Any]) -> None:
+            raise error_type("private-internal-sentinel")
+
+        harness = Harness([Provider(on_send=fail_send if failure_site == "setup_send" else None)])
+
+        async def fail_checkpoint(_checkpoint: RelayCheckpoint) -> None:
+            raise error_type("private-internal-sentinel")
+
+        result = await asyncio.wait_for(
+            harness.start(
+                on_checkpoint=(
+                    fail_checkpoint if failure_site == "checkpoint" else harness.checkpoint
+                ),
+            ),
+            2,
+        )
+        assert result.reason == "unavailable"
+        assert result.diagnostic_code == "internal_failure"
+        assert result.diagnostic_stage == "provider_receive"
+        assert bool(harness.connections) is (failure_site == "setup_send")
+        assert harness.results == [result]
+        assert harness.browser.closed
+        assert harness.browser.sent[-1] == {"relayEnd": {"reason": "unavailable"}}
+        assert "private-internal-sentinel" not in repr(result)
+        assert "private-internal-sentinel" not in json.dumps(harness.browser.sent)
+        assert "diagnostic" not in json.dumps(harness.browser.sent)
+
+    asyncio.run(scenario())
+
+
+def test_provider_failure_does_not_hide_terminal_persistence_failure() -> None:
+    """Failed durable closure must still propagate, not report a saved session."""
+
+    async def scenario() -> None:
+        def fail_send(_payload: dict[str, Any]) -> None:
+            raise ConnectionClosedError(None, None)
+
+        harness = Harness([Provider(on_send=fail_send)])
+        attempted: list[RelayResult] = []
+
+        async def reject_closed(result: RelayResult) -> None:
+            assert harness.providers[0].closed
+            assert not any("relayEnd" in item for item in harness.browser.sent)
+            attempted.append(result)
+            raise OSError("private-terminal-persistence-sentinel")
+
+        with pytest.raises(OSError, match="private-terminal-persistence-sentinel"):
+            await asyncio.wait_for(harness.start(on_closed=reject_closed), 2)
+        assert len(attempted) == 1
+        assert attempted[0].reason == "unavailable"
+        assert attempted[0].diagnostic_code == "provider_connection_closed"
+        assert harness.browser.closed
+        assert not any("relayEnd" in item for item in harness.browser.sent)
+        assert "private-terminal-persistence-sentinel" not in json.dumps(harness.browser.sent)
 
     asyncio.run(scenario())
 
