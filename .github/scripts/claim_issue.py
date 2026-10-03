@@ -66,7 +66,7 @@ def _request(url: str, *, token: str, method: str = "GET", payload: object | Non
     )
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
-            if response.status == 204 or not response.length:
+            if response.status == 204 or response.length == 0:
                 return None
             return json.load(response)
     except urllib.error.HTTPError as exc:
@@ -372,24 +372,30 @@ def _run_command(args: argparse.Namespace, *, token: str) -> int:
             number=args.number,
             actor=actor,
         )
-        _add_label(args.api_url, token=token, repository=args.repository, number=args.number)
-        message = decision.message
         if not assigned:
-            # Honest about the difference: the label records the claim either
-            # way, but the assignee field is what most people read.
-            message = (
-                f"@{actor}, this issue is marked `{CLAIM_LABEL}` for you and the "
-                "claim counts, but GitHub would not accept you as an assignee — "
-                "it only allows that for accounts it already knows in this "
-                "repository. A maintainer can set the assignee manually.\n\n"
-                + decision.message.split("\n", 2)[-1]
+            _comment(
+                args.api_url,
+                token=token,
+                repository=args.repository,
+                number=args.number,
+                body=(
+                    f"@{actor}, I could not confirm your assignment, so I have not "
+                    f"added the `{CLAIM_LABEL}` label for you. Please ask a maintainer "
+                    "to check the assignment before trying again."
+                ),
             )
+            print(
+                f"Claim failed for @{actor} on #{args.number}: assignment not confirmed.",
+                file=sys.stderr,
+            )
+            return 1
+        _add_label(args.api_url, token=token, repository=args.repository, number=args.number)
         _comment(
             args.api_url,
             token=token,
             repository=args.repository,
             number=args.number,
-            body=message,
+            body=decision.message,
         )
         print(f"Claimed #{args.number} for {actor} (assignee set: {assigned}).")
         return 0

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import importlib.util
 import io
 import json
@@ -11,6 +12,7 @@ import subprocess
 import sys
 import tarfile
 import textwrap
+import urllib.error
 import urllib.request
 from datetime import UTC, date, datetime
 from email.message import Message
@@ -1196,6 +1198,293 @@ def _decide(issue: dict[str, object], *, actor: str, open_claims: tuple[int, ...
     return CLAIM.claim_decision(
         issue, actor=actor, open_claims=list(open_claims), docs_url="https://example.org/c.md"
     )
+
+
+class _ClaimResponse(io.BytesIO):
+    """Synthetic HTTP response with independently declared body length."""
+
+    def __init__(self, body: bytes, *, length: int | None, status: int = 200) -> None:
+        super().__init__(body)
+        self.length = length
+        self.status = status
+
+
+@pytest.mark.parametrize(
+    ("status", "length", "body", "expected"),
+    [
+        (
+            200,
+            None,
+            b'{"assignees": [{"login": "newcomer"}]}',
+            {"assignees": [{"login": "newcomer"}]},
+        ),
+        (200, 2, b"[]", []),
+        (200, 0, b"", None),
+        (204, None, b"", None),
+        (204, 0, b"", None),
+    ],
+)
+def test_claim_request_parses_unknown_length_json_without_losing_empty_controls(
+    monkeypatch: pytest.MonkeyPatch,
+    status: int,
+    length: int | None,
+    body: bytes,
+    expected: object,
+) -> None:
+    """Distinguish unknown response length from an explicitly empty response."""
+
+    def urlopen(request: urllib.request.Request, *, timeout: int) -> _ClaimResponse:
+        assert request.full_url == "https://api.github.test/repos/example/project/issues/7"
+        assert request.method == "GET"
+        assert timeout == 30
+        return _ClaimResponse(body, status=status, length=length)
+
+    monkeypatch.setattr(CLAIM.urllib.request, "urlopen", urlopen)
+    assert (
+        CLAIM._request(
+            "https://api.github.test/repos/example/project/issues/7", token="synthetic-token"
+        )
+        == expected
+    )
+
+
+def _claim_http_response(body: bytes, *, chunked: bool) -> http.client.HTTPResponse:
+    if chunked:
+        headers = b"Transfer-Encoding: chunked\r\n"
+        wire_body = (
+            f"{len(body):x}\r\n".encode() + body + b"\r\n0\r\n\r\n" if body else b"0\r\n\r\n"
+        )
+    else:
+        headers = b"Connection: close\r\n"
+        wire_body = body
+    wire = b"HTTP/1.1 200 OK\r\n" + headers + b"\r\n" + wire_body
+
+    class Socket:
+        """Expose an in-memory socket interface without opening a connection."""
+
+        def makefile(self, mode: str) -> io.BytesIO:
+            """Return the synthetic HTTP wire data as a buffered stream."""
+
+            return io.BytesIO(wire)
+
+    response = http.client.HTTPResponse(Socket())
+    response.begin()
+    assert response.length is None
+    return response
+
+
+@pytest.mark.parametrize("chunked", [False, True])
+def test_claim_request_parses_real_unknown_length_http_json(
+    monkeypatch: pytest.MonkeyPatch, chunked: bool
+) -> None:
+    """Decode actual chunked and EOF-delimited HTTPResponse objects."""
+
+    response = _claim_http_response(b'{"assignees": [{"login": "newcomer"}]}', chunked=chunked)
+    monkeypatch.setattr(CLAIM.urllib.request, "urlopen", lambda *args, **kwargs: response)
+
+    assert CLAIM._request("https://api.github.test/issue", token="synthetic-token") == {
+        "assignees": [{"login": "newcomer"}]
+    }
+
+
+@pytest.mark.parametrize("chunked", [False, True])
+@pytest.mark.parametrize("body", [b"", b"not-json"])
+def test_claim_request_unknown_length_invalid_json_fails_closed(
+    monkeypatch: pytest.MonkeyPatch, chunked: bool, body: bytes
+) -> None:
+    """Never treat malformed unknown-length bodies as successful API data."""
+
+    response = _claim_http_response(body, chunked=chunked)
+    monkeypatch.setattr(CLAIM.urllib.request, "urlopen", lambda *args, **kwargs: response)
+
+    with pytest.raises(json.JSONDecodeError):
+        CLAIM._request("https://api.github.test/issue", token="synthetic-token")
+
+
+@pytest.mark.parametrize("status", [403, 422])
+def test_claim_request_preserves_permission_errors(
+    monkeypatch: pytest.MonkeyPatch, status: int
+) -> None:
+    """Preserve HTTP permission and validation failures without body logging."""
+
+    url = "https://api.github.test/repos/example/project/issues/7/assignees"
+
+    def urlopen(request: urllib.request.Request, *, timeout: int) -> _ClaimResponse:
+        raise urllib.error.HTTPError(url, status, "Synthetic failure", Message(), None)
+
+    monkeypatch.setattr(CLAIM.urllib.request, "urlopen", urlopen)
+    with pytest.raises(
+        ValueError, match=f"POST /repos/example/project/issues/7/assignees.*{status}"
+    ):
+        CLAIM._request(
+            url, token="synthetic-token", method="POST", payload={"assignees": ["newcomer"]}
+        )
+
+
+def _claim_command_args(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    monkeypatch.setenv("GITHUB_TOKEN", "synthetic-token")
+    monkeypatch.setenv("COMMENT_BODY", "/claim")
+    monkeypatch.setenv("COMMENT_AUTHOR", "newcomer")
+    monkeypatch.setenv("AUTHOR_ASSOCIATION", "NONE")
+    return [
+        "command",
+        "--repository",
+        "example/project",
+        "--number",
+        "7",
+        "--api-url",
+        "https://api.github.test",
+        "--docs-url",
+        "https://example.invalid/CONTRIBUTING.md",
+    ]
+
+
+@pytest.mark.parametrize("readback_holders", [(), ("other",), ("newcomer",)])
+def test_claim_command_uses_assignment_readback_before_label_or_success(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    readback_holders: tuple[str, ...],
+) -> None:
+    """Require the separate GET to confirm ownership before publishing a claim."""
+
+    args = _claim_command_args(monkeypatch)
+    issue_url = "https://api.github.test/repos/example/project/issues/7"
+    calls: list[tuple[str, str, object]] = []
+    readbacks = iter([_issue(), _issue(assignees=readback_holders)])
+    confirmed = "newcomer" in readback_holders
+
+    def request(url: str, *, token: str, method: str = "GET", payload: object = None) -> object:
+        assert token == "synthetic-token"
+        calls.append((method, url, payload))
+        if method == "GET" and url == issue_url:
+            return next(readbacks)
+        if method == "GET" and url == (
+            "https://api.github.test/repos/example/project/issues"
+            "?state=open&assignee=newcomer&labels=claimed&per_page=100"
+        ):
+            return []
+        if method == "POST" and url == issue_url + "/assignees":
+            assert payload == {"assignees": ["newcomer"]}
+            # Only the GET readback counts, even when it contradicts this POST.
+            return _issue(assignees=() if confirmed else ("newcomer",))
+        if method == "POST" and url in (issue_url + "/labels", issue_url + "/comments"):
+            return {}
+        raise AssertionError(f"Unexpected synthetic request: {method} {url}")
+
+    monkeypatch.setattr(CLAIM, "_request", request)
+    result = CLAIM.main(args)
+
+    assert [method for method, _, _ in calls[:4]] == ["GET", "GET", "POST", "GET"]
+    assert [url for _, url, _ in calls[:4]][::3] == [issue_url, issue_url]
+    mutations = [(url, payload) for method, url, payload in calls[4:] if method != "GET"]
+    assert mutations[-1][0] == issue_url + "/comments"
+    comment = mutations[-1][1]
+    assert isinstance(comment, dict)
+    output = capsys.readouterr()
+    if confirmed:
+        assert result == 0
+        assert mutations == [
+            (issue_url + "/labels", {"labels": ["claimed"]}),
+            (
+                issue_url + "/comments",
+                {
+                    "body": CLAIM.claim_granted_body(
+                        "newcomer", docs_url="https://example.invalid/CONTRIBUTING.md"
+                    )
+                },
+            ),
+        ]
+        assert "Assigned to @newcomer" in comment["body"]
+        assert "Claimed #7 for newcomer" in output.out
+    else:
+        assert result == 1
+        assert len(mutations) == 1
+        assert "could not confirm" in comment["body"].lower()
+        assert "Assigned to" not in comment["body"]
+        assert "claim counts" not in comment["body"]
+        assert "this issue is yours" not in comment["body"]
+        assert "Claimed #7" not in output.out
+        assert "not confirmed" in output.err
+
+
+@pytest.mark.parametrize("failed_stage", ["POST", "readback", "label"])
+@pytest.mark.parametrize("status", [403, 422])
+def test_claim_command_assignment_errors_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failed_stage: str,
+    status: int,
+) -> None:
+    """Fail each API stage without false success or an unsafe assignment rollback."""
+
+    args = _claim_command_args(monkeypatch)
+    calls: list[tuple[str, str]] = []
+    issue_reads = 0
+
+    def request(url: str, *, token: str, method: str = "GET", payload: object = None) -> object:
+        nonlocal issue_reads
+        calls.append((method, url))
+        if method == "GET" and url.endswith("/issues/7"):
+            issue_reads += 1
+            if issue_reads == 2 and failed_stage == "readback":
+                raise ValueError(f"GitHub API GET /issues/7 returned HTTP {status}")
+            return _issue(assignees=("newcomer",) if issue_reads == 2 else ())
+        if method == "GET" and "/issues?" in url:
+            return []
+        if method == "POST" and url.endswith("/assignees"):
+            if failed_stage == "POST":
+                raise ValueError(f"GitHub API POST /assignees returned HTTP {status}")
+            return _issue(assignees=("newcomer",))
+        if method == "POST" and url.endswith("/labels") and failed_stage == "label":
+            raise ValueError(f"GitHub API POST /labels returned HTTP {status}")
+        raise AssertionError(f"Unexpected synthetic request: {method} {url}")
+
+    monkeypatch.setattr(CLAIM, "_request", request)
+    assert CLAIM.main(args) == 1
+    assert not any(url.endswith("/comments") for _, url in calls)
+    assert sum(url.endswith("/labels") for _, url in calls) == (failed_stage == "label")
+    # A later label failure must not automatically undo an existing assignment.
+    assert not any(method == "DELETE" for method, _ in calls)
+    assert issue_reads == (1 if failed_stage == "POST" else 2)
+    output = capsys.readouterr()
+    assert "Claimed #7" not in output.out
+    assert f"HTTP {status}" in output.err
+
+
+@pytest.mark.parametrize(
+    ("holders", "claims", "expected_reply"),
+    [
+        (("newcomer",), [], "already holds this one"),
+        (("other",), [], "already claimed by @other"),
+        ((), [1, 2, 3], "limit of 3"),
+    ],
+)
+def test_claim_command_preserves_repeat_ownership_and_three_claim_limit(
+    monkeypatch: pytest.MonkeyPatch,
+    holders: tuple[str, ...],
+    claims: list[int],
+    expected_reply: str,
+) -> None:
+    """Keep ordinary repeat, ownership and limit decisions free of claim writes."""
+
+    args = _claim_command_args(monkeypatch)
+    comments: list[str] = []
+
+    def request(url: str, *, token: str, method: str = "GET", payload: object = None) -> object:
+        if method == "GET" and url.endswith("/issues/7"):
+            return _issue(assignees=holders)
+        if method == "GET" and "/issues?" in url:
+            return [_issue(number=number, assignees=("newcomer",)) for number in claims]
+        if method == "POST" and url.endswith("/comments"):
+            assert isinstance(payload, dict)
+            comments.append(payload["body"])
+            return {}
+        raise AssertionError(f"Unexpected claim mutation: {method} {url}")
+
+    monkeypatch.setattr(CLAIM, "_request", request)
+    assert CLAIM.main(args) == 0
+    assert len(comments) == 1
+    assert expected_reply in comments[0]
 
 
 def test_a_claim_command_has_to_be_the_whole_comment() -> None:
