@@ -12,7 +12,7 @@ equivalents for Python package metadata.
 
 - Keep files dropped in the Data Hub import dialog staged until confirmation;
   modal drops no longer trigger the page's immediate import action. Direct
-  page and project-card imports remain available when no dialog is open.
+  page and dataset-card imports remain available when no dialog is open.
 - Preserve library search results matched by the server against authors, DOI,
   abstracts and grouped source metadata, while retaining collection filters
   and sorting in the web client.
