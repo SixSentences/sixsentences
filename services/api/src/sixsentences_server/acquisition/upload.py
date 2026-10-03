@@ -57,7 +57,8 @@ from sixsentences_server.core.limits import MAX_DOCUMENT_UPLOAD_BYTES
 from sixsentences_server.core.models import WorkRecord
 from sixsentences_server.core.uploads import UnsafeImageError, decode_image
 
-_DOI_RE = re.compile(r"\b10\.\d{4,9}/[^\s\"<>()\[\]{},;]+", re.IGNORECASE)
+_DOI_RE = re.compile(r"\b10\.\d{4,9}/[^\s\"<>\[\]{},;]+", re.IGNORECASE)
+_DOI_LABEL_RE = re.compile(r"(?:doi\s*:\s*|https?://(?:dx\.)?doi\.org/)$", re.IGNORECASE)
 _ARXIV_RE = re.compile(r"arxiv[:\s/]+(\d{4}\.\d{4,5})(v\d+)?", re.IGNORECASE)
 # a bare arXiv id (YYMM.NNNNN) as it appears in filenames like 2307.03172v3.pdf
 _ARXIV_BARE_RE = re.compile(r"\b(\d{2}(0[1-9]|1[0-2])\.\d{4,5})(v\d+)?\b")
@@ -919,8 +920,35 @@ def _synthetic_work_id(checksum: str) -> str:
 
 
 def _find_doi(text: str) -> str | None:
-    match = _DOI_RE.search(text[:_METADATA_CHARS])
-    return match.group(0).rstrip(".,;:") if match else None
+    """Extract a candidate with contextual wrapper heuristics, not DOI validation."""
+    # One lookahead character prevents resolving a prefix cut off by the scan budget.
+    match = _DOI_RE.search(text[: _METADATA_CHARS + 1])
+    if match is None or match.end() > _METADATA_CHARS:
+        return None
+    doi = match.group(0).rstrip(".,;:")
+    before = _DOI_LABEL_RE.sub("", text[: match.start()].rstrip()).rstrip()
+    wrappers = len(before) - len(before.rstrip("("))
+    # DOI suffixes are opaque: unbalanced parentheses alone are not invalid.
+    # Only an adjacent prose opener licenses removing a surplus terminal closer.
+    # Ambiguous punctuation keeps the existing extraction boundaries and heuristics.
+    depth = 0
+    terminal_surplus = 0
+    for char in doi:
+        if char == "(":
+            depth += 1
+        elif char == ")" and depth:
+            depth -= 1
+        elif char == ")":
+            terminal_surplus += 1
+            continue
+        terminal_surplus = 0
+    trim = min(wrappers, terminal_surplus)
+    if trim:
+        trimmed = doi[:-trim].rstrip(".,;:")
+        # If trimming erases the entire opaque suffix, keep the ambiguous candidate.
+        if trimmed.partition("/")[2]:
+            doi = trimmed
+    return doi
 
 
 def _find_arxiv_id(text: str) -> str | None:

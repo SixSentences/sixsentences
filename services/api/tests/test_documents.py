@@ -15,8 +15,14 @@ from sixsentences_server.acquisition.models import (
     ExtractedText,
     TextStatus,
 )
+from sixsentences_server.acquisition.pdf import extract_page_texts
 from sixsentences_server.acquisition.store import LocalDocumentStore
-from sixsentences_server.acquisition.upload import ingest_document, is_verified_work_id
+from sixsentences_server.acquisition.upload import (
+    _find_doi,
+    _resolve_metadata,
+    ingest_document,
+    is_verified_work_id,
+)
 from sixsentences_server.api.app import create_app
 from sixsentences_server.chat.service import answer_question
 from sixsentences_server.config import Settings
@@ -37,7 +43,8 @@ from sixsentences_server.llm.mock import mock_pool
 
 def _mini_pdf(text: str) -> bytes:
     """A minimal, well-formed one-page PDF whose page text is `text`."""
-    stream = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode()
+    escaped = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    stream = f"BT /F1 12 Tf 72 720 Td ({escaped}) Tj ET".encode()
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
@@ -79,6 +86,161 @@ class _StubOA:
     def search(self, query: str, *, limit: int = 1, **_: object) -> list[WorkRecord]:
         self.searched.append(query)
         return self.search_hits
+
+
+class _ExactOA(_StubOA):
+    """Resolve only exact synthetic IDs, never an arbitrary matching prefix."""
+
+    def __init__(self, works: dict[str, WorkRecord]) -> None:
+        super().__init__()
+        self.works = works
+
+    def get_work(self, external_id: str) -> WorkRecord | None:
+        self.requested.append(external_id)
+        return self.works.get(external_id)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("No identifier is present in this synthetic document.", None),
+        ("doi:10.5555/ordinary", "10.5555/ordinary"),
+        ("doi:10.5555/ordinary.", "10.5555/ordinary"),
+        ("10.5555/first and 10.5555/second", "10.5555/first"),
+        ("10.5555/example(2026)", "10.5555/example(2026)"),
+        ("10.5555/example(2026)00001-7", "10.5555/example(2026)00001-7"),
+        ("10.5555/example(2026(nested))tail", "10.5555/example(2026(nested))tail"),
+        ("10.5555/example(unfinished", "10.5555/example(unfinished"),
+        ("10.5555/example)", "10.5555/example)"),
+        ("10.5555/example)tail", "10.5555/example)tail"),
+        ("10.5555/α(β)γ", "10.5555/α(β)γ"),
+        ("10.5555/a)b(c", "10.5555/a)b(c"),
+        ("(doi:10.5555/example)", "10.5555/example"),
+        ("(doi:10.5555/synthetic(2026)).", "10.5555/synthetic(2026)"),
+        ("(https://doi.org/10.5555/synthetic(2026)).", "10.5555/synthetic(2026)"),
+        ("10.5555/unbalanced)", "10.5555/unbalanced)"),
+        ("(10.5555/example(2026)).", "10.5555/example(2026)"),
+        ("( doi: 10.5555/example(2026)tail).", "10.5555/example(2026)tail"),
+        ("((doi:10.5555/example(2026)))", "10.5555/example(2026)"),
+        ("(https://doi.org/10.5555/example(2026)).", "10.5555/example(2026)"),
+        ("(http://dx.doi.org/10.5555/example(2026))", "10.5555/example(2026)"),
+        ("(doi:10.5555/example(2026)", "10.5555/example(2026)"),
+        ("(doi:10.5555/example(unfinished)", "10.5555/example(unfinished)"),
+        ("(doi:10.5555/example))", "10.5555/example)"),
+        ("(doi:10.5555/a)b)", "10.5555/a)b"),
+        ("(doi:10.5555/a)b(c)", "10.5555/a)b(c)"),
+        ("(doi:10.5555/a)b(c))", "10.5555/a)b(c)"),
+        ("(doi:10.5555/)", "10.5555/)"),
+        ("10.5555/example(2026).", "10.5555/example(2026)"),
+        ("Earlier (context). doi:10.5555/example)", "10.5555/example)"),
+        ("[doi:10.5555/example(2026)].", "10.5555/example(2026)"),
+        ("10.5555/example(2026), 10.5555/second", "10.5555/example(2026)"),
+    ],
+)
+def test_upload_doi_candidate_preserves_suffix(text: str, expected: str | None) -> None:
+    assert _find_doi(text) == expected
+
+
+@pytest.mark.parametrize("continuation", ["", " ", ", later", "\n", "(2026)", "tail", ")"])
+def test_upload_doi_candidate_at_metadata_limit(continuation: str) -> None:
+    doi = "10.5555/at-the-limit"
+    text = " " * (12_000 - len(doi)) + doi + continuation
+    complete = continuation in ("", " ", ", later", "\n")
+    foreign = WorkRecord(id="W9000000001", title="Synthetic truncated-prefix work")
+    stub = _ExactOA({f"doi:{doi}": foreign})
+
+    assert _find_doi(text) == (doi if complete else None)
+    work, resolved_by = _resolve_metadata(text, "limit.pdf", stub)  # type: ignore[arg-type]
+
+    assert stub.requested == ([f"doi:{doi}"] if complete else [])
+    assert work == (foreign if complete else None)
+    assert resolved_by == ("doi" if complete else None)
+
+
+def test_upload_doi_candidate_does_not_search_beyond_metadata_limit() -> None:
+    assert _find_doi(" " * 12_000 + "10.5555/outside") is None
+    assert _find_doi(" " * 11_997 + "10.5555/cut-off-prefix") is None
+
+
+def test_upload_doi_wrapper_does_not_create_an_empty_suffix() -> None:
+    foreign = WorkRecord(id="W9000000001", title="Synthetic empty-suffix prefix work")
+    stub = _ExactOA({"doi:10.5555/": foreign})
+
+    work, resolved_by = _resolve_metadata(
+        "(doi:10.5555/)", "identity.pdf", stub  # type: ignore[arg-type]
+    )
+
+    assert stub.requested == ["doi:10.5555/)"]
+    assert work is None
+    assert resolved_by is None
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    ["(2026)", "(2026(nested))00001-7", "(unfinished", ")"],
+)
+def test_upload_doi_candidate_never_verifies_truncated_prefix(suffix: str) -> None:
+    prefix = "10.5555/synthetic"
+    doi = prefix + suffix
+    foreign = WorkRecord(id="W9000000001", title="Synthetic unrelated prefix work")
+    stub = _ExactOA({f"doi:{prefix}": foreign})
+
+    work, resolved_by = _resolve_metadata(
+        f"Synthetic identity study. doi:{doi} Author Example.",
+        "identity.pdf",
+        stub,  # type: ignore[arg-type]
+    )
+
+    assert stub.requested == [f"doi:{doi}"]
+    assert work is None
+    assert resolved_by is None
+
+
+def test_mini_pdf_roundtrips_literal_parentheses_and_backslashes() -> None:
+    text = r"Synthetic PDF (nested (literal) parentheses) and a \ backslash."
+    assert extract_page_texts(_mini_pdf(text)) == [text]
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    ["(2026)", "(2026(nested))00001-7", "(unfinished", ")"],
+)
+@pytest.mark.parametrize("resolve_full_doi", [False, True])
+def test_ingest_upload_parenthesized_doi_requires_exact_identity(
+    settings: Settings, suffix: str, resolve_full_doi: bool
+) -> None:
+    init_db()
+    prefix = "10.5555/synthetic"
+    doi = prefix + suffix
+    text = f"Synthetic identity study. doi:{doi} Author Example."
+    pdf = _mini_pdf(text)
+    assert extract_page_texts(pdf) == [text]
+    foreign = WorkRecord(id="W9000000001", title="Synthetic unrelated prefix work")
+    exact = WorkRecord(id="W9000000002", title="Synthetic identity study", doi=doi)
+    works = {f"doi:{prefix}": foreign}
+    if resolve_full_doi:
+        works[f"doi:{doi}"] = exact
+    stub = _ExactOA(works)
+
+    with db_session() as session:
+        org = get_default_org(session)
+        doc = ingest_document(
+            session,
+            org_id=org.id,
+            run_id=None,
+            content=pdf,
+            filename="identity.pdf",
+            oa_client=stub,  # type: ignore[arg-type]
+        )
+
+        assert stub.requested == [f"doi:{doi}"]
+        assert doc.text_status == "parsed"
+        assert doc.work_id != foreign.id
+        assert is_verified_work_id(doc.work_id) == resolve_full_doi
+        if resolve_full_doi:
+            assert doc.work_id == exact.id
+        else:
+            assert doc.work_id.startswith("W0")
 
 
 class _NoAcquire:
@@ -156,7 +318,7 @@ def test_ingest_upload_resolves_doi_to_verified_work(settings: Settings) -> None
         )
         assert doc.work_id == "W2741809807"
         assert is_verified_work_id(doc.work_id)
-        assert stub.requested and stub.requested[0].startswith("doi:10.5555/")
+        assert stub.requested == ["doi:10.5555/3295222"]
 
 
 def test_normal_upload_dedupes_different_files_with_same_verified_doi(settings: Settings) -> None:
