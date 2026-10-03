@@ -223,10 +223,10 @@
       "sha256": "6927d6272b210e1ee553ce1e549ab8aaadd77f7a08f2a7390b857139b7990f53"
     },
     {
-      "bytes": 52330,
+      "bytes": 54579,
       "mode": "0644",
       "path": "src/sixsentences_server/acquisition/upload.py",
-      "sha256": "553d0cad124d44e4ff4db62ea208529f362bd6e2558bbe5d07796b27c4577b75"
+      "sha256": "ee2b197e484725fa9f0e2dd7ee4b4be17cf5ba6ef85bb59ef09fee9d4ecdbb86"
     },
     {
       "bytes": 7775,
@@ -1777,10 +1777,10 @@
       "sha256": "09cdfc2336300cc44daf4bee9d237d0b761483a9ade212ea82f841f2d8d644af"
     },
     {
-      "bytes": 69301,
+      "bytes": 79982,
       "mode": "0644",
       "path": "tests/test_documents.py",
-      "sha256": "51717e989f885d18ef86905ba4dbb53c446bf00b0215453025f8fbf81f1ea3f9"
+      "sha256": "36b9d26944b06c46847a58b7663254b343e4d34fbd3963f7afce2aed245f567c"
     },
     {
       "bytes": 6086,
