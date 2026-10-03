@@ -869,10 +869,9 @@ export default function LibraryPage() {
       toast.error(error instanceof Error ? error.message : "That didn't work."),
   });
 
-  // Instant client-side filtering keeps selection and the open reader stable.
-  // The server-side q parameter remains available when this collection grows.
+  // The server searches all metadata, including grouped source records.
+  // Apply only collection filters and sorting to its search results here.
   const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
     const visible = (docs ?? []).filter((doc) => {
       const matchesLocation =
         location === "all"
@@ -885,14 +884,7 @@ export default function LibraryPage() {
       const matchesOrigin =
         originFilter === "all"
         || (originFilter === "search" ? doc.run !== null : doc.run === null);
-      const matchesQuery =
-        !needle
-        || (doc.title ?? "").toLowerCase().includes(needle)
-        || doc.work_id.toLowerCase().includes(needle)
-        || (doc.run?.label ?? "").toLowerCase().includes(needle)
-        || (doc.project_name ?? "").toLowerCase().includes(needle)
-        || (doc.folder ?? "").toLowerCase().includes(needle);
-      return matchesLocation && matchesType && matchesOrigin && matchesQuery;
+      return matchesLocation && matchesType && matchesOrigin;
     });
     return visible.toSorted((left, right) => {
       switch (sort) {
@@ -917,7 +909,7 @@ export default function LibraryPage() {
           return Date.parse(right.created_at) - Date.parse(left.created_at);
       }
     });
-  }, [docs, query, location, originFilter, sort, typeFilter]);
+  }, [docs, location, originFilter, sort, typeFilter]);
   const filteredWebSources = webSources ?? [];
   const hasCollectionFilters =
     typeFilter !== "all" || originFilter !== "all" || location !== "all";

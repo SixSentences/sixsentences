@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
+import ts from "typescript";
+import { InfiniteQueryObserver, QueryClient } from "@tanstack/react-query";
 
 const source = readFileSync(
   join(process.cwd(), "src/app/(app)/library/page.tsx"),
@@ -27,6 +29,197 @@ const libraryTypes = readFileSync(
   join(process.cwd(), "src/lib/types.ts"),
   "utf8",
 );
+
+function compileLibraryBehavior(code, bindings = {}) {
+  const compiled = ts.transpileModule(code, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  return Function(...Object.keys(bindings), compiled)(...Object.values(bindings));
+}
+
+function findLibraryNode(text, predicate) {
+  const ast = ts.createSourceFile("library.tsx", text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const matches = [];
+  const visit = (node) => {
+    if (predicate(node)) matches.push(node);
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  assert.equal(matches.length, 1, "the behavior harness must resolve one production node");
+  return matches[0].getText(ast);
+}
+
+function libraryFunction(text, name) {
+  return findLibraryNode(text, (node) => ts.isFunctionDeclaration(node) && node.name?.text === name)
+    .replace(/^export /, "");
+}
+
+const documentHelpers = { exports: {} };
+compileLibraryBehavior(
+  readFileSync("src/lib/library-document.ts", "utf8"),
+  { exports: documentHelpers.exports },
+);
+const filteredDeclaration = findLibraryNode(
+  source,
+  (node) => ts.isVariableDeclaration(node) && node.name.getText() === "filtered",
+);
+const filterLibraryDocuments = compileLibraryBehavior(`
+  ${libraryFunction(source, "libraryDocumentType")}
+  ${libraryFunction(source, "compareNullableYears")}
+  return ({ docs, query = "", location = "all", typeFilter = "all", originFilter = "all", sort = "added-desc" }) => {
+    const ${filteredDeclaration};
+    return filtered;
+  };
+`, { ...documentHelpers.exports, useMemo: (callback) => callback() });
+
+function libraryDocument(id, overrides = {}) {
+  return {
+    id,
+    title: "Unrelated paper title",
+    work_id: `paper-${id}`,
+    project_id: null,
+    project_name: null,
+    folder: null,
+    run: null,
+    content_type: "application/pdf",
+    created_at: `2026-01-${String(id).padStart(2, "0")}T00:00:00Z`,
+    byte_size: 10,
+    year: null,
+    metadata: {},
+    ...overrides,
+  };
+}
+
+for (const [field, query, metadata] of [
+  ["author", "Lovelace", { authors: ["Ada Lovelace"] }],
+  ["DOI", "10.1234/example", { doi: "10.1234/example" }],
+  ["abstract", "attention mechanism", { abstract: "An attention mechanism for retrieval." }],
+  ["keyword", "reproducibility", { keywords: ["reproducibility"] }],
+  ["component metadata absent from the returned row", "historical identifier", {}],
+]) {
+  test(`Library keeps the server's ${field} search hit`, () => {
+    // The API has already matched q, including metadata on grouped source records.
+    const document = libraryDocument(1, { metadata });
+    assert.deepEqual(
+      filterLibraryDocuments({ docs: [document], query }),
+      [document],
+    );
+  });
+}
+
+test("Library collection filters compose on server search hits", () => {
+  const docs = [
+    libraryDocument(1, { project_id: 7, run: { label: "Search" } }),
+    libraryDocument(2, { project_id: 7 }),
+    libraryDocument(3, { content_type: "image/png" }),
+    libraryDocument(4, { content_type: "text/plain", run: { label: "Search" } }),
+    libraryDocument(5, { project_id: 8, content_type: "APPLICATION/X-PDF; charset=binary" }),
+  ];
+  for (const [filters, expected] of [
+    [{}, [5, 4, 3, 2, 1]],
+    [{ location: "unfiled" }, [4, 3]],
+    [{ location: 7 }, [2, 1]],
+    [{ typeFilter: "pdf" }, [5, 2, 1]],
+    [{ typeFilter: "image" }, [3]],
+    [{ typeFilter: "other" }, [4]],
+    [{ originFilter: "uploaded" }, [5, 3, 2]],
+    [{ originFilter: "search" }, [4, 1]],
+    [{ location: 7, typeFilter: "pdf", originFilter: "search" }, [1]],
+    [{ location: 8, typeFilter: "image" }, []],
+  ]) {
+    assert.deepEqual(
+      filterLibraryDocuments({ docs, query: "metadata-only match", ...filters }).map((doc) => doc.id),
+      expected,
+      JSON.stringify(filters),
+    );
+  }
+});
+
+test("Library preserves every sort order and the server response order", () => {
+  const docs = Object.freeze([
+    libraryDocument(1, { title: "Beta", year: 2020, byte_size: 30 }),
+    libraryDocument(2, { title: "Alpha", year: 2024, byte_size: 10 }),
+    libraryDocument(3, { title: null, work_id: "Zeta", byte_size: 20 }),
+  ]);
+  for (const [sort, expected] of [
+    ["added-desc", [3, 2, 1]],
+    ["added-asc", [1, 2, 3]],
+    ["title-asc", [2, 1, 3]],
+    ["title-desc", [3, 1, 2]],
+    ["year-desc", [2, 1, 3]],
+    ["year-asc", [1, 2, 3]],
+    ["size-desc", [1, 3, 2]],
+  ]) {
+    assert.deepEqual(
+      filterLibraryDocuments({ docs, query: "metadata-only match", sort }).map((doc) => doc.id),
+      expected,
+      sort,
+    );
+  }
+  assert.deepEqual(docs.map((doc) => doc.id), [1, 2, 3]);
+  assert.deepEqual(filterLibraryDocuments({ docs: undefined, query: "pending" }), []);
+  assert.deepEqual(filterLibraryDocuments({ docs: [], query: "no match" }), []);
+});
+
+test("Library search keys isolate pending and late responses from the current query", async () => {
+  const requests = [];
+  const api = {
+    libraryDocuments: (q, offset, limit) => new Promise((resolve) => {
+      requests.push({ q, offset, limit, resolve });
+    }),
+  };
+  const getOptions = compileLibraryBehavior(`
+    ${libraryFunction(readFileSync("src/hooks/queries.ts", "utf8"), "useLibrary")}
+    return useLibrary;
+  `, { useInfiniteQuery: (options) => options, api });
+  const libraryCall = findLibraryNode(
+    source,
+    (node) => ts.isCallExpression(node) && node.expression.getText() === "useLibrary",
+  );
+  const pageOptions = compileLibraryBehavior(`
+    return (query) => { const libraryView = "papers"; return ${libraryCall}; };
+  `, { useLibrary: getOptions });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+  const observer = new InfiniteQueryObserver(client, pageOptions(""));
+  const unsubscribe = observer.subscribe(() => {});
+  try {
+    const initial = observer.refetch();
+    requests[0].resolve([libraryDocument(1)]);
+    await initial;
+    assert.equal(observer.getCurrentResult().data.pages[0][0].id, 1);
+
+    observer.setOptions(pageOptions("old query"));
+    const oldRequest = client.getQueryCache().find({ queryKey: ["library", "old query"], exact: true }).promise;
+    observer.setOptions(pageOptions("  Lovelace  "));
+    assert.equal(observer.getCurrentResult().isLoading, true);
+    assert.equal(observer.getCurrentResult().data, undefined);
+    assert.deepEqual(
+      requests.map(({ q, offset, limit }) => ({ q, offset, limit })),
+      [
+        { q: "", offset: 0, limit: 200 },
+        { q: "old query", offset: 0, limit: 200 },
+        { q: "Lovelace", offset: 0, limit: 200 },
+      ],
+    );
+
+    const current = observer.refetch();
+    const document = libraryDocument(2, { metadata: { authors: ["Ada Lovelace"] } });
+    requests[2].resolve([document]);
+    await current;
+    requests[1].resolve([libraryDocument(3)]);
+    await oldRequest;
+
+    const result = observer.getCurrentResult();
+    assert.equal(result.isLoading, false);
+    assert.deepEqual(result.data.pages.flat(), [document]);
+    assert.deepEqual(filterLibraryDocuments({ docs: result.data.pages.flat(), query: "Lovelace" }), [document]);
+  } finally {
+    unsubscribe();
+    observer.destroy();
+    client.clear();
+  }
+});
+
 
 test("the Library upload is reachable without drag and drop", () => {
   assert.match(source, /type="file"/);

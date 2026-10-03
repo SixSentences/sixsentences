@@ -247,7 +247,14 @@ export default function DataPage() {
     dragDepth.current = 0;
     setDragging(false);
     setDropTargetId(null);
+    if (importOpen || profileOpen || confirmDelete !== null) return;
     void importFiles(Array.from(event.dataTransfer.files), target);
+  }
+
+  function isolateImportDrag(event: DragEvent<HTMLElement>) {
+    // Portal events still bubble through the page's React ancestry.
+    event.preventDefault();
+    event.stopPropagation();
   }
 
   function openImport() {
@@ -262,6 +269,7 @@ export default function DataPage() {
       className="relative min-h-0 flex-1 overflow-y-auto bg-background md:rounded-t-2xl"
       onDragEnter={(event) => {
         event.preventDefault();
+        if (importOpen || profileOpen || confirmDelete !== null) return;
         dragDepth.current += 1;
         if (event.dataTransfer.types.includes("Files")) setDragging(true);
       }}
@@ -398,15 +406,21 @@ export default function DataPage() {
           setImportDrag(false);
         }
       }}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent
+          className="sm:max-w-2xl"
+          onDragEnter={isolateImportDrag}
+          onDragOver={isolateImportDrag}
+          onDragLeave={isolateImportDrag}
+          onDrop={isolateImportDrag}
+        >
           <DialogHeader>
             <DialogTitle className="font-serif text-2xl">Import data</DialogTitle>
             <DialogDescription>Drop files into the field or browse. They land where you choose.</DialogDescription>
           </DialogHeader>
           <div className="flex items-center gap-3">
-            <Label className="shrink-0 text-[0.75rem] text-muted-foreground">Land in</Label>
+            <Label htmlFor="dataset-import-target" className="shrink-0 text-[0.75rem] text-muted-foreground">Land in</Label>
             <Select value={importTarget} onValueChange={setImportTarget}>
-              <SelectTrigger className="h-9 rounded-full"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="dataset-import-target" className="h-9 rounded-full"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="new">A new profile per file</SelectItem>
                 {(datasets ?? []).map((dataset) => (
