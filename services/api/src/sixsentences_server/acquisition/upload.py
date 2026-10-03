@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
 from typing import Any
+from urllib.parse import urlsplit
 
 import pypdf
 from PIL import Image
@@ -59,9 +60,17 @@ from sixsentences_server.core.uploads import UnsafeImageError, decode_image
 
 _DOI_RE = re.compile(r"\b10\.\d{4,9}/[^\s\"<>\[\]{},;]+", re.IGNORECASE)
 _DOI_LABEL_RE = re.compile(r"(?:doi\s*:\s*|https?://(?:dx\.)?doi\.org/)$", re.IGNORECASE)
-_ARXIV_RE = re.compile(r"arxiv[:\s/]+(\d{4}\.\d{4,5})(v\d+)?", re.IGNORECASE)
-# a bare arXiv id (YYMM.NNNNN) as it appears in filenames like 2307.03172v3.pdf
-_ARXIV_BARE_RE = re.compile(r"\b(\d{2}(0[1-9]|1[0-2])\.\d{4,5})(v\d+)?\b")
+# Token boundaries stay Unicode-aware; only the identifier grammar is ASCII.
+_ARXIV_CANDIDATE_RE = re.compile(
+    r"(?:(?P<label>(?ai:arxiv))[:\s/]+)?(?P<token>[^\s\"'<>()\[\]{},;]+)"
+)
+_ARXIV_ID_RE = re.compile(
+    r"(?:(?P<modern>[0-9]{2}(?:0[1-9]|1[0-2])\.[0-9]{4,5})"
+    r"|(?P<archive>[a-z]+(?:-[a-z]+)*)(?:\.(?P<subject>[a-z]{2}))?/"
+    r"(?P<legacy>[0-9]{2}(?:0[1-9]|1[0-2])[0-9]{3}))"
+    r"(?:v[0-9]+)?(?:\.pdf)?",
+    re.IGNORECASE | re.ASCII,
+)
 _METADATA_CHARS = 12_000  # DOIs/ids live on the first pages
 _TITLE_HEAD_CHARS = 240  # scholarly PDFs open with the title
 _PDF_COVER_FRAGMENT_LIMIT = 800
@@ -951,14 +960,64 @@ def _find_doi(text: str) -> str | None:
     return doi
 
 
+def _arxiv_token_id(token: str, *, labeled: bool) -> str | None:
+    """Validate one lexical candidate and remove article-version decorations."""
+    explicit = labeled
+    if token.lower().startswith(("http://", "https://")):
+        try:
+            parsed = urlsplit(token)
+        except ValueError:
+            return None
+        if parsed.netloc.lower() not in {"arxiv.org", "www.arxiv.org", "export.arxiv.org"}:
+            return None
+        # Validate the entire path before ignoring a query/fragment. No decoding,
+        # userinfo, ports, or additional path segments can supply an ID.
+        if not parsed.path.startswith(("/abs/", "/pdf/")):
+            return None
+        token = parsed.path[5:]
+        explicit = True
+
+    match = _ARXIV_ID_RE.fullmatch(token)
+    if match is None:
+        return None
+    modern = match.group("modern")
+    if modern:
+        return modern
+    if not explicit:
+        return None
+    archive = match.group("archive").lower()
+    if match.group("subject") and archive not in {"math", "cs", "nlin", "q-bio"}:
+        return None
+    return f"{archive}/{match.group('legacy')}"
+
+
 def _find_arxiv_id(text: str) -> str | None:
-    match = _ARXIV_RE.search(text[:_METADATA_CHARS])
-    if match:
-        return match.group(1)
-    # the id often hides in a filename or link, e.g. 2307.03172v3.pdf —
-    # the bare pattern is month-validated so page numbers cannot match
-    bare = _ARXIV_BARE_RE.search(text[:_METADATA_CHARS])
-    return bare.group(1) if bare else None
+    """Extract complete candidates, not proof of availability or historical validity.
+
+    Both modern sequence lengths and syntactic numeric versions remain supported.
+    Legacy subject classes are removed only for archives that used that notation.
+    """
+    bare = None
+    # Two characters distinguish a terminal prose period from a cut-off ".pdf".
+    # Rejected whole tokens are never rescanned for an embedded bare-ID prefix.
+    for match in _ARXIV_CANDIDATE_RE.finditer(text[: _METADATA_CHARS + 2]):
+        token = match.group("token")
+        variants = [(token, match.end())]
+        if token.endswith("."):
+            variants.append((token[:-1], match.end() - 1))
+        for candidate, end in variants:
+            if end > _METADATA_CHARS:
+                continue
+            labeled = match.group("label") is not None
+            identifier = _arxiv_token_id(candidate, labeled=labeled)
+            if identifier is not None:
+                if labeled:
+                    return identifier
+                if bare is None:
+                    bare = identifier
+                break
+    # Preserve label priority; URLs and bare filenames stay in text order.
+    return bare
 
 
 def _pdf_info_title(content: bytes) -> str | None:

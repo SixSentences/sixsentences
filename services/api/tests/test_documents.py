@@ -18,6 +18,7 @@ from sixsentences_server.acquisition.models import (
 from sixsentences_server.acquisition.pdf import extract_page_texts
 from sixsentences_server.acquisition.store import LocalDocumentStore
 from sixsentences_server.acquisition.upload import (
+    _find_arxiv_id,
     _find_doi,
     _resolve_metadata,
     ingest_document,
@@ -241,6 +242,301 @@ def test_ingest_upload_parenthesized_doi_requires_exact_identity(
             assert doc.work_id == exact.id
         else:
             assert doc.work_id.startswith("W0")
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("arXiv:hep-th/9901001v2", "hep-th/9901001"),
+        ("arxiv hep-th/9901001", "hep-th/9901001"),
+        ("arxiv/hep-th/9901001", "hep-th/9901001"),
+        ("ARXIV:HEP-TH/9901001V02", "hep-th/9901001"),
+        ("arXiv: math.CA/0611800v3", "math/0611800"),
+        ("arXiv:cs.AI/9901001", "cs/9901001"),
+        ("arXiv:nlin.CD/0101001v0", "nlin/0101001"),
+        ("arXiv:q-bio.BM/0401001v000", "q-bio/0401001"),
+        ("arXiv:cond-mat/9901001", "cond-mat/9901001"),
+        ("arXiv:physics/9901001", "physics/9901001"),
+        ("arXiv:2307.03172v3 [cs.CL]", "2307.03172"),
+        ("2307.03172v3.pdf", "2307.03172"),
+        ("0706.0001", "0706.0001"),
+        ("0706.00001", "0706.00001"),
+        ("1501.0001", "1501.0001"),
+        ("1501.00001", "1501.00001"),
+        ("0012.0000v00.PDF", "0012.0000"),
+        ("[arXiv:hep-th/9901001v2].", "hep-th/9901001"),
+        ("arXiv:hep-th/9901001v2.", "hep-th/9901001"),
+        ("1501.00001.", "1501.00001"),
+        ("arXiv:\u00a0math.CA/0611800\u00a0later", "math/0611800"),
+        ("1501.00001\u00a0later", "1501.00001"),
+        ("https://arxiv.org/abs/hep-th/9901001v2", "hep-th/9901001"),
+        ("https://arxiv.org/pdf/math.CA/0611800v3.pdf", "math/0611800"),
+        ("http://www.arxiv.org/abs/cs.AI/9901001", "cs/9901001"),
+        ("https://export.arxiv.org/pdf/nlin.CD/0101001.pdf", "nlin/0101001"),
+        ("https://ARXIV.ORG/abs/1501.00001v0", "1501.00001"),
+        ("https://arxiv.org/pdf/1501.00001v2.pdf?download=1#page=2", "1501.00001"),
+        ("https://arxiv.org/abs/hep-th/9901001.", "hep-th/9901001"),
+        ("1501.00001 1502.00002", "1501.00001"),
+        ("1501.00001 arXiv:hep-th/9901001", "hep-th/9901001"),
+        ("1501.00001 https://arxiv.org/abs/1502.00002", "1501.00001"),
+        ("https://arxiv.org/abs/1502.00002 1501.00001", "1502.00002"),
+        ("https://arxiv.org/abs/1501.00001 arXiv:1502.00002", "1502.00002"),
+        ("https://arxiv.org/abs/hep-th/9901001 arXiv:math.CA/0611800", "math/0611800"),
+        ("arXiv:bad:1501.00001 1502.00002", "1502.00002"),
+        ("https://arxiv.org/abs/extra/1501.00001 1502.00002", "1502.00002"),
+        ("1501.000011 arXiv:hep-th/9901001", "hep-th/9901001"),
+    ],
+)
+def test_upload_arxiv_candidate_requires_complete_identity(text: str, expected: str) -> None:
+    assert _find_arxiv_id(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "No identifier is present in this synthetic document.",
+        "hep-th/9901001",
+        "hep-th9901001.pdf",
+        "arXiv:hep-th9901001",
+        "arXiv:hep-th/990100",
+        "arXiv:hep-th/99010011",
+        "arXiv:hep-th/9900001",
+        "arXiv:hep-th/9913001",
+        "arXiv:math.CAAA/0611800",
+        "arXiv:math.C/0611800",
+        "arXiv:physics.AA/9901001",
+        "arXiv:cond-mat.AA/9901001",
+        "arXiv:hep-th.AA/9901001",
+        "arXiv:math.\u0130\u0130/0611800",
+        "arXiv:\u017fs/0611800",
+        "arXiv:math.CA/061180\u0660",
+        "arXiv:hep-th/9901001v",
+        "arXiv:hep-th/9901001v2extra",
+        "arXiv:hep-th/9901001v2\u03b2",
+        "arXiv:hep-th/9901001v2\u0661",
+        "arXiv:hep-th/9901001v2_extra",
+        "arXiv:hep-th/9901001.pdfx",
+        "arXiv:hep-th/9901001.pdf.pdf",
+        "arXiv:hep-th/9901001..",
+        "1500.00001",
+        "1513.00001",
+        "arXiv:1513.00001",
+        "1501.000",
+        "1501.000011",
+        "arXiv:1501.000011",
+        "1501.00001v",
+        "1501.00001v2extra",
+        "1501.00001v2.3",
+        "1501.00001.pdfx",
+        "1501.00001.pdf.pdf",
+        "1501.00001..",
+        "1501.00001\u03b2",
+        "1501.00001\u0661",
+        "1501.00001_",
+        "\u0661\u0665\u0660\u0661.00001",
+        "1501.0000\u0661",
+        "foo1501.00001",
+        "foo_1501.00001",
+        "1501.00001/1502.00002",
+        "arXiv:math.GT/0611800/1501.00001",
+        "arXiv:bad:1501.00001",
+        "extra/hep-th/9901001",
+        "https://arxiv.org/abs/extra/1501.00001",
+        "https://arxiv.org/abs/1501.00001/extra",
+        "https://arxiv.org/pdf/1501.00001.pdfx",
+        "https://arxiv.org/abs/1501.000011?download=1",
+        "https://arxiv.org/abs/hep-th%2F9901001",
+        "https://arxiv.org.evil.example/abs/1501.00001",
+        "https://arxiv.org@evil.example/abs/1501.00001",
+        "https://user@arxiv.org/abs/1501.00001",
+        "https://arxiv.org:443/abs/1501.00001",
+        "ftp://arxiv.org/abs/1501.00001",
+        "arxiv.org/abs/1501.00001",
+        "https://other.example/abs/1501.00001",
+        "1501.00001?download=1",
+        "arXiv:1501.00001#page=2",
+    ],
+)
+def test_upload_arxiv_candidate_never_resolves_a_foreign_prefix(text: str) -> None:
+    foreign = WorkRecord(id="W9000000001", title="Synthetic unrelated prefix work")
+    stub = _ExactOA(
+        {
+            f"doi:10.48550/arXiv.{identifier}": foreign
+            for identifier in (
+                "1501.00001", "1502.00002", "1513.00001",
+                "hep-th/9901001", "th/9901001", "math/0611800",
+            )
+        }
+    )
+
+    assert _find_arxiv_id(text) is None
+    work, resolved_by = _resolve_metadata(
+        text, "synthetic-upload.pdf", stub  # type: ignore[arg-type]
+    )
+
+    assert stub.requested == []
+    assert work is None
+    assert resolved_by is None
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        "1501.00001",
+        "1501.00001v23.pdf",
+        "arXiv:hep-th/9901001v2",
+        "https://arxiv.org/pdf/math.CA/0611800v2.pdf?download=1#page=2",
+    ],
+)
+@pytest.mark.parametrize("separator", ["", " ", "\n", "\u00a0", ", later", ")."])
+def test_upload_arxiv_candidate_complete_at_metadata_limit(token: str, separator: str) -> None:
+    expected = _find_arxiv_id(token)
+    assert expected is not None
+    text = " " * (12_000 - len(token)) + token + separator
+    assert _find_arxiv_id(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("token", "continuation"),
+    [
+        ("1501.00001", "1"),
+        ("1501.00001", "\u03b2"),
+        ("1501.00001", "\u0661"),
+        ("1501.00001", "_"),
+        ("1501.00001", "v2"),
+        ("1501.00001v2", "3"),
+        ("1501.00001v2", ".pdf"),
+        ("1501.00001v2.pd", "f"),
+        ("1501.00001v2.pdf", "x"),
+        ("arXiv:hep-th/9901001", "v2"),
+        ("arXiv:hep-th/9901001v2", ".pdf"),
+        ("https://arxiv.org/abs/1501.00001", "/extra"),
+        ("https://arxiv.org/abs/1501.00001", "?download=1"),
+        ("https://arxiv.org/abs/1501.00001?download=", "1"),
+    ],
+)
+def test_upload_arxiv_candidate_rejects_truncation_at_metadata_limit(
+    token: str, continuation: str
+) -> None:
+    text = " " * (12_000 - len(token)) + token + continuation
+    stub = _ExactOA(
+        {"doi:10.48550/arXiv.1501.00001": WorkRecord(id="W9000000001", title="Foreign prefix")}
+    )
+    assert _find_arxiv_id(text) is None
+    assert _resolve_metadata(
+        text, "synthetic-upload.pdf", stub  # type: ignore[arg-type]
+    ) == (None, None)
+    assert stub.requested == []
+
+
+@pytest.mark.parametrize("ending", [".", ". ", "., later"])
+def test_upload_arxiv_candidate_sentence_period_at_metadata_limit(ending: str) -> None:
+    token = "arXiv:hep-th/9901001v2"
+    assert _find_arxiv_id(" " * (12_000 - len(token)) + token + ending) == "hep-th/9901001"
+
+
+def test_upload_arxiv_candidate_does_not_start_outside_metadata_limit() -> None:
+    assert _find_arxiv_id(" " * 12_000 + "1501.00001") is None
+    assert _find_arxiv_id(" " * 11_997 + "arXiv:hep-th/9901001") is None
+
+
+@pytest.mark.parametrize(
+    ("page_token", "filename", "url", "identifier"),
+    [
+        ("arXiv:hep-th/9901001v2", "synthetic-upload.pdf", None, "hep-th/9901001"),
+        ("arXiv:math.CA/0611800v3", "synthetic-upload.pdf", None, "math/0611800"),
+        ("", "1501.00001v3.pdf", None, "1501.00001"),
+        (
+            "", "synthetic-upload.pdf",
+            "https://export.arxiv.org/pdf/cs.AI/9901001v2.pdf?download=1",
+            "cs/9901001",
+        ),
+    ],
+)
+@pytest.mark.parametrize("resolve_full_id", [False, True])
+def test_ingest_upload_arxiv_requires_exact_versionless_identity(
+    settings: Settings,
+    page_token: str,
+    filename: str,
+    url: str | None,
+    identifier: str,
+    resolve_full_id: bool,
+) -> None:
+    init_db()
+    text = " ".join(
+        part for part in ("Synthetic identifier extraction study.", page_token, "Author Example.")
+        if part
+    )
+    pdf = _mini_pdf(text)
+    assert extract_page_texts(pdf) == [text]
+    exact = WorkRecord(id="W9000000002", title="Synthetic identifier extraction study")
+    foreign = WorkRecord(id="W9000000001", title="Synthetic unrelated prefix work")
+    key = f"doi:10.48550/arXiv.{identifier}"
+    works = {
+        "doi:10.48550/arXiv.math.CA/0611800": foreign,
+        "doi:10.48550/arXiv.cs.AI/9901001": foreign,
+        f"{key}v2": foreign,
+    }
+    if resolve_full_id:
+        works[key] = exact
+    stub = _ExactOA(works)
+
+    with db_session() as session:
+        org = get_default_org(session)
+        doc = ingest_document(
+            session,
+            org_id=org.id,
+            run_id=None,
+            content=pdf,
+            filename=filename,
+            url=url,
+            oa_client=stub,  # type: ignore[arg-type]
+        )
+
+        assert stub.requested == [key]
+        assert doc.text_status == "parsed"
+        assert doc.work_id != foreign.id
+        assert is_verified_work_id(doc.work_id) == resolve_full_id
+        if resolve_full_id:
+            assert doc.work_id == exact.id
+        else:
+            assert doc.work_id.startswith("W0")
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        "arXiv:1501.000011",
+        "https://arxiv.org/abs/1501.00001/extra",
+        "arXiv:math.GT/0611800/1501.00001",
+    ],
+)
+def test_ingest_upload_arxiv_invalid_token_stays_unverified(settings: Settings, token: str) -> None:
+    init_db()
+    text = f"Synthetic malformed identifier study. {token} Author Example."
+    pdf = _mini_pdf(text)
+    assert extract_page_texts(pdf) == [text]
+    stub = _ExactOA(
+        {
+            "doi:10.48550/arXiv.1501.00001": WorkRecord(
+                id="W9000000001", title="Synthetic unrelated prefix work"
+            )
+        }
+    )
+    with db_session() as session:
+        org = get_default_org(session)
+        doc = ingest_document(
+            session,
+            org_id=org.id,
+            run_id=None,
+            content=pdf,
+            filename="synthetic-upload.pdf",
+            oa_client=stub,  # type: ignore[arg-type]
+        )
+
+        assert stub.requested == []
+        assert doc.work_id.startswith("W0")
+        assert not is_verified_work_id(doc.work_id)
 
 
 class _NoAcquire:
