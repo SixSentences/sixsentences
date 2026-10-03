@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ $# -gt 1 ]]; then
+  echo "Usage: backup.sh [ENV_FILE]" >&2
+  exit 2
+fi
+if [[ $# -eq 1 && -z "$1" ]]; then
+  echo "Environment file argument must not be empty." >&2
+  exit 2
+fi
+
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
 REPOSITORY_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd -P)"
 COMPOSE_FILE="$REPOSITORY_ROOT/compose.yaml"
-ENV_FILE="${SIX_SELFHOST_ENV_FILE:-$REPOSITORY_ROOT/.env.selfhost}"
+ENV_FILE="${1:-${SIX_SELFHOST_ENV_FILE:-$REPOSITORY_ROOT/.env.selfhost}}"
 
 "$SCRIPT_DIR/preflight.sh" "$ENV_FILE"
 

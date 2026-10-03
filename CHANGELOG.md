@@ -10,6 +10,10 @@ equivalents for Python package metadata.
 
 ### Fixed
 
+- Honor the explicit environment-file argument in the self-hosted backup
+  command and its Makefile shortcut, including paths with spaces. Reject empty
+  or extra arguments before preflight, while preserving the existing optional
+  environment-variable and checkout-default selection.
 - Extract article HTML with the HTML parser instead of the weak JATS/XML
   heuristic, preserving explicit XML and entity protections. Missing-MIME
   HTML roots now yield text sidecars without changing PDF landing-page policy;

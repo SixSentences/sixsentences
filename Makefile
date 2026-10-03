@@ -45,7 +45,7 @@ doctor: ## Report what the running deployment can actually do
 	$(COMPOSE) exec api six-community doctor
 
 backup: ## Write an authenticated backup to SIX_BACKUP_DIR
-	bash deploy/community/backup.sh $(ENV_FILE)
+	bash deploy/community/backup.sh "$(ENV_FILE)"
 
 # restore.sh refuses to run without --confirm RESTORE. That guard is the point,
 # so this target asks for the same word rather than supplying it: a shortcut

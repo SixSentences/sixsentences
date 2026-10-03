@@ -27,6 +27,17 @@ checkout, owned by the deployment administrator. Then run:
 bash deploy/community/backup.sh
 ```
 
+For another deployment, select its configuration explicitly:
+
+```console
+bash deploy/community/backup.sh "/srv/six/custom deployment.env"
+make backup ENV_FILE="/srv/six/custom deployment.env"
+```
+
+The optional argument takes precedence over `SIX_SELFHOST_ENV_FILE`; without
+either, the script uses the checkout's `.env.selfhost`. An empty argument or
+additional arguments are rejected before preflight or any backup operation.
+
 The script validates configuration, records which write services were running,
 drains the worker, stops the API, dumps PostgreSQL, rejects links and special
 files in persistent volumes, creates checksums, atomically publishes the
