@@ -2,12 +2,16 @@
 extract, and the run-level service."""
 
 import base64
+import hashlib
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import httpx
+import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import sixsentences_server.acquisition.extract as extract_module
 from sixsentences_server.acquisition.arxiv import (
     ArxivClient,
     ArxivEntry,
@@ -25,6 +29,7 @@ from sixsentences_server.acquisition.models import (
     AcquisitionResult,
     AcquisitionStatus,
     DocumentSource,
+    ExtractedText,
     FetchedBlob,
     LegalBasis,
     TextStatus,
@@ -32,7 +37,7 @@ from sixsentences_server.acquisition.models import (
 from sixsentences_server.acquisition.pdf import PdfTextExtractor
 from sixsentences_server.acquisition.resolver import OpenAccessResolver
 from sixsentences_server.acquisition.service import AcquisitionService, acquire_for_run
-from sixsentences_server.acquisition.store import LocalDocumentStore
+from sixsentences_server.acquisition.store import DocumentStore, LocalDocumentStore
 from sixsentences_server.core.db import (
     DocumentRow,
     Run,
@@ -231,6 +236,296 @@ def test_extract_html_strips_tags_and_scripts() -> None:
     assert out.status is TextStatus.PARSED
     assert "real body text of the paper" in out.text
     assert "evil" not in out.text and "color:red" not in out.text
+
+
+_HTML_BODY = "Synthetic article content demonstrates reliable local text extraction."
+
+
+def _extract_via(raw: str, content_type: str, route: str) -> ExtractedText:
+    """Run the real parsers while asserting which classifier branch was used."""
+    with (
+        patch.object(extract_module, "_strip_xml", wraps=extract_module._strip_xml) as xml,
+        patch.object(extract_module, "_strip_html", wraps=extract_module._strip_html) as html,
+    ):
+        result = StdlibTextExtractor().extract(raw.encode(), content_type)
+    assert xml.call_count == (1 if route == "xml" else 0)
+    assert html.call_count == (1 if route == "html" else 0)
+    return result
+
+
+@pytest.mark.parametrize("content_type", ["text/html", "TEXT/HTML; charset=UTF-8"])
+@pytest.mark.parametrize("separator", ["<br>", "<br/>", "&nbsp;"])
+@pytest.mark.parametrize("uppercase", [False, True])
+def test_extract_html_article_uses_html_parser(
+    content_type: str, separator: str, uppercase: bool
+) -> None:
+    start, end = "<article><p>", "</p><script>hidden()</script><style>.hidden{}</style></article>"
+    if uppercase:
+        start, end, separator = start.upper(), end.upper(), separator.replace("br", "BR")
+    out = _extract_via(
+        f"{start}{_HTML_BODY}{separator}Second paragraph.{end}", content_type, "html"
+    )
+    assert out.status is TextStatus.PARSED
+    assert out.text == f"{_HTML_BODY} Second paragraph."
+
+
+def test_extract_html_article_with_only_script_and_style_is_empty() -> None:
+    raw = f"<article><script>{'hidden();' * 20}</script><style>{'.hidden{}' * 20}</style></article>"
+    out = _extract_via(raw, "text/html", "html")
+    assert out.status is TextStatus.EMPTY
+    assert out.text == ""
+
+
+@pytest.mark.parametrize("error", [AssertionError, ValueError])
+def test_extract_html_discards_partial_text_on_parser_error(
+    monkeypatch: pytest.MonkeyPatch,
+    error: type[Exception],
+) -> None:
+    def reject_after_text(parser: extract_module._TextCollector, raw: str) -> None:
+        parser.handle_data(_HTML_BODY)
+        raise error("synthetic malformed HTML")
+
+    monkeypatch.setattr(extract_module._TextCollector, "feed", reject_after_text)
+    out = _extract_via(f"<article><p>{_HTML_BODY}</p></article>", "text/html", "html")
+    assert out.status is TextStatus.EMPTY
+    assert out.text == ""
+
+
+@pytest.mark.parametrize(
+    "marker", ["<![unexpected]>", "<![unexpected[fixture]]>", "<![]>", "<![123]>", "<![>"]
+)
+def test_extract_html_malformed_marked_sections_do_not_escape(marker: str) -> None:
+    raw = f"<article><p>{_HTML_BODY}</p>{marker}</article>"
+    out = _extract_via(raw, "text/html", "html")
+    # Parser versions either reject these sections or ignore them; never expose partial garbage.
+    assert (out.status, out.text) in [
+        (TextStatus.EMPTY, ""),
+        (TextStatus.PARSED, _HTML_BODY),
+    ]
+
+
+@pytest.mark.parametrize("location", ["text", "attribute"])
+def test_extract_html_oversized_numeric_references_discard_partial_text(location: str) -> None:
+    reference = "&#" + "9" * 4301 + ";"
+    tail = (
+        reference if location == "text" else f'<span title="{reference}">Second paragraph.</span>'
+    )
+    out = _extract_via(f"<article><p>{_HTML_BODY}</p>{tail}</article>", "text/html", "html")
+    assert out.status is TextStatus.EMPTY
+    assert out.text == ""
+
+
+@pytest.mark.parametrize("location", ["text", "attribute"])
+@pytest.mark.parametrize("reference", ["&#" + "9" * 100 + ";", "&#x" + "f" * 5000 + ";"])
+def test_extract_html_numeric_reference_controls_preserve_visible_text(
+    location: str, reference: str
+) -> None:
+    tail = (
+        reference if location == "text" else f'<span title="{reference}">Second paragraph.</span>'
+    )
+    out = _extract_via(f"<article><p>{_HTML_BODY}</p>{tail}</article>", "text/html", "html")
+    assert out.status is TextStatus.PARSED
+    expected_tail = "\ufffd" if location == "text" else "Second paragraph."
+    assert out.text == f"{_HTML_BODY} {expected_tail}"
+
+
+@pytest.mark.parametrize("content_type", ["", "text/plain", "application/octet-stream"])
+@pytest.mark.parametrize(
+    "prolog",
+    [
+        "",
+        "<!-- synthetic -->",
+        "<!DOCTYPE html>",
+        '<!-- synthetic --><!DOCTYPE HTML PUBLIC "synthetic">',
+    ],
+)
+def test_extract_html_root_precedes_article_sniff(content_type: str, prolog: str) -> None:
+    raw = f"{prolog}<html><article><p>{_HTML_BODY}<br>Second&nbsp;paragraph.</p></article></html>"
+    out = _extract_via(raw, content_type, "html")
+    assert out.status is TextStatus.PARSED
+    assert out.text == f"{_HTML_BODY} Second paragraph."
+
+
+@pytest.mark.parametrize("tag", ["htmlx", "html:foo", "html!"])
+def test_extract_html_root_requires_an_exact_name(tag: str) -> None:
+    out = _extract_via(f"<{tag}><p>{_HTML_BODY}</p></{tag}>", "application/octet-stream", "none")
+    assert out.status is TextStatus.UNSUPPORTED
+
+
+@pytest.mark.parametrize(
+    "content_type", ["application/xml", "TEXT/XML; charset=UTF-8", "application/xhtml+xml"]
+)
+def test_extract_xml_mime_does_not_fall_back_to_html(content_type: str) -> None:
+    raw = f"<html><article><p>{_HTML_BODY}<br>Second&nbsp;paragraph.</p></article></html>"
+    out = _extract_via(raw, content_type, "xml")
+    assert out.status is TextStatus.EMPTY
+    assert out.text == ""
+
+
+@pytest.mark.parametrize(
+    ("prefix", "expected"),
+    [
+        ("", TextStatus.PARSED),
+        ("\ufeff", TextStatus.PARSED),
+        (" \n", TextStatus.EMPTY),
+        ("\ufeff \n", TextStatus.EMPTY),
+        (" \n\ufeff", TextStatus.EMPTY),
+        ("\ufeff\ufeff", TextStatus.EMPTY),
+        ("\ufeff \n\ufeff", TextStatus.EMPTY),
+        ("\u00a0\ufeff", TextStatus.EMPTY),
+        ("<!-- synthetic -->", TextStatus.EMPTY),
+    ],
+)
+def test_extract_xml_declaration_keeps_raw_prefix_and_priority(
+    prefix: str, expected: TextStatus
+) -> None:
+    raw = f'{prefix}<?xml version="1.0"?><article><p>{_HTML_BODY}</p></article>'
+    out = _extract_via(raw, "text/html", "xml")
+    assert out.status is expected
+    assert out.text == (_HTML_BODY if expected is TextStatus.PARSED else "")
+
+
+@pytest.mark.parametrize("content_type", ["", "text/plain", "application/octet-stream"])
+def test_extract_jats_comment_cannot_spoof_html_root(content_type: str) -> None:
+    raw = f"<!-- <html> is only a comment --><article><body><p>{_HTML_BODY}</p></body></article>"
+    out = _extract_via(raw, content_type, "xml")
+    assert out.status is TextStatus.PARSED
+    assert out.text == _HTML_BODY
+
+
+@pytest.mark.parametrize("content_type", ["text/html", "application/octet-stream"])
+@pytest.mark.parametrize("root", ["article", "html"])
+def test_extract_xml_entity_subset_does_not_spoof_html_root(content_type: str, root: str) -> None:
+    raw = (
+        f'<!DOCTYPE {root} [<!ENTITY fixture "<html>">]>'
+        f"<{root}><article><p>{_HTML_BODY}&fixture;</p></article></{root}>"
+    )
+    out = _extract_via(raw, content_type, "xml")
+    assert out.status is TextStatus.EMPTY
+    assert out.text == ""
+
+
+def test_extract_quoted_doctype_cannot_spoof_html_root() -> None:
+    raw = f'<!DOCTYPE html PUBLIC " > <html> "><article><p>{_HTML_BODY}</p></article>'
+    out = _extract_via(raw, "application/octet-stream", "xml")
+    assert out.status is TextStatus.EMPTY
+
+
+def test_extract_xhtml_keeps_xml_text_semantics() -> None:
+    raw = f"<html><article><p>{_HTML_BODY}<br/></p><script>xml_literal</script></article></html>"
+    out = _extract_via(raw, "application/xhtml+xml", "xml")
+    assert out.status is TextStatus.PARSED
+    assert out.text == f"{_HTML_BODY} xml_literal"
+
+
+@pytest.mark.parametrize("prefix", ["", "\ufeff"])
+@pytest.mark.parametrize("content_type", ["text/html", "application/xhtml+xml"])
+def test_extract_xml_entity_restrictions_are_not_bypassed(prefix: str, content_type: str) -> None:
+    raw = (
+        f'{prefix}<!DOCTYPE html [<!ENTITY fixture "synthetic-token">]>'
+        f"<html><article><p>{_HTML_BODY} &fixture;</p></article></html>"
+    )
+    out = _extract_via(raw, content_type, "xml")
+    assert out.status is TextStatus.EMPTY
+    assert out.text == ""
+
+
+@pytest.mark.parametrize(
+    ("prolog", "content_type", "route"),
+    [
+        ("<!-- <article> <html> " + "x" * 200 + " -->", "text/html", "xml"),
+        ("<!-- <html> " + "x" * 200 + " -->", "application/octet-stream", "html"),
+        ("<!-- " + "x" * 200 + " -->", "text/html", "html"),
+        ("<!-- " + "x" * 200 + " -->", "application/octet-stream", "none"),
+        ('<!DOCTYPE html PUBLIC "<article>' + "x" * 200 + '">', "text/html", "xml"),
+        (" " * 198, "application/octet-stream", "none"),
+    ],
+)
+def test_extract_incomplete_prolog_keeps_previous_priority(
+    prolog: str, content_type: str, route: str
+) -> None:
+    raw = f"{prolog}<html><article><p>{_HTML_BODY}</p></article></html>"
+    out = _extract_via(raw, content_type, route)
+    if route == "none":
+        assert out.status is TextStatus.UNSUPPORTED
+    elif route == "html":
+        assert out.text == _HTML_BODY
+
+
+def test_extract_unclosed_comment_keeps_article_xml_priority() -> None:
+    out = _extract_via(f"<!-- <article> <html> {_HTML_BODY}", "text/html", "xml")
+    assert out.status is TextStatus.EMPTY
+    assert out.text == ""
+
+
+@pytest.mark.parametrize("padding", [194, 195])
+@pytest.mark.parametrize("tag", ["htmlx", "html:foo", "html!"])
+def test_extract_root_name_at_scan_limit_keeps_historical_unknown_fallback(
+    padding: int, tag: str
+) -> None:
+    # At 195 only "<html" fits: no delimiter is visible, so the old sniff still applies.
+    route = "none" if padding == 194 else "html"
+    raw = f"{' ' * padding}<{tag}><p>{_HTML_BODY}</p></{tag}>"
+    out = _extract_via(raw, "application/octet-stream", route)
+    assert out.status is (TextStatus.UNSUPPORTED if padding == 194 else TextStatus.PARSED)
+
+
+@pytest.mark.parametrize(
+    ("prolog", "expected"),
+    [
+        ("<?synthetic?>", TextStatus.PARSED),
+        ('<?XML version="1.0"?>', TextStatus.EMPTY),
+        ("<!DOCTYPEhtml>", TextStatus.EMPTY),
+        ("<!unrecognized>", TextStatus.EMPTY),
+        ("<! -- synthetic -->", TextStatus.EMPTY),
+        ("<![CDATA[<html>]]>", TextStatus.EMPTY),
+        ("<!doctype>", TextStatus.EMPTY),
+    ],
+)
+def test_extract_unknown_prolog_keeps_article_xml_priority(
+    prolog: str, expected: TextStatus
+) -> None:
+    out = _extract_via(
+        f"{prolog}<article><p>{_HTML_BODY}</p></article>", "text/html", "xml"
+    )
+    assert out.status is expected
+
+
+def test_pdf_extractor_delegates_html_article_to_html_parser() -> None:
+    raw = f"<article><p>{_HTML_BODY}<br>Second&nbsp;paragraph.</p></article>"
+    out = PdfTextExtractor().extract(raw.encode(), "text/html; charset=utf-8")
+    assert out.status is TextStatus.PARSED
+    assert out.text == f"{_HTML_BODY} Second paragraph."
+
+
+@pytest.mark.parametrize("content_type", ["", "text/plain", "text/html"])
+def test_acquire_html_root_uses_text_parser_without_changing_landing_policy(
+    content_type: str,
+) -> None:
+    url = "https://synthetic.example/article"
+    content = (
+        f"<!-- synthetic --><html><article><p>{_HTML_BODY}"
+        "<br>Second&nbsp;paragraph.</p></article></html>"
+    ).encode()
+    fetcher = FakeFetcher({url: FetchedBlob(content, content_type, url)})
+    store = Mock(spec=DocumentStore)
+    checksum = hashlib.sha256(content).hexdigest()
+    store.put.return_value = (checksum, "memory:synthetic")
+    service = AcquisitionService(
+        resolver=OpenAccessResolver(), fetcher=fetcher, extractor=PdfTextExtractor(), store=store
+    )
+    work = WorkRecord(id="W_synthetic_html", title=_HTML_BODY, oa_status="green", pdf_url=url)
+    result = service.acquire(work)
+    assert fetcher.requested == [url]
+    if content_type == "text/html":
+        assert result.status is AcquisitionStatus.NOT_RETRIEVED
+        store.put.assert_not_called()
+        store.put_text.assert_not_called()
+    else:
+        assert result.status is AcquisitionStatus.RETRIEVED
+        assert result.text_status is TextStatus.PARSED
+        store.put.assert_called_once_with(content)
+        store.put_text.assert_called_once_with(checksum, f"{_HTML_BODY} Second paragraph.")
 
 
 def test_extract_pdf_is_stored_unparsed_not_faked() -> None:
