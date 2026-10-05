@@ -10,6 +10,12 @@ equivalents for Python package metadata.
 
 ### Fixed
 
+- Accept uploaded PDFs that carry only an owner password, as publisher PDFs that
+  restrict printing or copying usually do: they open with the empty user password
+  and their text is extracted. A PDF that needs a password to open is still
+  refused, no other password is tried, and page limits and page-tree checks still
+  apply. A file whose content this server cannot decrypt (AES without a pypdf
+  crypto backend) is refused as encrypted instead of as structurally invalid.
 - Distinguish voice-provider disconnects, failed handshakes and refused redirects
   from internal relay failures with fixed operator diagnostics. Public session-end
   reasons, settlement and the no-redirect credential boundary remain unchanged.

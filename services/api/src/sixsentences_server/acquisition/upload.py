@@ -29,6 +29,7 @@ from urllib.parse import urlsplit
 import pypdf
 from PIL import Image
 from pypdf._codecs import adobe_glyphs
+from pypdf.errors import DependencyError
 from pypdf.generic import (
     ArrayObject,
     ContentStream,
@@ -104,7 +105,11 @@ def validate_pdf_structure(content: bytes) -> None:
         raise UploadError("the uploaded file is not a structurally valid PDF")
     try:
         reader = pypdf.PdfReader(BytesIO(content), strict=False)
-        if reader.is_encrypted:
+        # Publisher PDFs often carry only an owner password, which restricts
+        # printing or copying; the empty user password opens them in any reader.
+        # A PDF that needs a password to open is still refused, and no other
+        # password is ever tried.
+        if reader.is_encrypted and reader.decrypt("") == pypdf.PasswordType.NOT_DECRYPTED:
             raise UploadError("encrypted PDFs are not supported")
         page_count = len(reader.pages)
         if page_count < 1:
@@ -116,8 +121,16 @@ def validate_pdf_structure(content: bytes) -> None:
         for page in reader.pages:
             if str(page.get("/Type", "/Page")) != "/Page":
                 raise UploadError("the PDF contains a malformed page tree")
+        if reader.is_encrypted:
+            # The password check above needs no AES, but AES-encrypted content
+            # does. Decrypting the first page here refuses a file this server
+            # cannot read, instead of storing it without its text.
+            reader.pages[0].get_contents()
     except UploadError:
         raise
+    except DependencyError as exc:
+        # pypdf decrypts AES only through an optional crypto backend.
+        raise UploadError("encrypted PDFs are not supported") from exc
     except Exception as exc:
         raise UploadError("the uploaded file is not a structurally valid PDF") from exc
 
