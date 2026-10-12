@@ -3,10 +3,14 @@ endpoint, citation cards and the split-view paper reader."""
 
 import base64
 import json
+from io import BytesIO
 
+import pypdf
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pypdf.errors import DependencyError
+from pypdf.generic import NameObject
 from sqlalchemy import func, select
 
 from sixsentences_server.acquisition.models import (
@@ -18,11 +22,13 @@ from sixsentences_server.acquisition.models import (
 from sixsentences_server.acquisition.pdf import extract_page_texts
 from sixsentences_server.acquisition.store import LocalDocumentStore
 from sixsentences_server.acquisition.upload import (
+    UploadError,
     _find_arxiv_id,
     _find_doi,
     _resolve_metadata,
     ingest_document,
     is_verified_work_id,
+    validate_pdf_structure,
 )
 from sixsentences_server.api.app import create_app
 from sixsentences_server.chat.service import answer_question
@@ -67,6 +73,21 @@ def _mini_pdf(text: str) -> bytes:
         f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF".encode()
     )
     return bytes(out)
+
+
+def _encrypted_pdf(text: str, *, user_password: str, extra_pages: int = 0) -> bytes:
+    """`_mini_pdf` with an owner password, encrypted with RC4 so no crypto backend is needed.
+
+    An empty `user_password` is how publishers restrict printing or copying: the
+    file still opens without a password. A non-empty one locks it.
+    """
+    writer = pypdf.PdfWriter(clone_from=pypdf.PdfReader(BytesIO(_mini_pdf(text))))
+    for _ in range(extra_pages):
+        writer.add_blank_page()
+    writer.encrypt(user_password=user_password, owner_password="owner", algorithm="RC4-128")
+    out = BytesIO()
+    writer.write(out)
+    return out.getvalue()
 
 
 class _StubOA:
@@ -901,6 +922,83 @@ def test_ingest_rejects_non_pdf(settings: Settings) -> None:
                 filename="page.html",
                 oa_client=_StubOA(),
             )
+
+
+def test_ingest_accepts_a_permission_encrypted_pdf_and_extracts_its_text(
+    settings: Settings,
+) -> None:
+    pdf = _encrypted_pdf(
+        "Restricted Printing Study of Terraform Drift in Regulated Fleets", user_password=""
+    )
+    assert pypdf.PdfReader(BytesIO(pdf)).is_encrypted
+    init_db()
+    with db_session() as session:
+        org = get_default_org(session)
+        doc = ingest_document(
+            session,
+            org_id=org.id,
+            run_id=None,
+            content=pdf,
+            filename="restricted.pdf",
+            oa_client=_StubOA(),
+        )
+        assert doc.text_status == "parsed"
+        work = session.get(WorkRow, doc.work_id)
+        assert work is not None and "Terraform Drift" in work.title
+
+
+def test_ingest_still_refuses_a_pdf_that_needs_a_password(settings: Settings) -> None:
+    pdf = _encrypted_pdf("Locked article text", user_password="reader-secret")
+    init_db()
+    with db_session() as session:
+        org = get_default_org(session)
+        with pytest.raises(UploadError, match="^encrypted PDFs are not supported$"):
+            ingest_document(
+                session,
+                org_id=org.id,
+                run_id=None,
+                content=pdf,
+                filename="locked.pdf",
+                oa_client=_StubOA(),
+            )
+
+
+def test_permission_encrypted_pdf_still_meets_the_page_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("sixsentences_server.acquisition.upload._MAX_PDF_PAGES", 1)
+    pdf = _encrypted_pdf("Two page article", user_password="", extra_pages=1)
+
+    with pytest.raises(UploadError, match="1-page safety limit"):
+        validate_pdf_structure(pdf)
+
+
+def test_permission_encrypted_pdf_still_needs_a_resolvable_page_tree() -> None:
+    # The page tree counts one kid that is not a /Page, so walking the decrypted
+    # tree fails. The page-tree checks must run after decryption as before it.
+    writer = pypdf.PdfWriter(clone_from=pypdf.PdfReader(BytesIO(_mini_pdf("Odd page"))))
+    writer.pages[0][NameObject("/Type")] = NameObject("/Template")
+    writer.encrypt(user_password="", owner_password="owner", algorithm="RC4-128")
+    out = BytesIO()
+    writer.write(out)
+
+    with pytest.raises(UploadError, match="not a structurally valid PDF"):
+        validate_pdf_structure(out.getvalue())
+
+
+def test_encrypted_pdf_whose_content_cannot_be_decrypted_here_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # AES content needs an optional pypdf crypto backend; without one, the password
+    # check passes and decrypting the content raises DependencyError.
+    def no_backend(self: pypdf.PageObject) -> None:
+        raise DependencyError("cryptography>=3.1 is required for AES algorithm")
+
+    monkeypatch.setattr(pypdf.PageObject, "get_contents", no_backend)
+    pdf = _encrypted_pdf("AES article text", user_password="")
+
+    with pytest.raises(UploadError, match="^encrypted PDFs are not supported$"):
+        validate_pdf_structure(pdf)
 
 
 def _upload(client: TestClient, run_id: int, pdf: bytes, name: str = "paper.pdf") -> dict:
