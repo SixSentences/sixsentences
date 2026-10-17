@@ -227,47 +227,169 @@ def test_xlsx_reads_shared_strings() -> None:
 
 
 @pytest.mark.parametrize(
-    "payload",
+    ("payload", "message"),
     [
-        b"not a zip",
-        _zip([("xl/workbook.xml", b"<workbook/>")]),
-        _xlsx([["a"], [1]], target="../outside.xml"),
-        _xlsx([["a"], [1]], sheet_payload=b"<!DOCTYPE x [<!ENTITY a 'x'>]><x>&a;</x>"),
-        _xlsx(
-            [["unused"], [1]],
-            sheet_payload=(
-                b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-                b'<sheetData><row><c r="A1" t="s"><v>999</v></c></row>'
-                b'<row><c r="A2"><v>1</v></c></row></sheetData></worksheet>'
-            ),
-            extra_entries=[
-                (
-                    "xl/sharedStrings.xml",
-                    b'<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-                    b"<si><t>a</t></si></sst>",
-                )
-            ],
+        (b"not a zip", "not a safe, readable XLSX workbook"),
+        (_zip([("xl/workbook.xml", b"<workbook/>")]), "not an .xlsx workbook"),
+        (_xlsx([["a"], [1]], target="../outside.xml"), "first worksheet cannot be found"),
+        (
+            _xlsx([["a"], [1]], sheet_payload=b"<!DOCTYPE x [<!ENTITY a 'x'>]><x>&a;</x>"),
+            "declarations that spreadsheet programs do not write",
         ),
-        _xlsx(
-            [["unused"], [1]],
-            sheet_payload=(
-                b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-                b'<sheetData><row><c r="A1" t="s"><v>-1</v></c></row>'
-                b'<row><c r="A2"><v>1</v></c></row></sheetData></worksheet>'
+        (_xlsx([["a"], [1]], sheet_payload=b"<worksheet"), "damaged .*cannot be read"),
+        (
+            _xlsx(
+                [["unused"], [1]],
+                sheet_payload=(
+                    b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                    b'<sheetData><row><c r="A1" t="s"><v>999</v></c></row>'
+                    b'<row><c r="A2"><v>1</v></c></row></sheetData></worksheet>'
+                ),
+                extra_entries=[
+                    (
+                        "xl/sharedStrings.xml",
+                        b'<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                        b"<si><t>a</t></si></sst>",
+                    )
+                ],
             ),
-            extra_entries=[
-                (
-                    "xl/sharedStrings.xml",
-                    b'<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-                    b"<si><t>a</t></si></sst>",
-                )
-            ],
+            "a cell refers to missing text",
+        ),
+        (
+            _xlsx(
+                [["unused"], [1]],
+                sheet_payload=(
+                    b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                    b'<sheetData><row><c r="A1" t="s"><v>-1</v></c></row>'
+                    b'<row><c r="A2"><v>1</v></c></row></sheetData></worksheet>'
+                ),
+                extra_entries=[
+                    (
+                        "xl/sharedStrings.xml",
+                        b'<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                        b"<si><t>a</t></si></sst>",
+                    )
+                ],
+            ),
+            "a cell refers to missing text",
         ),
     ],
+    ids=[
+        "not-a-zip",
+        "zip-without-workbook-parts",
+        "worksheet-outside-the-package",
+        "doctype",
+        "malformed-xml",
+        "shared-string-out-of-range",
+        "shared-string-negative",
+    ],
 )
-def test_xlsx_rejects_malformed_or_unsafe_workbooks(payload: bytes) -> None:
-    with pytest.raises(DatasetImportError):
+def test_xlsx_rejects_malformed_or_unsafe_workbooks(payload: bytes, message: str) -> None:
+    with pytest.raises(DatasetImportError, match=message) as refused:
         parse_dataset(payload, "book.xlsx")
+    # Every refusal of a damaged workbook names the way forward, except an unsafe archive.
+    if "safe, readable" not in message:
+        assert ".xlsx and upload" in str(refused.value)
+
+
+_RELATIONSHIPS_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+_SPREADSHEET_NS = (
+    'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+    f'xmlns:r="{_RELATIONSHIPS_NS}"'
+)
+
+
+def test_xlsx_cells_linked_to_another_workbook_import_their_last_values() -> None:
+    """The ordinary lab case: formulas that reference another workbook.
+
+    Excel stores the link in an externalLink part; the worksheet itself is in the
+    file, and each linked cell keeps the value it last showed.
+    """
+    worksheet = (
+        f"<worksheet {_SPREADSHEET_NS}><sheetData>"
+        '<row r="1"><c r="A1" t="inlineStr"><is><t>sample</t></is></c>'
+        '<c r="B1" t="inlineStr"><is><t>dose</t></is></c></row>'
+        '<row r="2"><c r="A2" t="inlineStr"><is><t>s1</t></is></c>'
+        '<c r="B2"><f>[1]Sheet1!A1</f><v>42</v></c></row>'
+        "</sheetData></worksheet>"
+    ).encode()
+    workbook = (
+        f'<workbook {_SPREADSHEET_NS}><sheets><sheet name="Data" sheetId="1" r:id="rId1"/>'
+        '</sheets><externalReferences><externalReference r:id="rId2"/></externalReferences>'
+        "</workbook>"
+    ).encode()
+    relationships = (
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        f'<Relationship Id="rId1" Type="{_RELATIONSHIPS_NS}/worksheet" '
+        'Target="worksheets/sheet1.xml"/>'
+        f'<Relationship Id="rId2" Type="{_RELATIONSHIPS_NS}/externalLink" '
+        'Target="externalLinks/externalLink1.xml"/>'
+        "</Relationships>"
+    ).encode()
+    link_relationships = (
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        f'<Relationship Id="rId1" Type="{_RELATIONSHIPS_NS}/externalLinkPath" '
+        'Target="file:///C:/lab/doses.xlsx" TargetMode="External"/>'
+        "</Relationships>"
+    ).encode()
+    payload = _zip(
+        [
+            ("[Content_Types].xml", b"<Types/>"),
+            ("xl/workbook.xml", workbook),
+            ("xl/_rels/workbook.xml.rels", relationships),
+            ("xl/worksheets/sheet1.xml", worksheet),
+            ("xl/externalLinks/externalLink1.xml", b"<externalLink/>"),
+            ("xl/externalLinks/_rels/externalLink1.xml.rels", link_relationships),
+        ]
+    )
+
+    assert parse_dataset(payload, "linked.xlsx").rows == ({"sample": "s1", "dose": 42},)
+
+
+def test_xlsx_refuses_a_first_worksheet_kept_in_another_file_and_says_what_to_do() -> None:
+    workbook = (
+        f'<workbook {_SPREADSHEET_NS}><sheets><sheet name="Data" sheetId="1" r:id="rId1"/>'
+        "</sheets></workbook>"
+    ).encode()
+    relationships = (
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        f'<Relationship Id="rId1" Type="{_RELATIONSHIPS_NS}/worksheet" '
+        'Target="file:///C:/lab/data.xlsx" TargetMode="External"/>'
+        "</Relationships>"
+    ).encode()
+    payload = _zip(
+        [
+            ("[Content_Types].xml", b"<Types/>"),
+            ("xl/workbook.xml", workbook),
+            ("xl/_rels/workbook.xml.rels", relationships),
+        ]
+    )
+
+    with pytest.raises(DatasetImportError) as refused:
+        parse_dataset(payload, "external.xlsx")
+    message = str(refused.value)
+    assert "not stored in this workbook but in another file" in message
+    assert "Paste Special, Values" in message
+    assert "save it as .xlsx and upload that copy" in message
+    assert "relationship" not in message
+
+
+def test_xlsx_shared_string_limit_is_stated_in_terms_of_text_values() -> None:
+    worksheet = _worksheet([["a"], [1]])
+    strings = (
+        b'<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        b"<si><t>x</t></si><si><t>y</t></si></sst>"
+    )
+    with pytest.raises(DatasetImportError, match="more than 1 distinct text values"):
+        parse_dataset(
+            _xlsx(
+                [["a"], [1]],
+                sheet_payload=worksheet,
+                extra_entries=[("xl/sharedStrings.xml", strings)],
+            ),
+            "book.xlsx",
+            limits=replace(DEFAULT_LIMITS, max_xlsx_shared_strings=1),
+        )
 
 
 def test_xlsx_rejects_rows_and_compression_bombs() -> None:

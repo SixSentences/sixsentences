@@ -10,6 +10,11 @@ equivalents for Python package metadata.
 
 ### Fixed
 
+- Explain a refused XLSX workbook in terms of the file and say what to do about it,
+  instead of naming OOXML parts: a damaged workbook is to be saved again from Excel or
+  LibreOffice, and a first worksheet kept in another file is to be copied in as values.
+  Workbooks whose cells link to other workbooks were never refused; they import the
+  values the links last showed, and a test now pins that.
 - Accept uploaded PDFs that carry only an owner password, as publisher PDFs that
   restrict printing or copying usually do: they open with the empty user password
   and their text is extracted. A PDF that needs a password to open is still
