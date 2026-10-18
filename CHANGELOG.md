@@ -10,6 +10,11 @@ equivalents for Python package metadata.
 
 ### Fixed
 
+- Flag only retractions in the community API's retraction check. The API's copy of the
+  Retraction Watch loader counted every row of the dataset, so a paper that was only
+  corrected, or carried an expression of concern or a reinstatement notice, was flagged
+  as retracted, ranked down, and reported by the living-review monitor. It now keeps
+  only `RetractionNature` "Retraction", as the engine's loader already did.
 - Report how old the cached Retraction Watch data is. `load_retractions()` returns the
   retracted DOIs with the time the cache was written, so a "no retractions found" can be
   told apart from one checked against a six-month-old copy: `describe()` gives
