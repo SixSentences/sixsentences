@@ -10,6 +10,11 @@ equivalents for Python package metadata.
 
 ### Fixed
 
+- Flag only retractions in the community API's retraction check. The API's copy of the
+  Retraction Watch loader counted every row of the dataset, so a paper that was only
+  corrected, or carried an expression of concern or a reinstatement notice, was flagged
+  as retracted, ranked down, and reported by the living-review monitor. It now keeps
+  only `RetractionNature` "Retraction", as the engine's loader already did.
 - Explain a refused XLSX workbook in terms of the file and say what to do about it,
   instead of naming OOXML parts: a damaged workbook is to be saved again from Excel or
   LibreOffice, and a first worksheet kept in another file is to be copied in as values.
