@@ -40,6 +40,9 @@ _SHEET_NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 _DOCUMENT_REL_NS = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
 _PACKAGE_REL_NS = "{http://schemas.openxmlformats.org/package/2006/relationships}"
 _CELL_REFERENCE = re.compile(r"^([A-Za-z]{1,3})([1-9][0-9]*)$")
+# The way forward for a workbook the importer cannot read as it is: Excel and
+# LibreOffice write every part these checks look at, so a fresh save repairs it.
+_RESAVE_WORKBOOK = "open it in Excel or LibreOffice, save it again as .xlsx and upload that copy"
 
 
 class _DuplicateJsonKey(ValueError):
@@ -191,11 +194,16 @@ def _parse_json(blob: bytes, *, limits: DatasetLimits) -> tuple[Row, ...]:
 def _parse_xml(payload: bytes, *, part: str) -> ElementTree.Element:
     upper = payload.upper()
     if b"<!DOCTYPE" in upper or b"<!ENTITY" in upper or b"\x00" in payload:
-        raise DatasetImportError(f"XLSX part {part!r} contains unsupported XML declarations")
+        raise DatasetImportError(
+            "the workbook contains declarations that spreadsheet programs do not write "
+            f"({part!r}); {_RESAVE_WORKBOOK}"
+        )
     try:
         return ElementTree.fromstring(payload)
     except ElementTree.ParseError as exc:
-        raise DatasetImportError(f"XLSX part {part!r} is malformed XML") from exc
+        raise DatasetImportError(
+            f"the workbook is damaged ({part!r} cannot be read); {_RESAVE_WORKBOOK}"
+        ) from exc
 
 
 def _first_worksheet_name(
@@ -203,23 +211,33 @@ def _first_worksheet_name(
 ) -> str:
     first_sheet = workbook.find(f".//{_SHEET_NS}sheets/{_SHEET_NS}sheet")
     if first_sheet is None:
-        raise DatasetImportError("the workbook contains no worksheet")
+        raise DatasetImportError(
+            "the workbook contains no worksheet; put the data on a worksheet and save it as .xlsx"
+        )
+    missing = f"the workbook is damaged (its first worksheet cannot be found); {_RESAVE_WORKBOOK}"
     relationship_id = first_sheet.get(f"{_DOCUMENT_REL_NS}id", "")
     if not relationship_id:
-        raise DatasetImportError("the first worksheet has no relationship")
+        raise DatasetImportError(missing)
 
     target = ""
     for relationship in relationships.findall(f"{_PACKAGE_REL_NS}Relationship"):
         if relationship.get("Id") != relationship_id:
             continue
         if relationship.get("TargetMode", "Internal") != "Internal":
-            raise DatasetImportError("external worksheet relationships are not supported")
+            # Only the sheet itself living in another file is refused. Cells that
+            # link to another workbook are read with the values they last showed.
+            raise DatasetImportError(
+                "the first worksheet is not stored in this workbook but in another file it "
+                "links to; open the workbook in Excel or LibreOffice, copy the data onto a "
+                "worksheet of its own (Paste Special, Values), save it as .xlsx and upload "
+                "that copy"
+            )
         target = relationship.get("Target", "")
         break
     if not target or "\\" in target or "\x00" in target:
-        raise DatasetImportError("the first worksheet relationship is invalid")
+        raise DatasetImportError(missing)
     if any(part in {"", ".", ".."} for part in target.lstrip("/").split("/")):
-        raise DatasetImportError("the first worksheet relationship is unsafe or missing")
+        raise DatasetImportError(missing)
     candidate = target.lstrip("/") if target.startswith("/") else posixpath.join("xl", target)
     candidate = posixpath.normpath(candidate)
     if (
@@ -228,19 +246,24 @@ def _first_worksheet_name(
         or not candidate.endswith(".xml")
         or candidate not in names
     ):
-        raise DatasetImportError("the first worksheet relationship is unsafe or missing")
+        raise DatasetImportError(missing)
     return candidate
 
 
 def _shared_strings(root: ElementTree.Element, *, limits: DatasetLimits) -> list[str]:
     items = root.findall(f"{_SHEET_NS}si")
     if len(items) > limits.max_xlsx_shared_strings:
-        raise DatasetImportError("the workbook contains too many shared strings")
+        raise DatasetImportError(
+            f"the workbook contains more than {limits.max_xlsx_shared_strings} distinct "
+            "text values; split the data into smaller workbooks"
+        )
     shared: list[str] = []
     for item in items:
         value = "".join(node.text or "" for node in item.findall(f".//{_SHEET_NS}t"))
         if len(value) > limits.max_cell_characters:
-            raise DatasetImportError("an XLSX shared string exceeds the cell limit")
+            raise DatasetImportError(
+                f"a text value exceeds the {limits.max_cell_characters}-character cell limit"
+            )
         shared.append(value)
     return shared
 
@@ -261,10 +284,15 @@ def _xlsx_cell_value(
                     raise ValueError
                 parsed = shared[shared_index]
             except (ValueError, IndexError) as exc:
-                raise DatasetImportError("an XLSX shared-string reference is invalid") from exc
+                raise DatasetImportError(
+                    f"the workbook is damaged (a cell refers to missing text); {_RESAVE_WORKBOOK}"
+                ) from exc
         elif kind == "b":
             if raw not in {"0", "1"}:
-                raise DatasetImportError("an XLSX boolean cell is invalid")
+                raise DatasetImportError(
+                    "the workbook is damaged (a TRUE/FALSE cell holds another value); "
+                    f"{_RESAVE_WORKBOOK}"
+                )
             parsed = raw == "1"
         elif raw == "":
             parsed = None
@@ -277,14 +305,18 @@ def _xlsx_cell_value(
             except ValueError:
                 parsed = raw
     if isinstance(parsed, str) and len(parsed) > limits.max_cell_characters:
-        raise DatasetImportError("an XLSX cell exceeds the cell limit")
+        raise DatasetImportError(
+            f"a cell exceeds the {limits.max_cell_characters}-character cell limit"
+        )
     return parsed
 
 
 def _column_index(reference: str) -> int:
     match = _CELL_REFERENCE.fullmatch(reference)
     if match is None:
-        raise DatasetImportError("an XLSX cell reference is invalid")
+        raise DatasetImportError(
+            f"the workbook is damaged (a cell has an invalid position); {_RESAVE_WORKBOOK}"
+        )
     index = 0
     for character in match.group(1).upper():
         index = index * 26 + ord(character) - 64
@@ -309,7 +341,10 @@ def _worksheet_matrix(
                     f"XLSX row {row_number} exceeds the {limits.max_columns}-column limit"
                 )
             if index in cells:
-                raise DatasetImportError(f"XLSX row {row_number} repeats a cell reference")
+                raise DatasetImportError(
+                    f"the workbook is damaged (row {row_number} lists the same cell twice); "
+                    f"{_RESAVE_WORKBOOK}"
+                )
             cells[index] = _xlsx_cell_value(cell, shared, limits=limits)
             next_index = index + 1
         width = max(cells, default=-1) + 1
@@ -330,7 +365,10 @@ def _parse_xlsx(blob: bytes, *, limits: DatasetLimits) -> tuple[Row, ...]:
             names = set(archive.namelist())
             required = {"xl/workbook.xml", "xl/_rels/workbook.xml.rels"}
             if not required.issubset(names):
-                raise DatasetImportError("the XLSX workbook metadata is incomplete")
+                raise DatasetImportError(
+                    "the file is a ZIP archive but not an .xlsx workbook; save the data as "
+                    ".xlsx and upload that file"
+                )
             workbook = _parse_xml(
                 read_zip_member(archive, "xl/workbook.xml", max_bytes=limits.max_xlsx_member_bytes),
                 part="xl/workbook.xml",
