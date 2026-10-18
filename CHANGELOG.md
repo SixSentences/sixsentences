@@ -10,6 +10,12 @@ equivalents for Python package metadata.
 
 ### Fixed
 
+- Report how old the cached Retraction Watch data is. `load_retractions()` returns the
+  retracted DOIs with the time the cache was written, so a "no retractions found" can be
+  told apart from one checked against a six-month-old copy: `describe()` gives
+  "retraction data downloaded 2026-03-02 (195 days ago)" and adds a note past 30 days.
+  A missing cache reads as missing, not as an empty list. Age never fails the check, so
+  it keeps working offline.
 - Explain a refused XLSX workbook in terms of the file and say what to do about it,
   instead of naming OOXML parts: a damaged workbook is to be saved again from Excel or
   LibreOffice, and a first worksheet kept in another file is to be copied in as values.
