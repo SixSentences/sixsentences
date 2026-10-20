@@ -1,6 +1,8 @@
 """Public metadata connectors are exercised with recorded synthetic responses."""
 
+import os
 import traceback
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -11,6 +13,7 @@ from sixsentences.connectors.retractions import (
     RetractionDownloadError,
     download_retractions,
     load_retracted_dois,
+    load_retractions,
 )
 
 
@@ -126,6 +129,58 @@ def test_retraction_loader_accepts_a_utf8_bom(tmp_path: Path) -> None:
     )
 
     assert load_retracted_dois(tmp_path) == {"10.1/bom"}
+
+
+def _cache_written_at(data_dir: Path, written: datetime) -> None:
+    cache = data_dir / "retraction_watch.csv"
+    cache.write_text(
+        "OriginalPaperDOI,Title,RetractionNature\n10.1/abc,Synthetic,Retraction\n",
+        encoding="utf-8",
+    )
+    os.utime(cache, (written.timestamp(), written.timestamp()))
+
+
+def test_retraction_data_reports_how_old_the_cache_is(tmp_path: Path) -> None:
+    downloaded = datetime(2026, 3, 2, 9, 30, tzinfo=UTC)
+    now = datetime(2026, 9, 13, 12, 0, tzinfo=UTC)
+    _cache_written_at(tmp_path, downloaded)
+
+    data = load_retractions(tmp_path)
+
+    assert data.dois == {"10.1/abc"}
+    assert data.downloaded_at == downloaded
+    assert data.age(now) == now - downloaded
+    assert data.is_stale(now)
+    assert data.describe(now) == (
+        "retraction data downloaded 2026-03-02 (195 days ago); "
+        "retractions published since then are not included"
+    )
+
+
+def test_recent_retraction_data_is_reported_without_a_staleness_note(tmp_path: Path) -> None:
+    now = datetime(2026, 9, 13, 12, 0, tzinfo=UTC)
+    _cache_written_at(tmp_path, now - timedelta(days=1, hours=2))
+
+    data = load_retractions(tmp_path)
+
+    assert not data.is_stale(now)
+    assert data.describe(now) == "retraction data downloaded 2026-09-12 (1 day ago)"
+
+
+def test_a_missing_retraction_cache_is_not_an_empty_one(tmp_path: Path) -> None:
+    missing = load_retractions(tmp_path)
+    assert not missing.available
+    assert missing.dois == frozenset()
+    assert missing.age() is None
+    assert missing.describe() == "no retraction data downloaded"
+
+    (tmp_path / "retraction_watch.csv").write_text(
+        "OriginalPaperDOI,Title,RetractionNature\n", encoding="utf-8"
+    )
+    empty = load_retractions(tmp_path)
+    assert empty.available
+    assert empty.dois == frozenset()
+    assert empty.describe().startswith("retraction data downloaded ")
 
 
 def test_retraction_download_is_atomic_and_schema_checked(tmp_path: Path) -> None:
