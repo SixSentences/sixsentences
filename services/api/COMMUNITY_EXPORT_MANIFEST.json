@@ -2371,10 +2371,10 @@
       "sha256": "bd888115cfa33650305a3071bad7666c2be77c36807dd39c54effff0b6cc1748"
     },
     {
-      "bytes": 34337,
+      "bytes": 34998,
       "mode": "0644",
       "path": "tests/test_voice_relay.py",
-      "sha256": "b5dcaae099b9224f1db374d9f1faf93edc4844f8e4eaf1a4c328b1f87be30e2a"
+      "sha256": "77c05f776c69a432fb16325068e77c8e7b5805a471df499b0e7386ed8702fd0d"
     },
     {
       "bytes": 34585,

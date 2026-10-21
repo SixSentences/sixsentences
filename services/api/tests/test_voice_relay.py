@@ -41,6 +41,11 @@ from sixsentences_server.voice.relay_policy import (
     usage_upper_cost_microusd,
 )
 
+# How long a test waits for the relay before it fails instead of hanging. None of these waits
+# asserts latency: the relay's own deadlines are the RelayLimits the tests pass in. A slow
+# runner needs more than the second the cancellation paths used to get (#152).
+HANG_GUARD_SECONDS = 10
+
 
 def config(**overrides: Any) -> LiveRelayConfig:
     values = {
@@ -335,7 +340,7 @@ class Harness:
         )
 
 
-async def until(condition: Callable[[], bool], seconds: float = 2.0) -> None:
+async def until(condition: Callable[[], bool], seconds: float = HANG_GUARD_SECONDS) -> None:
     async with asyncio.timeout(seconds):
         while not condition():
             await asyncio.sleep(0.005)
@@ -347,7 +352,7 @@ def test_terminal_diagnostics_separate_invalid_audio_from_disconnection() -> Non
         task = harness.start()
         await until(lambda: bool(harness.connections))
         harness.browser.send({"realtimeInput": {"text": "not an audio frame"}})
-        result = await asyncio.wait_for(task, 2)
+        result = await asyncio.wait_for(task, HANG_GUARD_SECONDS)
         assert result.reason == "connection"
         assert result.diagnostic_code == "invalid_audio"
         assert result.diagnostic_stage == "browser_receive"
@@ -358,7 +363,7 @@ def test_terminal_diagnostics_separate_invalid_audio_from_disconnection() -> Non
         task = disconnected.start()
         await until(lambda: bool(disconnected.connections))
         disconnected.browser.incoming.put_nowait({"type": "websocket.disconnect"})
-        result = await asyncio.wait_for(task, 2)
+        result = await asyncio.wait_for(task, HANG_GUARD_SECONDS)
         assert result.diagnostic_code == "client_disconnected"
         assert result.diagnostic_stage == "browser_receive"
 
@@ -419,7 +424,7 @@ def test_provider_send_closures_keep_public_reason_and_actual_stage(
         harness = Harness([Provider(on_send=fail_send)])
         if send_kind != "setup":
             harness.browser.send(audio_message())
-        result = await asyncio.wait_for(harness.start(), 3)
+        result = await asyncio.wait_for(harness.start(), HANG_GUARD_SECONDS)
 
         assert result.reason == "unavailable"
         assert result.diagnostic_code == "provider_connection_closed"
@@ -461,7 +466,7 @@ def test_internal_failures_are_not_relabelled_as_provider_transport(
                     fail_checkpoint if failure_site == "checkpoint" else harness.checkpoint
                 ),
             ),
-            2,
+            HANG_GUARD_SECONDS,
         )
         assert result.reason == "unavailable"
         assert result.diagnostic_code == "internal_failure"
@@ -494,7 +499,7 @@ def test_provider_failure_does_not_hide_terminal_persistence_failure() -> None:
             raise OSError("private-terminal-persistence-sentinel")
 
         with pytest.raises(OSError, match="private-terminal-persistence-sentinel"):
-            await asyncio.wait_for(harness.start(on_closed=reject_closed), 2)
+            await asyncio.wait_for(harness.start(on_closed=reject_closed), HANG_GUARD_SECONDS)
         assert len(attempted) == 1
         assert attempted[0].reason == "unavailable"
         assert attempted[0].diagnostic_code == "provider_connection_closed"
@@ -534,7 +539,7 @@ def test_actual_relay_rejects_browser_setup_without_forwarding_or_echoing_provid
         task = harness.start()
         await until(lambda: bool(harness.browser.sent))
         harness.browser.send({"setup": {"model": "models/attacker"}})
-        result = await asyncio.wait_for(task, 1)
+        result = await asyncio.wait_for(task, HANG_GUARD_SECONDS)
         assert result.reason == "connection"
         assert harness.providers[0].sent == [build_relay_setup(config())]
         assert "test-provider-key" not in json.dumps(harness.browser.sent)
@@ -552,7 +557,7 @@ def test_relay_stops_on_metered_exposure_before_forwarding_more_audio() -> None:
         harness.browser.send(audio_message())
         await until(lambda: any("realtimeInput" in item for item in harness.providers[0].sent))
         harness.providers[0].emit({"usageMetadata": receipt(400_000)})
-        result = await asyncio.wait_for(task, 1)
+        result = await asyncio.wait_for(task, HANG_GUARD_SECONDS)
         assert result.reason == "budget"
         assert result.accounted_cost_usd == 1.2
         assert result.observed_cost_usd == 1.2
@@ -589,7 +594,7 @@ def test_relay_natural_pause_completes_a_turn_and_blocks_next_unaffordable_gener
             lambda: bool(harness.checkpoints) and harness.checkpoints[-1].reserved_cost_usd == 0.3
         )
         harness.browser.send(audio_message())
-        result = await asyncio.wait_for(task, 1)
+        result = await asyncio.wait_for(task, HANG_GUARD_SECONDS)
         assert result.reason == "budget"
         assert sum("activityStart" in item.get("realtimeInput", {}) for item in provider.sent) == 1
         assert result.accounted_cost_usd == 0.3
@@ -612,7 +617,7 @@ def test_missing_final_meter_ends_session_and_retains_inflight_allowance() -> No
         task = harness.start(limits=replace(RelayLimits(), meter_timeout_seconds=0.05))
         await until(lambda: bool(harness.browser.sent))
         harness.browser.send(audio_message())
-        result = await asyncio.wait_for(task, 2)
+        result = await asyncio.wait_for(task, HANG_GUARD_SECONDS)
         assert result.reason == "unavailable"
         assert result.accounted_cost_usd == 1.0
         assert not result.meter_complete
@@ -636,7 +641,7 @@ def test_streaming_meter_before_turn_complete_cannot_release_headroom() -> None:
         task = harness.start(limits=replace(RelayLimits(), meter_timeout_seconds=0.3))
         await until(lambda: bool(harness.browser.sent))
         harness.browser.send(audio_message())
-        result = await asyncio.wait_for(task, 2)
+        result = await asyncio.wait_for(task, HANG_GUARD_SECONDS)
         assert result.reason == "unavailable"
         assert result.observed_cost_usd == 0.003
         assert result.accounted_cost_usd == 1.0
@@ -695,7 +700,7 @@ def test_cancel_closes_upstream_before_terminal_callback_and_retains_pending_cos
             lambda: bool(harness.checkpoints) and harness.checkpoints[-1].turns_started == 1
         )
         task.cancel()
-        result = await asyncio.wait_for(task, 1)
+        result = await asyncio.wait_for(task, HANG_GUARD_SECONDS)
         assert result.reason == "connection"
         assert result.accounted_cost_usd == 1.0
         assert len(harness.results) == 1
@@ -718,13 +723,13 @@ def test_repeated_cancellation_cannot_interrupt_durable_terminal_write() -> None
         task = harness.start(on_closed=delayed_close)
         await until(lambda: bool(harness.browser.sent))
         task.cancel()
-        await asyncio.wait_for(write_started.wait(), 1)
+        await asyncio.wait_for(write_started.wait(), HANG_GUARD_SECONDS)
         task.cancel()
         await asyncio.sleep(0.01)
         assert not task.done()
         assert not any("relayEnd" in item for item in harness.browser.sent)
         allow_write.set()
-        result = await asyncio.wait_for(task, 1)
+        result = await asyncio.wait_for(task, HANG_GUARD_SECONDS)
         assert result.reason == "connection"
         assert len(harness.results) == 1
         assert harness.browser.closed
@@ -749,7 +754,7 @@ def test_server_resumes_only_provider_checkpoint_without_leaking_it_to_browser()
         }
         assert "provider-resume-only" not in json.dumps(harness.browser.sent)
         assert await stop_gemini_relay("relay-test-session")
-        result = await asyncio.wait_for(task, 1)
+        result = await asyncio.wait_for(task, HANG_GUARD_SECONDS)
         assert result.provider_connections == 2
         assert result.reason == "stopped"
 
@@ -783,7 +788,7 @@ def test_rotation_waits_for_setup_during_audio_pacing_and_pending_activity_end()
         assert not any("activityStart" in item.get("realtimeInput", {}) for item in second.sent)
         assert second.sent[0]["setup"]["sessionResumption"] == {"handle": "same-turn"}
         assert await stop_gemini_relay("relay-test-session")
-        result = await asyncio.wait_for(task, 1)
+        result = await asyncio.wait_for(task, HANG_GUARD_SECONDS)
         assert result.reason == "stopped"
         assert result.turns_started == 1
         assert result.accounted_cost_usd == 1.0
@@ -812,7 +817,7 @@ def test_goaway_waits_for_fresh_safe_checkpoint_without_resetting_turn_budget() 
         assert second.sent[0]["setup"]["sessionResumption"] == {"handle": "fresh-safe"}
         await until(lambda: harness.checkpoints[-1].reserved_cost_usd == 0.003)
         assert await stop_gemini_relay("relay-test-session")
-        result = await asyncio.wait_for(task, 1)
+        result = await asyncio.wait_for(task, HANG_GUARD_SECONDS)
         assert result.turns_started == 1
         assert result.accounted_cost_usd == 0.003
         assert result.provider_connections == 2
@@ -826,7 +831,7 @@ def test_goaway_without_safe_checkpoint_has_a_hard_wait_deadline() -> None:
         task = harness.start()
         await until(lambda: bool(harness.browser.sent))
         harness.providers[0].emit({"goAway": {"timeLeft": "0.05s"}})
-        result = await asyncio.wait_for(task, 1)
+        result = await asyncio.wait_for(task, HANG_GUARD_SECONDS)
         assert result.reason == "connection"
         assert result.provider_connections == 1
 
@@ -840,7 +845,7 @@ def test_checkpoint_failure_prevents_upstream_connection() -> None:
         async def reject(_checkpoint: RelayCheckpoint) -> None:
             raise RuntimeError("private database detail must never reach the user")
 
-        result = await asyncio.wait_for(harness.start(on_checkpoint=reject), 1)
+        result = await asyncio.wait_for(harness.start(on_checkpoint=reject), HANG_GUARD_SECONDS)
         assert result.reason == "unavailable"
         assert not harness.connections
         assert "database" not in json.dumps(harness.browser.sent)
@@ -872,7 +877,7 @@ def test_checkpoint_snapshots_and_writes_are_serialized_in_monotonic_order() -> 
             RelayLimits(),
         )
         first = asyncio.create_task(relay.persist())
-        await asyncio.wait_for(first_started.wait(), 1)
+        await asyncio.wait_for(first_started.wait(), HANG_GUARD_SECONDS)
         relay.budget.begin_turn(1.0)
         relay.budget.observe(receipt(1000))
         second = asyncio.create_task(relay.persist())
@@ -880,7 +885,7 @@ def test_checkpoint_snapshots_and_writes_are_serialized_in_monotonic_order() -> 
         assert entered == 1
         relay.budget.observe(receipt(2000))
         release_first.set()
-        await asyncio.wait_for(asyncio.gather(first, second), 1)
+        await asyncio.wait_for(asyncio.gather(first, second), HANG_GUARD_SECONDS)
         # The waiting writer snapshots after the lock, not before it.
         assert writes == [0.0, 0.006]
 
@@ -891,7 +896,7 @@ def test_server_enforces_deadline_without_waiting_for_browser_to_stop() -> None:
     async def scenario() -> None:
         harness = Harness()
         task = harness.start(config(deadline_at=datetime.now(UTC) + timedelta(seconds=0.05)))
-        result = await asyncio.wait_for(task, 1)
+        result = await asyncio.wait_for(task, HANG_GUARD_SECONDS)
         assert result.reason == "time"
         assert harness.providers[0].closed
 
