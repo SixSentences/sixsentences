@@ -55,6 +55,12 @@ equivalents for Python package metadata.
   abstracts and grouped source metadata, while retaining collection filters
   and sorting in the web client.
 
+### Security
+
+- Lock certifi 2026.10.19 and Pillow 13.0.0, past GHSA-6q48-6c7w-9gw2 (certifi bundled emSign
+  root certificates that were compromised) and CVE-2026-112403 (Pillow). Both failed the
+  dependency and container scans for every change.
+
 ## [0.2.0-alpha.4] - 2026-10-01
 
 ### Fixed
