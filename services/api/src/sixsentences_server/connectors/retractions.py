@@ -28,14 +28,21 @@ def download_retractions(data_dir: Path, *, url: str = RETRACTION_WATCH_CSV_URL)
 
 
 def load_retracted_dois(data_dir: Path) -> set[str]:
-    """Return lowercased retracted DOIs; empty set if data not downloaded."""
+    """Return lowercased retracted DOIs; empty set if data not downloaded.
+
+    Retraction Watch also lists corrections, expressions of concern and
+    reinstatements; only rows whose ``RetractionNature`` is ``Retraction``
+    count, as in the engine's connector.
+    """
     path = data_dir / CACHE_FILE
     if not path.exists():
         return set()
     dois: set[str] = set()
-    with path.open(newline="", encoding="utf-8", errors="replace") as fh:
+    with path.open(newline="", encoding="utf-8-sig", errors="replace") as fh:
         reader = csv.DictReader(fh)
         for row in reader:
+            if (row.get("RetractionNature") or "").strip().casefold() != "retraction":
+                continue
             doi = (row.get("OriginalPaperDOI") or "").strip().lower()
             if doi and doi != "unavailable":
                 dois.add(doi.removeprefix("https://doi.org/"))

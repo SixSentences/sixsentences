@@ -379,10 +379,10 @@
       "sha256": "b9fb3da235e1fe8205aedb233f7a85d4c04f22a32138941e0787c2d88bae747d"
     },
     {
-      "bytes": 1489,
+      "bytes": 1799,
       "mode": "0644",
       "path": "src/sixsentences_server/connectors/retractions.py",
-      "sha256": "36f8ade2dbd40e832c04adb37f2a04b90f07fd9fb34d63ea195e91d33c18b8c7"
+      "sha256": "38b6e1c0aef70020bfa1ef793c490b4bfe69fb76038617319b1aea7bb8e2ea77"
     },
     {
       "bytes": 3988,
@@ -2219,6 +2219,12 @@
       "mode": "0644",
       "path": "tests/test_result_working_set.py",
       "sha256": "cb5a3174fe89faf6c18c4a8ab367d83ca9ddb81e077819c558b61f35fbb86f84"
+    },
+    {
+      "bytes": 1122,
+      "mode": "0644",
+      "path": "tests/test_retractions_connector.py",
+      "sha256": "14969e9b70dd0c92e79f1564d456719f628b4e4da20e45b42ea80737cd812a3d"
     },
     {
       "bytes": 1204,
