@@ -12,7 +12,7 @@ dependencies = [
     "duckdb==1.5.5",
     "fastapi==0.141.1",
     "httpx==0.28.1",
-    "pillow==12.3.0",
+    "pillow==13.0.0",
     "psycopg[binary]==3.3.5",
     "pyarrow==25.0.1",
     "pycryptodomex==3.23.0",
