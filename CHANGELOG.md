@@ -10,6 +10,12 @@ equivalents for Python package metadata.
 
 ### Fixed
 
+- Give the voice-relay tests ten seconds, named `HANG_GUARD_SECONDS`, to see the relay
+  finish instead of one or two. The cancellation tests cancel the relay and then wait
+  for its shielded cleanup, which on a runner at half speed took longer than the second
+  they allowed and failed a pull request that did not touch the relay (#152). None of
+  these waits measures latency: the relay's own deadlines are the limits each test
+  passes in, and those are unchanged.
 - Report how old the cached Retraction Watch data is. `load_retractions()` returns the
   retracted DOIs with the time the cache was written, so a "no retractions found" can be
   told apart from one checked against a six-month-old copy: `describe()` gives
